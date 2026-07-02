@@ -1,16 +1,17 @@
-import MainLayout from "@/components/layout/MainLayout";
-import Hero from "@/components/sections/Hero";
-import Services from "@/components/sections/Services";
-import Features from "@/components/sections/Features";
-import CallToAction from "@/components/sections/CallToAction";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 
-export default function Home() {
+export default function DashboardPage() {
   return (
-    <MainLayout>
-      <Hero />
-      <Services />
-      <Features />
-      <CallToAction />
-    </MainLayout>
+    <DashboardLayout>
+
+      <h1 className="text-3xl font-bold">
+        Dashboard
+      </h1>
+
+      <p className="mt-3 text-gray-600">
+        Welcome to your VTU Platform dashboard.
+      </p>
+
+    </DashboardLayout>
   );
 }
