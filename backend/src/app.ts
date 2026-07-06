@@ -1,14 +1,15 @@
 import express from "express";
 import cors from "cors";
+
 import authRoutes from "./routes/auth.routes";
+import walletRoutes from "./routes/wallet.routes";
+import airtimeRoutes from "./routes/airtime.routes";
 
 const app = express();
 
-// middlewares
 app.use(cors());
 app.use(express.json());
 
-// test route
 app.get("/", (req, res) => {
   res.json({
     success: true,
@@ -16,7 +17,8 @@ app.get("/", (req, res) => {
   });
 });
 
-// routes
 app.use("/api/auth", authRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/airtime", airtimeRoutes);
 
 export default app;
