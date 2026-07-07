@@ -1,57 +1,25 @@
-import { Response } from "express";
-import { AuthRequest } from "../middleware/auth.middleware";
-import User from "../models/User";
-import Transaction from "../models/Transaction";
+import { Request, Response } from "express";
+import catchAsync from "../utils/catchAsync";
+import { purchaseAirtime } from "../services/airtime.service";
 
-export const buyAirtime = async (req: AuthRequest, res: Response) => {
-  try {
-    const { network, phone, amount } = req.body;
+export const buyAirtime = catchAsync(async (req: any, res: Response) => {
+  const userId = req.user;
 
-    if (!network || !phone || !amount) {
-      return res.status(400).json({
-        message: "All fields are required",
-      });
-    }
+  const { network, phone, amount } = req.body;
 
-    const user = await User.findById(req.user._id);
-
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
-    }
-
-    if (user.walletBalance < amount) {
-      return res.status(400).json({
-        message: "Insufficient wallet balance",
-      });
-    }
-
-    // Deduct wallet
-    user.walletBalance -= Number(amount);
-    await user.save();
-
-    // Save transaction
-    await Transaction.create({
-      user: user._id,
-      type: "airtime",
-      network,
-      phone,
-      amount,
-      status: "successful",
-    });
-
-    res.json({
-      success: true,
-      message: "Airtime purchase successful",
-      network,
-      phone,
-      amount,
-      walletBalance: user.walletBalance,
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: "Server Error",
+  if (!network || !phone || !amount) {
+    return res.status(400).json({
+      success: false,
+      message: "Network, phone and amount are required",
     });
   }
-};
+
+  const result = await purchaseAirtime(
+    userId,
+    network,
+    phone,
+    Number(amount)
+  );
+
+  res.status(200).json(result);
+});

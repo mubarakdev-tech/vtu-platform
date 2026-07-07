@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface ITransaction extends Document {
   user: mongoose.Types.ObjectId;
@@ -84,7 +84,9 @@ const transactionSchema = new Schema<ITransaction>(
   }
 );
 
-export default mongoose.model<ITransaction>(
-  "Transaction",
-  transactionSchema
-);
+// Prevent OverwriteModelError during development
+const Transaction: Model<ITransaction> =
+  (mongoose.models.Transaction as Model<ITransaction>) ||
+  mongoose.model<ITransaction>("Transaction", transactionSchema);
+
+export default Transaction;

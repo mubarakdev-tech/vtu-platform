@@ -1,20 +1,16 @@
-require("dotenv").config();
+const mongoose = require("mongoose");
 
-const { MongoClient } = require("mongodb");
+const uri =
+  "mongodb+srv://mustaphamubarak94_db_user:Mbk%40199411782@cluster0.phfbtfn.mongodb.net/vtu-platform?retryWrites=true&w=majority";
 
-const uri = process.env.MONGO_URI;
-
-async function test() {
-  const client = new MongoClient(uri);
-
-  try {
-    await client.connect();
-    console.log("✅ Connected successfully!");
-  } catch (err) {
+mongoose
+  .connect(uri)
+  .then(() => {
+    console.log("✅ MongoDB Connected");
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error("❌ MongoDB Error:");
     console.error(err);
-  } finally {
-    await client.close();
-  }
-}
-
-test();
+    process.exit(1);
+  });

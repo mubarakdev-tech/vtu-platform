@@ -1,6 +1,6 @@
 import { Response } from "express";
 import { AuthRequest } from "../middleware/auth.middleware";
-import Transaction from "../models/Transaction";
+import Transaction from "../models/transaction.model";
 
 export const getTransactions = async (
   req: AuthRequest,
@@ -11,14 +11,17 @@ export const getTransactions = async (
       user: req.user._id,
     }).sort({ createdAt: -1 });
 
-    res.json({
+    return res.status(200).json({
       success: true,
       count: transactions.length,
       transactions,
     });
   } catch (error) {
-    res.status(500).json({
-      message: "Server Error",
+    console.error("Get Transactions Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 };
