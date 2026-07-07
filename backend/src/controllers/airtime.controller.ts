@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { AuthRequest } from "../middleware/auth.middleware";
 import User from "../models/User";
+import Transaction from "../models/Transaction";
 
 export const buyAirtime = async (req: AuthRequest, res: Response) => {
   try {
@@ -26,10 +27,19 @@ export const buyAirtime = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Deduct wallet balance
+    // Deduct wallet
     user.walletBalance -= Number(amount);
-
     await user.save();
+
+    // Save transaction
+    await Transaction.create({
+      user: user._id,
+      type: "airtime",
+      network,
+      phone,
+      amount,
+      status: "successful",
+    });
 
     res.json({
       success: true,

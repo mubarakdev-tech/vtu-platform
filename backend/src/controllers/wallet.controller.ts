@@ -1,45 +1,144 @@
-import { Response } from "express";
-import { AuthRequest } from "../middleware/auth.middleware";
-import User from "../models/User";
+import { Request, Response } from "express";
+import Wallet from "../models/wallet.model";
+import { createTransaction } from "../services/transaction.service";
+import { transferFundsService } from "../services/wallet.service";
 
-export const getWallet = async (req: AuthRequest, res: Response) => {
-  res.json({
-    success: true,
-    walletBalance: req.user.walletBalance,
-    user: req.user.name,
-  });
-};
+interface AuthRequest extends Request {
+  user?: string;
+}
 
-export const fundWallet = async (req: AuthRequest, res: Response) => {
+/**
+ * FUND WALLET
+ */
+export const fundWallet = async (
+  req: AuthRequest,
+  res: Response
+) => {
   try {
+    const userId = req.user;
     const { amount } = req.body;
 
-    if (!amount || amount <= 0) {
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    if (!amount || Number(amount) <= 0) {
       return res.status(400).json({
+        success: false,
         message: "Invalid amount",
       });
     }
 
-    const user = await User.findById(req.user._id);
+    let wallet = await Wallet.findOne({ user: userId });
 
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found",
+    if (!wallet) {
+      wallet = await Wallet.create({
+        user: userId,
+        balance: 0,
       });
     }
 
-    user.walletBalance += Number(amount);
+    wallet.balance += Number(amount);
 
-    await user.save();
+    await wallet.save();
 
-    res.json({
+    await createTransaction({
+      userId,
+      type: "CREDIT",
+      category: "WALLET_FUNDING",
+      amount: Number(amount),
+      description: "Wallet funded successfully",
+    });
+
+    return res.status(200).json({
       success: true,
       message: "Wallet funded successfully",
-      walletBalance: user.walletBalance,
+      balance: wallet.balance,
     });
-  } catch (error) {
-    res.status(500).json({
-      message: "Server Error",
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/**
+ * GET WALLET
+ */
+export const getWalletBalance = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const userId = req.user;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    let wallet = await Wallet.findOne({
+      user: userId,
+    });
+
+    if (!wallet) {
+      wallet = await Wallet.create({
+        user: userId,
+        balance: 0,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      balance: wallet.balance,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/**
+ * TRANSFER FUNDS
+ */
+export const transferFunds = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const userId = req.user;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const { email, amount } = req.body;
+
+    const result = await transferFundsService({
+      senderId: userId,
+      recipientEmail: email,
+      amount: Number(amount),
+    });
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error: any) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
     });
   }
 };
