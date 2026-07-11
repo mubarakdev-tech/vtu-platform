@@ -1,24 +1,27 @@
 import mongoose from "mongoose";
-
 import { vtpassProvider } from "../providers/vtpass/vtpass.client";
 import { debitWallet } from "./wallet.service";
 import { createTransaction } from "./transaction.service";
-import AppError from "../utils/apperror";
 
-export const purchaseAirtime = async (
-  userId: string,
-  network: string,
-  phone: string,
-  amount: number
-) => {
-  if (!amount || amount <= 0) {
-    throw new AppError("Invalid airtime amount", 400);
-  }
+interface PurchaseDataPayload {
+  userId: string;
+  network: string;
+  phone: string;
+  plan: string;
+  amount: number;
+}
 
+export const purchaseData = async ({
+  userId,
+  network,
+  phone,
+  plan,
+  amount,
+}: PurchaseDataPayload) => {
   const session = await mongoose.startSession();
 
   try {
-    let response: any;
+    let result: any;
 
     await session.withTransaction(async () => {
       // 1. Debit wallet
@@ -28,10 +31,11 @@ export const purchaseAirtime = async (
         session,
       });
 
-      // 2. Purchase airtime from provider
-      const providerResponse = await vtpassProvider.buyAirtime({
+      // 2. Purchase data from provider
+      const providerResponse = await vtpassProvider.buyData({
         network,
         phone,
+        plan,
         amount,
       });
 
@@ -39,32 +43,29 @@ export const purchaseAirtime = async (
       const transaction = await createTransaction({
         userId,
         type: "DEBIT",
-        category: "AIRTIME",
+        category: "DATA",
         amount,
         status: "SUCCESS",
-        description: `${network} Airtime Purchase`,
+        description: `${network} Data Purchase`,
         metadata: {
           network,
           phone,
+          plan,
           providerResponse,
         },
         session,
       });
 
-      response = {
+      result = {
         success: true,
-        message: "Airtime purchase successful",
+        message: "Data purchase successful",
         walletBalance: wallet.balance,
         transaction,
         providerResponse,
       };
     });
 
-    if (!response) {
-      throw new AppError("Airtime purchase failed", 500);
-    }
-
-    return response;
+    return result;
   } finally {
     await session.endSession();
   }
