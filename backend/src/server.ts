@@ -1,20 +1,43 @@
 import dotenv from "dotenv";
-import app from "./app";
-import connectDB from "./config/db";
 
 dotenv.config();
 
-const PORT = process.env.PORT || 5000;
+import app from "./app";
+import connectDB from "./config/db";
+import env from "./config/env";
+import logger from "./utils/logger";
 
 const startServer = async () => {
   try {
+    // Validate environment variables before anything else
+    logger.info(`Starting server in ${env.NODE_ENV} mode...`);
+
+    // Connect to MongoDB
     await connectDB();
 
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
+    // Start HTTP server
+    const server = app.listen(env.PORT, () => {
+      logger.info(`🚀 Server running on http://localhost:${env.PORT}`);
+    });
+
+    // Graceful shutdown
+    process.on("SIGINT", async () => {
+      logger.info("Received SIGINT. Shutting down gracefully...");
+      server.close(() => {
+        logger.info("HTTP server closed.");
+        process.exit(0);
+      });
+    });
+
+    process.on("SIGTERM", async () => {
+      logger.info("Received SIGTERM. Shutting down gracefully...");
+      server.close(() => {
+        logger.info("HTTP server closed.");
+        process.exit(0);
+      });
     });
   } catch (error) {
-    console.error("❌ Failed to start server:", error);
+    logger.error(error instanceof Error ? error.stack || error.message : String(error));
     process.exit(1);
   }
 };
