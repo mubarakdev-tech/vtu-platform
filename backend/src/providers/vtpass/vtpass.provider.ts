@@ -1,41 +1,76 @@
-import {
-  AirtimePayload,
-  DataPayload,
-  ElectricityPayload,
-  IVtuProvider,
-  ProviderResponse,
-} from "../../interfaces/vtuProvider.interface";
+import { v4 as uuid } from "uuid";
+import { vtpassClient } from "./vtpass.client";
 
-export class VTpassProvider implements IVtuProvider {
-  async buyAirtime(payload: AirtimePayload): Promise<ProviderResponse> {
-    return {
-      success: true,
-      message: "Airtime purchase successful",
-      reference: `AIR-${Date.now()}`,
-      data: payload,
-    };
+export interface AirtimePayload {
+  network: string;
+  phone: string;
+  amount: number;
+}
+
+export interface DataPayload {
+  network: string;
+  phone: string;
+  plan: string;
+  amount: number;
+}
+
+export interface ElectricityPayload {
+  disco: string;
+  meterNumber: string;
+  meterType: "prepaid" | "postpaid";
+  amount: number;
+  phone: string;
+}
+
+export interface ProviderResponse {
+  success: boolean;
+  message: string;
+  reference?: string;
+  data?: any;
+}
+
+export class VTpassProvider {
+  async buyAirtime(
+    payload: AirtimePayload
+  ): Promise<ProviderResponse> {
+    try {
+      const requestId = uuid().replace(/-/g, "").slice(0, 20);
+
+      const response = await vtpassClient.post("/pay", {
+        request_id: requestId,
+        serviceID: payload.network.toLowerCase(),
+        amount: payload.amount,
+        phone: payload.phone,
+      });
+
+      return {
+        success: response.data.code === "000",
+        message: response.data.response_description,
+        reference: requestId,
+        data: response.data,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message:
+          error.response?.data?.response_description ??
+          error.message ??
+          "VTpass request failed",
+      };
+    }
   }
 
-  async buyData(payload: DataPayload): Promise<ProviderResponse> {
-    return {
-      success: true,
-      message: "Data purchase successful",
-      reference: `DATA-${Date.now()}`,
-      data: payload,
-    };
+  async buyData(
+    payload: DataPayload
+  ): Promise<ProviderResponse> {
+    throw new Error("buyData() not implemented yet.");
   }
 
   async buyElectricity(
     payload: ElectricityPayload
   ): Promise<ProviderResponse> {
-    return {
-      success: true,
-      message: "Electricity purchase successful",
-      reference: `ELE-${Date.now()}`,
-      data: {
-        ...payload,
-        token: "12345678901234567890",
-      },
-    };
+    throw new Error("buyElectricity() not implemented yet.");
   }
 }
+
+export const vtpassProvider = new VTpassProvider();

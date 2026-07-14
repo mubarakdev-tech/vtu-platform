@@ -19,3 +19,35 @@
 2026-07-13T21:29:25.567Z [INFO]: Starting server in development mode...
 2026-07-13T21:29:25.584Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
     at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-14T13:28:06.553Z [INFO]: Starting server in development mode...
+2026-07-14T13:28:08.418Z [INFO]: ✅ MongoDB Connected Successfully
+2026-07-14T13:28:08.421Z [INFO]: 🚀 Server running on http://localhost:5000
+2026-07-14T13:35:12.759Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:13:35:12 +0000] "POST /api/airtime/buy HTTP/1.1" 401 38 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T13:36:55.737Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:13:36:55 +0000] "POST /api/airtime/buy HTTP/1.1" 401 38 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T13:41:20.651Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:13:41:20 +0000] "POST /api/auth/login HTTP/1.1" 400 39 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T13:41:38.057Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:13:41:38 +0000] "POST /api/auth/login HTTP/1.1" 400 39 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T13:43:18.913Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:13:43:18 +0000] "POST /api/airtime/buy HTTP/1.1" 401 38 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T13:43:50.576Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:13:43:50 +0000] "POST /api/airtime/buy HTTP/1.1" 401 38 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T13:45:32.387Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:13:45:32 +0000] "POST /api/auth/register HTTP/1.1" 201 306 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T13:48:07.504Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:13:48:07 +0000] "POST /api/airtime/buy HTTP/1.1" 401 38 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T13:48:41.186Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:13:48:41 +0000] "POST /api/airtime/buy HTTP/1.1" 500 57 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T14:01:20.009Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:14:01:20 +0000] "POST /api/wallet/fund HTTP/1.1" 500 56 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T15:50:44.330Z [INFO]: Starting server in development mode...
+2026-07-14T15:50:45.865Z [INFO]: ✅ MongoDB Connected Successfully
+2026-07-14T15:50:45.869Z [INFO]: 🚀 Server running on http://localhost:5000
+2026-07-14T15:52:00.535Z [INFO]: Starting server in development mode...
+2026-07-14T15:52:02.032Z [INFO]: ✅ MongoDB Connected Successfully
+2026-07-14T15:52:02.035Z [INFO]: 🚀 Server running on http://localhost:5000
+2026-07-14T15:55:33.839Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:15:55:33 +0000] "POST /api/wallet/fund HTTP/1.1" 200 70 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T16:21:28.303Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:16:21:28 +0000] "POST /api/airtime/buy HTTP/1.1" 200 623 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T16:30:41.030Z [INFO]: Starting server in development mode...
+2026-07-14T16:30:41.030Z [INFO]: Starting server in development mode...
+2026-07-14T16:30:42.757Z [INFO]: ✅ MongoDB Connected Successfully
+2026-07-14T16:30:42.761Z [INFO]: ✅ MongoDB Connected Successfully
+2026-07-14T16:30:42.761Z [INFO]: 🚀 Server running on http://localhost:5000
+2026-07-14T16:30:42.764Z [INFO]: 🚀 Server running on http://localhost:5000
+2026-07-14T16:32:45.299Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:16:32:45 +0000] "POST /api/airtime/buy HTTP/1.1" 200 623 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T16:38:43.978Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:16:38:43 +0000] "POST /api/airtime/buy HTTP/1.1" 200 623 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T16:38:56.992Z [INFO]: ::ffff:127.0.0.1 - - [14/Jul/2026:16:38:56 +0000] "POST /api/airtime/buy HTTP/1.1" 200 623 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-14T16:54:58.071Z [INFO]: Starting server in development mode...
+2026-07-14T16:54:58.070Z [INFO]: Starting server in development mode...
