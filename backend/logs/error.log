@@ -12,3 +12,19 @@
     at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
 2026-07-13T21:29:25.584Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
     at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-14T19:56:27.309Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-14T19:56:27.368Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-14T19:56:27.409Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-14T19:56:44.841Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-14T20:00:15.824Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-14T20:02:11.255Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-14T20:05:13.014Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-14T20:41:34.515Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)

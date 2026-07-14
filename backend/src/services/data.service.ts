@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
-import { vtpassProvider } from "../providers/vtpass/vtpass.client";
+import AppError from "../utils/apperror";
+
+import { vtpassProvider } from "../providers/vtpass/vtpass.provider";
 import { debitWallet } from "./wallet.service";
 import { createTransaction } from "./transaction.service";
 
@@ -18,6 +20,10 @@ export const purchaseData = async ({
   plan,
   amount,
 }: PurchaseDataPayload) => {
+  if (!amount || amount <= 0) {
+    throw new AppError("Invalid data amount", 400);
+  }
+
   const session = await mongoose.startSession();
 
   try {
@@ -31,7 +37,7 @@ export const purchaseData = async ({
         session,
       });
 
-      // 2. Purchase data from provider
+      // 2. Purchase data from VTpass
       const providerResponse = await vtpassProvider.buyData({
         network,
         phone,
@@ -39,7 +45,12 @@ export const purchaseData = async ({
         amount,
       });
 
-      // 3. Record transaction
+      // 3. Stop immediately if VTpass failed
+      if (!providerResponse.success) {
+        throw new AppError(providerResponse.message, 400);
+      }
+
+      // 4. Record successful transaction
       const transaction = await createTransaction({
         userId,
         type: "DEBIT",
@@ -65,7 +76,13 @@ export const purchaseData = async ({
       };
     });
 
+    if (!result) {
+      throw new AppError("Data purchase failed", 500);
+    }
+
     return result;
+  } catch (error) {
+    throw error;
   } finally {
     await session.endSession();
   }
