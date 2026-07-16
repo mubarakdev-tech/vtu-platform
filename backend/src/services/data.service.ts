@@ -30,14 +30,14 @@ export const purchaseData = async ({
     let result: any;
 
     await session.withTransaction(async () => {
-      // 1. Debit wallet
+      // Debit wallet first
       const wallet = await debitWallet({
         userId,
         amount,
         session,
       });
 
-      // 2. Purchase data from VTpass
+      // Purchase data from VTpass
       const providerResponse = await vtpassProvider.buyData({
         network,
         phone,
@@ -45,12 +45,12 @@ export const purchaseData = async ({
         amount,
       });
 
-      // 3. Stop immediately if VTpass failed
+      // Roll back transaction if VTpass failed
       if (!providerResponse.success) {
         throw new AppError(providerResponse.message, 400);
       }
 
-      // 4. Record successful transaction
+      // Record successful transaction
       const transaction = await createTransaction({
         userId,
         type: "DEBIT",
@@ -81,8 +81,6 @@ export const purchaseData = async ({
     }
 
     return result;
-  } catch (error) {
-    throw error;
   } finally {
     await session.endSession();
   }

@@ -32,7 +32,9 @@ export const fundWallet = async (
       });
     }
 
-    let wallet = await Wallet.findOne({ user: userId });
+    let wallet = await Wallet.findOne({
+      user: userId,
+    });
 
     if (!wallet) {
       wallet = await Wallet.create({
@@ -48,7 +50,7 @@ export const fundWallet = async (
     await createTransaction({
       userId,
       type: "CREDIT",
-      category: "WALLET_FUNDING",
+      category: "FUNDING",
       amount: Number(amount),
       description: "Wallet funded successfully",
     });
@@ -58,6 +60,7 @@ export const fundWallet = async (
       message: "Wallet funded successfully",
       balance: wallet.balance,
     });
+
   } catch (error: any) {
     return res.status(500).json({
       success: false,
@@ -66,8 +69,9 @@ export const fundWallet = async (
   }
 };
 
+
 /**
- * GET WALLET
+ * GET WALLET BALANCE
  */
 export const getWalletBalance = async (
   req: AuthRequest,
@@ -98,6 +102,7 @@ export const getWalletBalance = async (
       success: true,
       balance: wallet.balance,
     });
+
   } catch (error: any) {
     return res.status(500).json({
       success: false,
@@ -105,6 +110,7 @@ export const getWalletBalance = async (
     });
   }
 };
+
 
 /**
  * TRANSFER FUNDS
@@ -135,6 +141,7 @@ export const transferFunds = async (
       success: true,
       ...result,
     });
+
   } catch (error: any) {
     return res.status(400).json({
       success: false,
