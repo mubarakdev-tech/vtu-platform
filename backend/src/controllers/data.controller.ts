@@ -1,17 +1,23 @@
 import { purchaseData } from "../services/data.service";
+import { vtpassProvider } from "../providers/vtpass/vtpass.provider";
+
 
 export const buyData = async (req: any, res: any) => {
+
   try {
+
 
     console.log("DATA CONTROLLER REACHED");
     console.log("USER:", req.user);
 
 
-    // req.user is already the user ID string
     const userId = req.user;
 
 
-    console.log("DATA PURCHASE USER ID:", userId);
+    console.log(
+      "DATA PURCHASE USER ID:",
+      userId
+    );
 
 
     const {
@@ -22,22 +28,31 @@ export const buyData = async (req: any, res: any) => {
     } = req.body;
 
 
-    console.log("DATA REQUEST BODY:", {
-      network,
-      phone,
-      plan,
-      amount,
-    });
+
+    console.log(
+      "DATA REQUEST BODY:",
+      {
+        network,
+        phone,
+        plan,
+        amount,
+      }
+    );
+
 
 
     if (!network || !phone || !plan || !amount) {
 
       return res.status(400).json({
-        success: false,
-        message: "All fields are required",
+
+        success:false,
+
+        message:"All fields are required"
+
       });
 
     }
+
 
 
     const result = await purchaseData({
@@ -50,15 +65,17 @@ export const buyData = async (req: any, res: any) => {
 
       plan,
 
-      amount: Number(amount),
+      amount:Number(amount),
 
     });
+
 
 
     return res.status(200).json(result);
 
 
-  } catch (error: any) {
+
+  } catch(error:any) {
 
 
     console.log(
@@ -67,13 +84,74 @@ export const buyData = async (req: any, res: any) => {
     );
 
 
-    return res.status(error.statusCode || 400).json({
+    return res.status(
+      error.statusCode || 400
+    ).json({
 
-      success: false,
+      success:false,
 
-      message: error.message,
+      message:error.message
 
     });
 
+
   }
+
+};
+
+
+
+
+
+export const getDataPlans = async (
+  req:any,
+  res:any
+) => {
+
+
+  try {
+
+
+    const { network } = req.params;
+
+
+    if(!network){
+
+      return res.status(400).json({
+
+        success:false,
+
+        message:"Network is required"
+
+      });
+
+    }
+
+
+
+    const result =
+      await vtpassProvider.getDataPlans(
+        network
+      );
+
+
+
+    return res.status(200).json(result);
+
+
+
+  } catch(error:any) {
+
+
+    return res.status(400).json({
+
+      success:false,
+
+      message:error.message
+
+    });
+
+
+  }
+
 };
