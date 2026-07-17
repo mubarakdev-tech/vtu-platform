@@ -33,3 +33,7 @@
     at NativeConnection.openUri (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1100:11)
     at connectDB (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\config\db.ts:7:5)
     at startServer (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\server.ts:16:5)
+2026-07-17T14:05:01.881Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-17T14:27:20.540Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)

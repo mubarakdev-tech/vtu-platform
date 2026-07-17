@@ -3,7 +3,7 @@ import Wallet from "../models/wallet.model";
 import User from "../models/user.model";
 import { createTransaction } from "./transaction.service";
 
-interface DebitWalletParams {
+interface WalletParams {
   userId: string;
   amount: number;
   session?: ClientSession;
@@ -15,42 +15,32 @@ interface TransferFundsParams {
   amount: number;
 }
 
-
 /**
  * DEBIT WALLET
- * Used for airtime/data/electricity purchases
  */
 export const debitWallet = async ({
   userId,
   amount,
   session,
-}: DebitWalletParams) => {
+}: WalletParams) => {
 
   if (amount <= 0) {
     throw new Error("Amount must be greater than zero");
   }
 
-  console.log("DEBIT WALLET USER ID:", userId);
+  console.log("======== DEBIT WALLET ========");
+  console.log("User:", userId);
+  console.log("Amount:", amount);
 
   const wallet = session
-    ? await Wallet.findOne({
-        $or: [
-          { user: userId },
-          { userId: userId }
-        ],
-      }).session(session)
-    : await Wallet.findOne({
-        $or: [
-          { user: userId },
-          { userId: userId }
-        ],
-      });
-
-  console.log("FOUND WALLET:", wallet);
+    ? await Wallet.findOne({ user: userId }).session(session)
+    : await Wallet.findOne({ user: userId });
 
   if (!wallet) {
     throw new Error("Wallet not found");
   }
+
+  console.log("Current Balance:", wallet.balance);
 
   if (wallet.balance < amount) {
     throw new Error("Insufficient wallet balance");
@@ -60,23 +50,47 @@ export const debitWallet = async ({
 
   await wallet.save({ session });
 
+  console.log("New Balance:", wallet.balance);
+
   return wallet;
 };
 
+/**
+ * CREDIT WALLET
+ */
+export const creditWallet = async ({
+  userId,
+  amount,
+  session,
+}: WalletParams) => {
+
+  if (amount <= 0) {
+    throw new Error("Amount must be greater than zero");
+  }
+
+  const wallet = session
+    ? await Wallet.findOne({ user: userId }).session(session)
+    : await Wallet.findOne({ user: userId });
+
+  if (!wallet) {
+    throw new Error("Wallet not found");
+  }
+
+  wallet.balance += amount;
+
+  await wallet.save({ session });
+
+  return wallet;
+};
 
 /**
  * TRANSFER FUNDS
- * Transfer money from one user wallet to another
  */
 export const transferFundsService = async ({
   senderId,
   recipientEmail,
   amount,
 }: TransferFundsParams) => {
-
-  if (amount <= 0) {
-    throw new Error("Amount must be greater than zero");
-  }
 
   const session = await mongoose.startSession();
 
@@ -90,58 +104,47 @@ export const transferFundsService = async ({
         user: senderId,
       }).session(session);
 
-
       if (!senderWallet) {
         throw new Error("Sender wallet not found");
       }
-
 
       if (senderWallet.balance < amount) {
         throw new Error("Insufficient wallet balance");
       }
 
-
       const recipient = await User.findOne({
         email: recipientEmail.toLowerCase(),
       });
-
 
       if (!recipient) {
         throw new Error("Recipient not found");
       }
 
-
       let recipientWallet = await Wallet.findOne({
         user: recipient._id,
       }).session(session);
 
-
-
       if (!recipientWallet) {
 
-        recipientWallet = await Wallet.create(
-          [
-            {
-              user: recipient._id,
-              balance: 0,
-            },
-          ],
-          { session }
-        ).then((wallet) => wallet[0]);
+        recipientWallet = (
+          await Wallet.create(
+            [
+              {
+                user: recipient._id,
+                balance: 0,
+              },
+            ],
+            { session }
+          )
+        )[0];
 
       }
 
-
-
       senderWallet.balance -= amount;
-      await senderWallet.save({ session });
-
-
-
       recipientWallet.balance += amount;
+
+      await senderWallet.save({ session });
       await recipientWallet.save({ session });
-
-
 
       await createTransaction({
         userId: senderId,
@@ -149,35 +152,25 @@ export const transferFundsService = async ({
         category: "TRANSFER",
         amount,
         description: `Transfer to ${recipientEmail}`,
-        metadata: {
-          recipient: recipientEmail,
-        },
         session,
       });
-
-
 
       await createTransaction({
         userId: recipient._id.toString(),
         type: "CREDIT",
         category: "TRANSFER",
         amount,
-        description: "Transfer received from sender",
-        metadata: {
-          sender: senderId,
-        },
+        description: `Transfer from ${senderId}`,
         session,
       });
 
-
-
       result = {
+        success: true,
         message: "Transfer successful",
         balance: senderWallet.balance,
       };
 
     });
-
 
     return result;
 
@@ -186,4 +179,5 @@ export const transferFundsService = async ({
     await session.endSession();
 
   }
+
 };

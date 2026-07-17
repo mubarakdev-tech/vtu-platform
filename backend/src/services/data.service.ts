@@ -1,5 +1,4 @@
-import mongoose from "mongoose";
-import AppError from "../utils/apperror";
+console.log("******** NEW DATA SERVICE LOADED ********");
 
 import { vtpassProvider } from "../providers/vtpass/vtpass.provider";
 import { debitWallet } from "./wallet.service";
@@ -7,13 +6,11 @@ import { createTransaction } from "./transaction.service";
 
 
 interface PurchaseDataPayload {
-
   userId: string;
   network: string;
   phone: string;
   plan: string;
   amount: number;
-
 }
 
 
@@ -27,198 +24,235 @@ export const purchaseData = async ({
 }: PurchaseDataPayload) => {
 
 
-  if (!amount || amount <= 0) {
-
-    throw new AppError(
-      "Invalid data amount",
-      400
-    );
-
-  }
+  console.log("========== DATA PURCHASE START ==========");
 
 
-
-  const session = await mongoose.startSession();
+  console.log({
+    userId,
+    network,
+    phone,
+    plan,
+    amount,
+  });
 
 
 
   try {
 
 
-    let result:any;
+    /**
+     * STEP 1
+     * Debit wallet
+     */
+    const wallet =
+      await debitWallet({
+        userId,
+        amount,
+      });
 
 
 
-    await session.withTransaction(async()=>{
+    console.log("✅ Wallet debited");
 
+    console.log(
+      "Wallet Balance:",
+      wallet.balance
+    );
+
+
+
+
+    /**
+     * STEP 2
+     * Send request to VTpass
+     */
+    const providerResponse =
+      await vtpassProvider.buyData({
+
+        network,
+
+        phone,
+
+        plan,
+
+        amount,
+
+      });
+
+
+
+    console.log(
+      "🔥 VTpass Response:"
+    );
+
+
+    console.log(
+      JSON.stringify(
+        providerResponse,
+        null,
+        2
+      )
+    );
+
+
+
+
+    /**
+     * STEP 3
+     * Check VTpass result
+     */
+    if (!providerResponse.success) {
 
 
       console.log(
-        "CHECKING DATA PLAN BEFORE PURCHASE"
+        "❌ VTpass purchase failed"
+      );
+
+
+      console.log(
+        "Reason:",
+        providerResponse.message
       );
 
 
 
-      // Check plan exists
-      const plans =
-        await vtpassProvider.getDataPlans(
-          network
-        );
-
-
-
-      if(!plans.success){
-
-        throw new AppError(
-          plans.message,
-          400
-        );
-
-      }
-
-
-
-      const selectedPlan =
-        plans.data.find(
-          (item:any)=>
-            item.variation_code === plan
-        );
-
-
-
-      if(!selectedPlan){
-
-        throw new AppError(
-          "Invalid data plan selected",
-          400
-        );
-
-      }
-
-
-
-      console.log(
-        "VALID PLAN:",
-        selectedPlan
+      throw new Error(
+        providerResponse.message ||
+        "VTpass transaction failed"
       );
 
-
-
-      // Use VTpass price
-      const finalAmount =
-        selectedPlan.amount;
+    }
 
 
 
-      // Debit wallet
-
-      const wallet =
-        await debitWallet({
-
-          userId,
-
-          amount: finalAmount,
-
-          session,
-
-        });
 
 
+    /**
+     * STEP 4
+     * Save successful transaction
+     */
+    const transaction =
+      await createTransaction({
 
-      // Purchase from VTpass
 
-      const providerResponse =
-        await vtpassProvider.buyData({
+        userId,
+
+
+        type:
+          "DEBIT",
+
+
+        category:
+          "DATA",
+
+
+        amount,
+
+
+        status:
+          "SUCCESS",
+
+
+
+        description:
+          `Purchased ${network.toUpperCase()} data for ${phone}`,
+
+
+
+        metadata: {
+
 
           network,
 
+
           phone,
+
 
           plan,
 
-          amount:finalAmount,
 
-        });
+          providerResponse:
+            providerResponse.data,
 
 
+        },
 
-      if(!providerResponse.success){
 
-        throw new AppError(
-          providerResponse.message,
-          400
-        );
-
-      }
+      });
 
 
 
 
-      const transaction =
-        await createTransaction({
-
-          userId,
-
-          type:"DEBIT",
-
-          category:"DATA",
-
-          amount:finalAmount,
-
-          status:"SUCCESS",
-
-          description:
-          `${network.toUpperCase()} Data Purchase`,
-
-          metadata:{
-
-            network,
-
-            phone,
-
-            plan,
-
-            providerResponse,
-
-          },
-
-          session,
-
-        });
+    console.log(
+      "✅ Transaction saved"
+    );
 
 
 
 
-      result={
 
-        success:true,
+    return {
 
-        message:
-        "Data purchase successful",
+
+      success:true,
+
+
+
+      message:
+        providerResponse.message,
+
+
+
+      data:{
+
 
         walletBalance:
-        wallet.balance,
+          wallet.balance,
+
 
         transaction,
 
-        providerResponse,
-
-      };
 
 
-
-    });
-
-
-
-    return result;
+        provider:
+          providerResponse.data,
 
 
+      },
 
-  }finally{
+
+    };
 
 
-    await session.endSession();
+
+
+  } catch(error:any) {
+
+
+
+    console.log(
+      "❌ DATA PURCHASE ERROR"
+    );
+
+
+    console.log(
+      "MESSAGE:",
+      error.message
+    );
+
+
+
+    console.log(
+      "FULL ERROR:",
+      error
+    );
+
+
+
+    throw new Error(
+      error.message ||
+      "Transaction failed"
+    );
 
 
   }

@@ -1,24 +1,23 @@
+import { Response } from "express";
 import { purchaseData } from "../services/data.service";
 import { vtpassProvider } from "../providers/vtpass/vtpass.provider";
 
+export const buyData = async (
+  req: any,
+  res: Response
+) => {
 
-export const buyData = async (req: any, res: any) => {
+  console.log("🔥🔥 BUY DATA CONTROLLER HIT");
 
   try {
 
+    console.log("🔥 DATA CONTROLLER REACHED");
 
-    console.log("DATA CONTROLLER REACHED");
-    console.log("USER:", req.user);
-
+    console.log("🔥 USER:", req.user);
 
     const userId = req.user;
 
-
-    console.log(
-      "DATA PURCHASE USER ID:",
-      userId
-    );
-
+    console.log("🔥 DATA PURCHASE USER ID:", userId);
 
     const {
       network,
@@ -27,130 +26,85 @@ export const buyData = async (req: any, res: any) => {
       amount,
     } = req.body;
 
-
-
-    console.log(
-      "DATA REQUEST BODY:",
-      {
-        network,
-        phone,
-        plan,
-        amount,
-      }
-    );
-
-
-
-    if (!network || !phone || !plan || !amount) {
-
-      return res.status(400).json({
-
-        success:false,
-
-        message:"All fields are required"
-
-      });
-
-    }
-
-
-
-    const result = await purchaseData({
-
-      userId,
-
+    console.log("🔥 DATA REQUEST BODY:", {
       network,
-
       phone,
-
       plan,
-
-      amount:Number(amount),
-
+      amount,
     });
 
+    if (!network || !phone || !plan || !amount) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
 
+    console.log("🔥 CALLING purchaseData()...");
+
+    const result = await purchaseData({
+      userId,
+      network,
+      phone,
+      plan,
+      amount: Number(amount),
+    });
+
+    console.log("🔥 purchaseData() RETURNED");
+
+    console.log("🔥 DATA PURCHASE RESULT:", result);
 
     return res.status(200).json(result);
 
+  } catch (error: any) {
 
+    console.log("🔥🔥 BUY DATA CONTROLLER CATCH");
 
-  } catch(error:any) {
+    console.log("🔥 FULL ERROR:", error);
 
+    console.log("🔥 MESSAGE:", error.message);
 
-    console.log(
-      "DATA PURCHASE ERROR:",
-      error.message
-    );
+    console.log("🔥 STACK:", error.stack);
 
-
-    return res.status(
-      error.statusCode || 400
-    ).json({
-
-      success:false,
-
-      message:error.message
-
+    return res.status(error.statusCode || 400).json({
+      success: false,
+      message: error.message || "UNKNOWN ERROR",
+      error: error.stack,
     });
-
 
   }
 
 };
 
-
-
-
-
 export const getDataPlans = async (
-  req:any,
-  res:any
+  req: any,
+  res: Response
 ) => {
-
 
   try {
 
-
     const { network } = req.params;
 
-
-    if(!network){
-
+    if (!network) {
       return res.status(400).json({
-
-        success:false,
-
-        message:"Network is required"
-
+        success: false,
+        message: "Network is required",
       });
-
     }
 
-
-
     const result =
-      await vtpassProvider.getDataPlans(
-        network
-      );
-
-
+      await vtpassProvider.getDataPlans(network);
 
     return res.status(200).json(result);
 
+  } catch (error: any) {
 
-
-  } catch(error:any) {
-
+    console.log("🔥 GET DATA PLANS ERROR:", error);
 
     return res.status(400).json({
-
-      success:false,
-
-      message:error.message
-
+      success: false,
+      message: error.message,
     });
-
 
   }
 

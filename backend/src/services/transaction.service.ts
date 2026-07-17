@@ -6,15 +6,16 @@ interface CreateTransactionParams {
   userId: string;
   type: "CREDIT" | "DEBIT";
   category:
-    | "FUNDING"
+    | "WALLET_FUNDING"
     | "TRANSFER"
     | "AIRTIME"
     | "DATA"
+    | "CABLE"
     | "ELECTRICITY"
-    | "TV";
+    | "REFUND";
   amount: number;
   status?: "PENDING" | "SUCCESS" | "FAILED";
-  description: string;
+  description?: string;
   metadata?: Record<string, any>;
   session?: ClientSession;
 }
@@ -25,10 +26,24 @@ export const createTransaction = async ({
   category,
   amount,
   status = "SUCCESS",
-  description,
+  description = "",
   metadata = {},
   session,
 }: CreateTransactionParams) => {
+  const reference = `${category}-${uuidv4()
+    .replace(/-/g, "")
+    .toUpperCase()}`;
+
+  console.log("\n========== CREATE TRANSACTION ==========");
+  console.log("User ID     :", userId);
+  console.log("Type        :", type);
+  console.log("Category    :", category);
+  console.log("Amount      :", amount);
+  console.log("Status      :", status);
+  console.log("Reference   :", reference);
+  console.log("Description :", description);
+  console.log("========================================\n");
+
   const [transaction] = await Transaction.create(
     [
       {
@@ -37,13 +52,15 @@ export const createTransaction = async ({
         category,
         amount,
         status,
-        reference: uuidv4(),
+        reference,
         description,
         metadata,
       },
     ],
     session ? { session } : {}
   );
+
+  console.log("✅ Transaction saved successfully");
 
   return transaction;
 };
