@@ -1,19 +1,37 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import api from "@/lib/api";
+
+interface Wallet {
+  balance: number;
+}
 
 export default function WalletPage() {
-  const [balance, setBalance] = useState<number>(0);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchWallet = async () => {
       try {
-        const res = await api.get("/wallet");
-        setBalance(res.data.balance);
+        const token = localStorage.getItem("token");
+
+        const res = await fetch("http://localhost:5000/api/wallet", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json();
+
+        console.log("Wallet Response:", data);
+
+        if (data.success) {
+          setWallet({
+            balance: data.balance,
+          });
+        }
       } catch (error) {
-        console.error("Failed to fetch wallet:", error);
+        console.error("Error fetching wallet:", error);
       } finally {
         setLoading(false);
       }
@@ -22,20 +40,18 @@ export default function WalletPage() {
     fetchWallet();
   }, []);
 
-  if (loading) {
-    return <div className="p-6">Loading wallet...</div>;
-  }
+  if (loading) return <p>Loading...</p>;
 
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-6">My Wallet</h1>
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold">Wallet</h1>
 
-      <div className="rounded-xl bg-white shadow p-6 border">
-        <p className="text-gray-500">Available Balance</p>
+      <div className="rounded-xl bg-white shadow p-6">
+        <h2 className="text-gray-500">Available Balance</h2>
 
-        <h2 className="text-4xl font-bold text-green-600 mt-2">
-          ₦{balance.toLocaleString()}
-        </h2>
+        <p className="text-4xl font-bold text-green-600">
+          ₦{wallet ? wallet.balance.toLocaleString() : "0"}
+        </p>
       </div>
     </div>
   );

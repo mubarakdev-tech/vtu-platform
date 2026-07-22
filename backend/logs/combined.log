@@ -1014,3 +1014,14 @@
 2026-07-17T14:35:32.305Z [INFO]: ::ffff:127.0.0.1 - - [17/Jul/2026:14:35:32 +0000] "POST /api/data/buy HTTP/1.1" 400 53 "-" "Thunder Client (https://www.thunderclient.com)"
 2026-07-17T14:36:27.317Z [INFO]: ::ffff:127.0.0.1 - - [17/Jul/2026:14:36:27 +0000] "POST /api/data/buy HTTP/1.1" 400 414 "-" "Thunder Client (https://www.thunderclient.com)"
 2026-07-17T14:45:56.890Z [INFO]: Received SIGINT. Shutting down gracefully...
+2026-07-17T16:28:27.599Z [INFO]: Starting server in development mode...
+2026-07-17T16:28:32.768Z [INFO]: ✅ MongoDB Connected Successfully
+2026-07-17T16:28:32.771Z [INFO]: 🚀 Server running on http://localhost:5000
+2026-07-17T16:28:40.225Z [INFO]: ::ffff:127.0.0.1 - - [17/Jul/2026:16:28:40 +0000] "POST /api/auth/login HTTP/1.1" 400 39 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-17T16:29:17.534Z [INFO]: ::ffff:127.0.0.1 - - [17/Jul/2026:16:29:17 +0000] "POST /api/auth/login HTTP/1.1" 400 39 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-17T16:35:00.923Z [INFO]: ::ffff:127.0.0.1 - - [17/Jul/2026:16:35:00 +0000] "POST /api/auth/login HTTP/1.1" 400 39 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-17T16:36:30.009Z [INFO]: ::ffff:127.0.0.1 - - [17/Jul/2026:16:36:30 +0000] "POST /api/auth/register HTTP/1.1" 201 317 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-17T16:40:33.314Z [INFO]: ::1 - - [17/Jul/2026:16:40:33 +0000] "POST /api/auth/login HTTP/1.1" 200 308 "http://localhost:3000/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-17T20:47:33.795Z [INFO]: ::1 - - [17/Jul/2026:20:47:33 +0000] "GET / HTTP/1.1" 200 61 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-17T20:47:37.481Z [INFO]: ::1 - - [17/Jul/2026:20:47:37 +0000] "GET /favicon.ico HTTP/1.1" 404 45 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-17T21:23:00.700Z [INFO]: ::1 - - [17/Jul/2026:21:23:00 +0000] "GET /api/wallet HTTP/1.1" 200 28 "http://localhost:3000/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
