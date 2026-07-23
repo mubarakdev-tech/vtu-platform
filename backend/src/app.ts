@@ -10,6 +10,7 @@ import walletRoutes from "./routes/wallet.routes";
 import airtimeRoutes from "./routes/airtime.routes";
 import transactionRoutes from "./routes/transaction.routes";
 import dataRoutes from "./routes/data.routes";
+import dashboardRoutes from "./routes/dashboard.routes";
 
 import { errorHandler } from "./middleware/error.middleware";
 import logger from "./utils/logger";
@@ -83,6 +84,7 @@ app.use("/api/wallet", walletRoutes);
 app.use("/api/airtime", airtimeRoutes);
 app.use("/api/data", dataRoutes);
 app.use("/api/transactions", transactionRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 /**
  * 404 Handler

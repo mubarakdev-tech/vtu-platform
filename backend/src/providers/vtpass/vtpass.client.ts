@@ -11,19 +11,31 @@ export const vtpassClient = axios.create({
 });
 
 vtpassClient.interceptors.request.use((config) => {
-  console.log("=== VTPASS REQUEST ===");
-  console.log("URL:", config.baseURL + config.url);
-  console.log("Headers:", config.headers);
-  console.log("Body:", config.data);
+  console.log("\n========== VTPASS REQUEST ==========");
+  console.log("METHOD :", config.method?.toUpperCase());
+  console.log("URL    :", `${config.baseURL}${config.url}`);
+  console.log("HEADERS:", config.headers);
+  console.log("BODY   :", config.data);
+  console.log("====================================\n");
   return config;
 });
 
 vtpassClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log("\n========== VTPASS SUCCESS ==========");
+    console.log("STATUS :", response.status);
+    console.log("DATA   :", response.data);
+    console.log("====================================\n");
+    return response;
+  },
   (error) => {
-    console.log("=== VTPASS RESPONSE ===");
-    console.log(error.response?.status);
-    console.log(error.response?.data);
+    console.log("\n========== VTPASS ERROR ==========");
+    console.log("MESSAGE :", error.message);
+    console.log("CODE    :", error.code);
+    console.log("STATUS  :", error.response?.status);
+    console.log("DATA    :", error.response?.data);
+    console.log("==================================\n");
+
     return Promise.reject(error);
   }
 );

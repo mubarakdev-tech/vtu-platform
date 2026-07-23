@@ -27,12 +27,23 @@ export const buyAirtime = catchAsync(async (req: any, res: Response) => {
     });
   }
 
+  console.log("======================================");
+  console.log("BUY AIRTIME CONTROLLER");
+  console.log("User ID :", userId);
+  console.log("Network :", network);
+  console.log("Phone   :", phone);
+  console.log("Amount  :", amount);
+  console.log("======================================");
+
   const result = await purchaseAirtime(
     userId,
     network.toLowerCase(),
     phone.trim(),
     Number(amount)
   );
+
+  console.log("AIRTIME RESULT:");
+  console.log(result);
 
   return res.status(200).json(result);
 
