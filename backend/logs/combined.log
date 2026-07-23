@@ -1025,3 +1025,89 @@
 2026-07-17T20:47:33.795Z [INFO]: ::1 - - [17/Jul/2026:20:47:33 +0000] "GET / HTTP/1.1" 200 61 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
 2026-07-17T20:47:37.481Z [INFO]: ::1 - - [17/Jul/2026:20:47:37 +0000] "GET /favicon.ico HTTP/1.1" 404 45 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
 2026-07-17T21:23:00.700Z [INFO]: ::1 - - [17/Jul/2026:21:23:00 +0000] "GET /api/wallet HTTP/1.1" 200 28 "http://localhost:3000/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-22T16:08:01.545Z [INFO]: Starting server in development mode...
+2026-07-22T16:08:03.378Z [INFO]: ✅ MongoDB Connected Successfully
+2026-07-22T16:08:03.383Z [INFO]: 🚀 Server running on http://localhost:5000
+2026-07-22T16:09:29.159Z [INFO]: ::1 - - [22/Jul/2026:16:09:29 +0000] "GET /api/wallet HTTP/1.1" 401 38 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-22T16:09:29.483Z [INFO]: ::1 - - [22/Jul/2026:16:09:29 +0000] "GET /favicon.ico HTTP/1.1" 404 45 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-22T16:09:44.200Z [INFO]: ::1 - - [22/Jul/2026:16:09:44 +0000] "GET /api/wallet/me HTTP/1.1" 401 38 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-22T16:20:03.926Z [INFO]: ::ffff:127.0.0.1 - - [22/Jul/2026:16:20:03 +0000] "POST /api/auth/login HTTP/1.1" 200 308 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-22T16:49:53.414Z [INFO]: ::1 - - [22/Jul/2026:16:49:53 +0000] "POST /api/auth/login HTTP/1.1" 200 308 "http://localhost:3000/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-22T16:52:05.690Z [INFO]: ::1 - - [22/Jul/2026:16:52:05 +0000] "GET /api/wallet HTTP/1.1" 200 28 "http://localhost:3000/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-22T16:58:16.883Z [INFO]: ::1 - - [22/Jul/2026:16:58:16 +0000] "GET /api/wallet HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-22T16:58:17.095Z [INFO]: ::1 - - [22/Jul/2026:16:58:17 +0000] "GET /api/wallet HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-22T17:00:22.029Z [INFO]: ::1 - - [22/Jul/2026:17:00:22 +0000] "GET /api/wallet HTTP/1.1" 401 38 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-22T17:05:00.172Z [INFO]: ::1 - - [22/Jul/2026:17:05:00 +0000] "GET /api/wallet HTTP/1.1" 304 - "http://localhost:3000/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
+2026-07-22T17:38:17.717Z [INFO]: ::ffff:127.0.0.1 - - [22/Jul/2026:17:38:17 +0000] "POST /api/wallet/fund HTTP/1.1" 401 38 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-22T17:39:05.087Z [INFO]: ::ffff:127.0.0.1 - - [22/Jul/2026:17:39:05 +0000] "POST /api/wallet/fund HTTP/1.1" 500 127 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-22T17:39:36.362Z [INFO]: ::ffff:127.0.0.1 - - [22/Jul/2026:17:39:36 +0000] "POST /api/wallet/fund HTTP/1.1" 500 127 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-22T17:42:27.006Z [INFO]: Starting server in development mode...
+2026-07-22T17:42:27.131Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T17:44:16.887Z [INFO]: Starting server in development mode...
+2026-07-22T17:44:16.987Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T17:45:54.921Z [INFO]: Starting server in development mode...
+2026-07-22T17:45:55.065Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T17:47:09.962Z [INFO]: Starting server in development mode...
+2026-07-22T17:47:10.101Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T17:51:54.029Z [INFO]: Starting server in development mode...
+2026-07-22T17:51:54.165Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T17:54:35.753Z [INFO]: Starting server in development mode...
+2026-07-22T17:54:35.918Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T18:46:16.250Z [INFO]: Starting server in development mode...
+2026-07-22T18:46:16.268Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T18:56:27.939Z [INFO]: Starting server in development mode...
+2026-07-22T18:56:27.969Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T18:58:21.562Z [INFO]: Starting server in development mode...
+2026-07-22T18:58:21.585Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T19:00:57.308Z [INFO]: Starting server in development mode...
+2026-07-22T19:00:57.332Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T19:01:42.031Z [INFO]: Starting server in development mode...
+2026-07-22T19:01:42.054Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T19:48:08.628Z [INFO]: Starting server in development mode...
+2026-07-22T19:48:08.650Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T19:51:16.858Z [INFO]: Starting server in development mode...
+2026-07-22T19:51:16.876Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T19:52:31.053Z [INFO]: Starting server in development mode...
+2026-07-22T19:52:31.070Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T19:54:20.902Z [INFO]: Starting server in development mode...
+2026-07-22T19:54:20.925Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T19:55:43.482Z [INFO]: Starting server in development mode...
+2026-07-22T19:55:43.500Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T19:58:30.802Z [INFO]: Starting server in development mode...
+2026-07-22T19:58:30.821Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T19:59:38.808Z [INFO]: Starting server in development mode...
+2026-07-22T19:59:38.831Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-22T20:02:30.899Z [INFO]: Starting server in development mode...
+2026-07-22T20:02:30.919Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-23T06:37:48.671Z [INFO]: Starting server in development mode...
+2026-07-23T06:37:50.173Z [INFO]: ✅ MongoDB Connected Successfully
+2026-07-23T06:37:50.178Z [INFO]: 🚀 Server running on http://localhost:5000
+2026-07-23T06:42:10.808Z [INFO]: ::ffff:127.0.0.1 - - [23/Jul/2026:06:42:10 +0000] "POST /api/wallet/fund HTTP/1.1" 200 70 "-" "Thunder Client (https://www.thunderclient.com)"
+2026-07-23T06:43:50.844Z [INFO]: Received SIGINT. Shutting down gracefully...
+2026-07-23T06:44:02.603Z [INFO]: Starting server in development mode...
+2026-07-23T06:44:04.071Z [INFO]: ✅ MongoDB Connected Successfully
+2026-07-23T06:44:04.074Z [INFO]: 🚀 Server running on http://localhost:5000
+2026-07-23T06:44:34.877Z [INFO]: Received SIGINT. Shutting down gracefully...
+2026-07-23T10:28:34.169Z [INFO]: Starting server in development mode...
+2026-07-23T10:28:37.218Z [INFO]: ✅ MongoDB Connected Successfully
+2026-07-23T10:28:37.221Z [INFO]: 🚀 Server running on http://localhost:5000
+2026-07-23T10:34:55.800Z [INFO]: Received SIGINT. Shutting down gracefully...

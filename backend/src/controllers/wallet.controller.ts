@@ -47,10 +47,11 @@ export const fundWallet = async (
 
     await wallet.save();
 
+    // Create transaction record
     await createTransaction({
       userId,
       type: "CREDIT",
-      category: "FUNDING",
+      category: "WALLET_FUNDING",
       amount: Number(amount),
       description: "Wallet funded successfully",
     });
@@ -60,7 +61,6 @@ export const fundWallet = async (
       message: "Wallet funded successfully",
       balance: wallet.balance,
     });
-
   } catch (error: any) {
     return res.status(500).json({
       success: false,
@@ -68,7 +68,6 @@ export const fundWallet = async (
     });
   }
 };
-
 
 /**
  * GET WALLET BALANCE
@@ -102,7 +101,6 @@ export const getWalletBalance = async (
       success: true,
       balance: wallet.balance,
     });
-
   } catch (error: any) {
     return res.status(500).json({
       success: false,
@@ -110,7 +108,6 @@ export const getWalletBalance = async (
     });
   }
 };
-
 
 /**
  * TRANSFER FUNDS
@@ -141,7 +138,6 @@ export const transferFunds = async (
       success: true,
       ...result,
     });
-
   } catch (error: any) {
     return res.status(400).json({
       success: false,
