@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
 import {
   Table,
   TableHeader,
@@ -9,79 +13,139 @@ import {
 
 import { Card, CardContent } from "@/components/ui/card";
 
-const transactions = [
-  {
-    service: "MTN Airtime",
-    amount: "₦1,000",
-    status: "Success",
-  },
-  {
-    service: "Glo Data",
-    amount: "₦2,500",
-    status: "Success",
-  },
-  {
-    service: "IKEDC",
-    amount: "₦5,000",
-    status: "Pending",
-  },
-  {
-    service: "GOtv",
-    amount: "₦6,200",
-    status: "Success",
-  },
-];
+interface Transaction {
+  _id: string;
+  service: string;
+  amount: number;
+  status: string;
+  createdAt?: string;
+}
 
 export default function TransactionsTable() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        const res = await fetch(
+          "http://localhost:5000/api/transactions",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data = await res.json();
+
+        setTransactions(data.transactions || []);
+
+      } catch (error) {
+        console.log("Transaction error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, []);
+
+
   return (
     <Card>
       <CardContent className="p-6">
 
-        <h2 className="mb-6 text-xl font-semibold">
+        <h2 className="text-xl font-semibold mb-4">
           Recent Transactions
         </h2>
 
-        <Table>
 
-          <TableHeader>
+        {loading ? (
 
-            <TableRow>
+          <p>Loading transactions...</p>
 
-              <TableHead>Service</TableHead>
+        ) : (
 
-              <TableHead>Amount</TableHead>
+          <Table>
 
-              <TableHead>Status</TableHead>
+            <TableHeader>
 
-            </TableRow>
+              <TableRow>
 
-          </TableHeader>
+                <TableHead>
+                  Service
+                </TableHead>
 
-          <TableBody>
+                <TableHead>
+                  Amount
+                </TableHead>
 
-            {transactions.map((transaction, index) => (
+                <TableHead>
+                  Status
+                </TableHead>
 
-              <TableRow key={index}>
-
-                <TableCell>
-                  {transaction.service}
-                </TableCell>
-
-                <TableCell>
-                  {transaction.amount}
-                </TableCell>
-
-                <TableCell>
-                  {transaction.status}
-                </TableCell>
+                <TableHead>
+                  Date
+                </TableHead>
 
               </TableRow>
 
-            ))}
+            </TableHeader>
 
-          </TableBody>
 
-        </Table>
+            <TableBody>
+
+              {transactions.length === 0 ? (
+
+                <TableRow>
+                  <TableCell colSpan={4}>
+                    No transactions yet
+                  </TableCell>
+                </TableRow>
+
+
+              ) : (
+
+                transactions.map((tx) => (
+
+                  <TableRow key={tx._id}>
+
+                    <TableCell>
+                      {tx.service}
+                    </TableCell>
+
+
+                    <TableCell>
+                      ₦{tx.amount.toLocaleString()}
+                    </TableCell>
+
+
+                    <TableCell>
+                      {tx.status}
+                    </TableCell>
+
+
+                    <TableCell>
+                      {tx.createdAt
+                        ? new Date(tx.createdAt).toLocaleDateString()
+                        : "-"}
+                    </TableCell>
+
+
+                  </TableRow>
+
+                ))
+
+              )}
+
+            </TableBody>
+
+          </Table>
+
+        )}
 
       </CardContent>
     </Card>

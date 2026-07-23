@@ -9,14 +9,25 @@ import ServicesGrid from "@/components/dashboard/ServicesGrid";
 export default function DashboardPage() {
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-6">
+
         <WalletCard />
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Today's Transactions" value="15" />
-          <StatCard title="Revenue" value="₦85,000" />
-          <StatCard title="Successful" value="98%" />
-          <StatCard title="Pending" value="3" />
+        <div className="grid gap-4 md:grid-cols-3">
+          <StatCard
+            title="Total Transactions"
+            value="0"
+          />
+
+          <StatCard
+            title="Successful"
+            value="0"
+          />
+
+          <StatCard
+            title="Failed"
+            value="0"
+          />
         </div>
 
         <QuickActions />
@@ -26,6 +37,7 @@ export default function DashboardPage() {
         <TransactionsTable />
 
         <ServicesGrid />
+
       </div>
     </DashboardLayout>
   );

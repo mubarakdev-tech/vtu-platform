@@ -1,36 +1,54 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Wallet } from "lucide-react";
 
 export default function WalletCard() {
+  const [balance, setBalance] = useState<number>(0);
+
+  useEffect(() => {
+    const getWallet = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        const response = await fetch(
+          "http://localhost:5000/api/wallet",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+
+        setBalance(Number(data.wallet?.balance ?? 0));
+
+      } catch (error) {
+        console.log(error);
+        setBalance(0);
+      }
+    };
+
+    getWallet();
+  }, []);
+
   return (
-    <Card className="bg-blue-700 text-white border-0">
+    <Card>
       <CardContent className="p-6">
-        <div className="flex items-center justify-between">
 
-          <div>
-            <p className="text-blue-100">
-              Wallet Balance
-            </p>
+        <p className="text-sm text-muted-foreground">
+          Available Balance
+        </p>
 
-            <h2 className="mt-2 text-4xl font-bold">
-              ₦25,000.00
-            </h2>
+        <h2 className="mt-2 text-4xl font-bold">
+          ₦{(balance ?? 0).toLocaleString()}
+        </h2>
 
-            <p className="mt-2 text-sm text-blue-200">
-              Last updated just now
-            </p>
-          </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          VTU Wallet
+        </p>
 
-          <Wallet size={60} />
-        </div>
-
-        <Button
-          className="mt-6"
-          variant="secondary"
-        >
-          Fund Wallet
-        </Button>
       </CardContent>
     </Card>
   );
