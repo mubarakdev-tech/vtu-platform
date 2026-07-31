@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Menu } from "lucide-react";
 
@@ -14,15 +15,15 @@ export default function Navbar() {
           href="/"
           className="flex items-center gap-3"
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-600 text-xl font-bold text-white shadow-lg">
-            A
-          </div>
+          <Image
+            src="/image/abupay-logo.png"
+            alt="AbuPay Logo"
+            width={140}
+            height={50}
+            priority
+          />
 
           <div>
-            <h1 className="text-2xl font-extrabold text-emerald-700">
-              AbuPay
-            </h1>
-
             <p className="text-xs text-gray-500">
               Fast • Secure • Reliable
             </p>
