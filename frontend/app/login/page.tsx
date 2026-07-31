@@ -1,93 +1,127 @@
+```tsx
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+import { loginSchema } from "@/schemas/authSchema";
+import useAuth from "@/hooks/useAuth";
+
+
+type LoginForm = z.infer<typeof loginSchema>;
+
 
 export default function LoginPage() {
+
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const { login, loading } = useAuth();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+  });
+
+
+  const onSubmit = async (data: LoginForm) => {
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
 
-      const data = await res.json();
+      const response = await login(
+        data.email,
+        data.password
+      );
 
-      if (!res.ok) {
-        throw new Error(data.message || "Login failed");
-      }
 
-      // Save login details
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem(
+        "user",
+        JSON.stringify(response.user)
+      );
+
 
       router.push("/dashboard");
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
-    } finally {
-      setLoading(false);
+
+
+    } catch (error: any) {
+
+      console.error(
+        error.response?.data?.message ||
+        error.message ||
+        "Login failed"
+      );
+
     }
+
   };
 
+
   return (
+
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
+
       <form
-        onSubmit={handleLogin}
+        onSubmit={handleSubmit(onSubmit)}
         className="w-full max-w-md rounded-lg bg-white p-8 shadow"
       >
+
         <h1 className="mb-6 text-center text-3xl font-bold">
           Login
         </h1>
 
-        {error && (
-          <p className="mb-4 rounded bg-red-100 p-2 text-red-600">
-            {error}
-          </p>
-        )}
 
         <input
           type="email"
           placeholder="Email"
-          className="mb-4 w-full rounded border p-3"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
+          className="mb-2 w-full rounded border p-3"
+          {...register("email")}
         />
+
+
+        {errors.email && (
+          <p className="mb-3 text-sm text-red-600">
+            {errors.email.message}
+          </p>
+        )}
+
+
 
         <input
           type="password"
           placeholder="Password"
-          className="mb-6 w-full rounded border p-3"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
+          className="mb-2 w-full rounded border p-3"
+          {...register("password")}
         />
+
+
+        {errors.password && (
+          <p className="mb-3 text-sm text-red-600">
+            {errors.password.message}
+          </p>
+        )}
+
+
 
         <button
           type="submit"
           disabled={loading}
           className="w-full rounded bg-blue-600 p-3 text-white hover:bg-blue-700"
         >
+
           {loading ? "Logging in..." : "Login"}
+
         </button>
+
+
       </form>
+
     </div>
+
   );
 }
+```
