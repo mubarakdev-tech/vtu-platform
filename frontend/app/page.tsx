@@ -1,17 +1,19 @@
-import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import Navbar from "@/components/landing/Navbar";
+import Hero from "@/components/landing/Hero";
+import TrustedBrands from "@/components/landing/TrustedBrands";
+import Services from "@/components/landing/Services";
+import WhyChooseUs from "@/components/landing/WhyChooseUs";
+import Stats from "@/components/landing/Stats";
 
-export default function DashboardPage() {
+export default function Home() {
   return (
-    <DashboardLayout>
-
-      <h1 className="text-3xl font-bold">
-        Dashboard
-      </h1>
-
-      <p className="mt-3 text-gray-600">
-        Welcome to your VTU Platform dashboard.
-      </p>
-
-    </DashboardLayout>
+    <>
+      <Navbar />
+      <Hero />
+      <TrustedBrands />
+      <Services />
+      <WhyChooseUs />
+      <Stats />
+    </>
   );
 }

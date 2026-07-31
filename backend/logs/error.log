@@ -75,3 +75,42 @@
     at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
 2026-07-22T20:02:30.919Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
     at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-24T14:20:01.613Z [ERROR]: MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1100:11)
+    at connectDB (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\config\db.ts:7:5)
+    at startServer (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\server.ts:16:5)
+2026-07-29T15:40:30.982Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-29T15:45:21.878Z [ERROR]: Error: querySrv ECONNREFUSED _mongodb._tcp.cluster0.phfbtfn.mongodb.net
+    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:295:17)
+2026-07-31T08:04:00.964Z [ERROR]: MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1100:11)
+    at connectDB (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\config\db.ts:7:5)
+    at startServer (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\server.ts:20:5)
+2026-07-31T08:04:23.981Z [ERROR]: MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1100:11)
+    at connectDB (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\config\db.ts:7:5)
+    at startServer (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\server.ts:20:5)
+2026-07-31T08:06:22.334Z [ERROR]: MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1100:11)
+    at connectDB (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\config\db.ts:7:5)
+    at startServer (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\server.ts:16:5)
+2026-07-31T08:06:22.345Z [ERROR]: MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1100:11)
+    at connectDB (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\config\db.ts:7:5)
+    at startServer (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\server.ts:16:5)
+2026-07-31T09:40:21.407Z [ERROR]: MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1100:11)
+    at connectDB (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\config\db.ts:7:5)
+    at startServer (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\server.ts:16:5)
+2026-07-31T09:50:21.682Z [ERROR]: MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1169:11)
+    at NativeConnection.openUri (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\node_modules\mongoose\lib\connection.js:1100:11)
+    at connectDB (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\config\db.ts:7:5)
+    at startServer (C:\Users\Mr. Mubarack\Desktop\vtu-Platform\backend\src\server.ts:16:5)

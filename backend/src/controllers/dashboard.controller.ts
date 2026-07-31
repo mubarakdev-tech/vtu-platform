@@ -1,66 +1,66 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import Wallet from "../models/wallet.model";
 import Transaction from "../models/transaction.model";
 
-export const getDashboard = async (
-  req: any,
-  res: Response
-) => {
+export const getDashboard = async (req: Request, res: Response) => {
   try {
-    const userId = req.user;
+    const userId = req.user?.id;
 
-    // Wallet
-    const wallet = await Wallet.findOne({
+    const wallet = await Wallet.findOne({ user: userId });
+
+    const transactions = await Transaction.find({ user: userId })
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    const totalTransactions = await Transaction.countDocuments({
       user: userId,
     });
 
-    // All Transactions
-    const transactions = await Transaction.find({
+    const successfulTransactions = await Transaction.countDocuments({
       user: userId,
-    }).sort({
-      createdAt: -1,
+      status: "success",
     });
 
-    // Statistics
-    const totalTransactions = transactions.length;
+    const failedTransactions = await Transaction.countDocuments({
+      user: userId,
+      status: "failed",
+    });
 
-    const successfulTransactions =
-      transactions.filter(
-        (t) => t.status === "SUCCESS"
-      ).length;
-
-    const failedTransactions =
-      transactions.filter(
-        (t) => t.status === "FAILED"
-      ).length;
-
-    const totalSpent = transactions
-      .filter((t) => t.type === "DEBIT")
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    return res.status(200).json({
+    res.json({
       success: true,
 
       walletBalance: wallet?.balance || 0,
 
-      totalTransactions,
+      stats: {
+        totalTransactions,
+        successfulTransactions,
+        failedTransactions,
+        referralEarnings: 0,
+      },
 
-      successfulTransactions,
+      recentTransactions: transactions,
 
-      failedTransactions,
+      announcements: [
+        {
+          id: 1,
+          title: "Welcome to AbuPay",
+          message: "Buy Airtime, Data and Pay Bills instantly.",
+        },
+      ],
 
-      totalSpent,
-
-      recentTransactions:
-        transactions.slice(0, 10),
+      promotions: [
+        {
+          title: "Weekend Promo",
+          description: "Get 2% cashback on MTN Data.",
+        },
+      ],
     });
+  } catch (error) {
+    console.log(error);
 
-  } catch (error: any) {
-
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Dashboard error",
     });
-
   }
 };
