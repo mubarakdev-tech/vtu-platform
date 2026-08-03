@@ -1,42 +1,34 @@
 import {
   Smartphone,
   Wifi,
-  Tv,
   Zap,
-  Wallet,
-  ArrowRight,
+  Tv,
 } from "lucide-react";
 
 const services = [
   {
     title: "Airtime Recharge",
+    description:
+      "Instant airtime recharge for MTN, Airtel, Glo and 9mobile networks.",
     icon: Smartphone,
-    color: "bg-green-500",
-    description: "Instant recharge for MTN, Airtel, Glo & 9mobile.",
   },
   {
     title: "Data Bundles",
+    description:
+      "Buy affordable internet data plans and stay connected anytime.",
     icon: Wifi,
-    color: "bg-blue-500",
-    description: "Affordable internet bundles delivered instantly.",
   },
   {
     title: "Electricity Bills",
+    description:
+      "Pay your electricity bills quickly and securely from anywhere.",
     icon: Zap,
-    color: "bg-yellow-500",
-    description: "Pay electricity bills without stress.",
   },
   {
     title: "TV Subscription",
+    description:
+      "Renew your DSTV, GOtv and other TV subscriptions with ease.",
     icon: Tv,
-    color: "bg-purple-500",
-    description: "Renew DStv, GOtv & Startimes quickly.",
-  },
-  {
-    title: "Wallet",
-    icon: Wallet,
-    color: "bg-emerald-600",
-    description: "Fund your wallet and enjoy faster checkout.",
   },
 ];
 
@@ -44,27 +36,26 @@ export default function Services() {
   return (
     <section
       id="services"
-      className="bg-slate-50 py-24"
+      className="scroll-mt-24 bg-white px-6 py-20"
     >
-      <div className="mx-auto max-w-7xl px-6">
+      <div className="container mx-auto">
 
-        <div className="text-center">
+        {/* Heading */}
+        <div className="mx-auto max-w-2xl text-center">
 
-          <span className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700">
-            OUR SERVICES
-          </span>
-
-          <h2 className="mt-5 text-5xl font-bold">
-            Everything You Need
+          <h2 className="text-3xl font-bold text-gray-900 md:text-4xl">
+            Our Services
           </h2>
 
-          <p className="mx-auto mt-5 max-w-2xl text-lg text-gray-500">
-            AbuPay provides all essential VTU services in one secure platform.
+          <p className="mt-4 text-gray-600">
+            Everything you need for your daily digital payments in one place.
           </p>
 
         </div>
 
-        <div className="mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+
+        {/* Cards */}
+        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
 
           {services.map((service) => {
 
@@ -73,28 +64,44 @@ export default function Services() {
             return (
               <div
                 key={service.title}
-                className="group rounded-3xl bg-white p-8 shadow-sm transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl"
+                className="
+                  rounded-2xl
+                  border
+                  bg-white
+                  p-6
+                  shadow-sm
+                  transition
+                  hover:-translate-y-1
+                  hover:shadow-lg
+                "
               >
 
-                <div className={`mb-6 flex h-16 w-16 items-center justify-center rounded-2xl text-white ${service.color}`}>
-                  <Icon size={30} />
+                <div
+                  className="
+                    mb-5
+                    flex
+                    h-12
+                    w-12
+                    items-center
+                    justify-center
+                    rounded-xl
+                    bg-blue-100
+                    text-blue-600
+                  "
+                >
+                  <Icon size={26} />
                 </div>
 
-                <h3 className="text-2xl font-bold">
+
+                <h3 className="text-xl font-semibold text-gray-900">
                   {service.title}
                 </h3>
 
-                <p className="mt-4 text-gray-500">
+
+                <p className="mt-3 text-sm leading-6 text-gray-600">
                   {service.description}
                 </p>
 
-                <button className="mt-8 flex items-center gap-2 font-semibold text-emerald-600 group-hover:gap-4 transition-all">
-
-                  Learn More
-
-                  <ArrowRight size={18} />
-
-                </button>
 
               </div>
             );

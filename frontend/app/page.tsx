@@ -11,31 +11,22 @@ import Footer from "@/components/landing/Footer";
 export default function Home() {
   return (
     <>
-      {/* Navigation */}
       <Navbar />
 
-      {/* Hero Section */}
       <Hero />
 
-      {/* Trusted Brands */}
       <TrustedBrands />
 
-      {/* Services */}
       <Services />
 
-      {/* Why Choose AbuPay */}
       <WhyChooseUs />
 
-      {/* Statistics */}
       <Stats />
 
-      {/* Customer Reviews */}
       <Testimonials />
 
-      {/* Frequently Asked Questions */}
       <FAQ />
 
-      {/* Footer */}
       <Footer />
     </>
   );

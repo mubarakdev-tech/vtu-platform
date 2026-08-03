@@ -1,41 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Wallet, ArrowDownCircle, Send, History } from "lucide-react";
+import {
+  Wallet,
+  ArrowDownCircle,
+  Send,
+  History,
+  Eye,
+} from "lucide-react";
 import CountUp from "react-countup";
+import { useState } from "react";
+import useWallet from "@/hooks/useWallet";
 
 export default function WalletCard() {
-  const [balance, setBalance] = useState(0);
-
-  useEffect(() => {
-    const getWallet = async () => {
-      try {
-        const token = localStorage.getItem("token");
-
-        const response = await fetch(
-          "http://localhost:5000/api/wallet",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        const data = await response.json();
-
-        setBalance(Number(data.wallet?.balance ?? 0));
-      } catch (error) {
-        console.error(error);
-      }
-    };
-
-    getWallet();
-  }, []);
+  const { balance, loading } = useWallet();
+  const [showBalance, setShowBalance] = useState(true);
 
   return (
-    <div className="overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-600 via-green-500 to-teal-500 p-8 text-white shadow-2xl">
+    <div className="overflow-hidden rounded-3xl bg-gradient-to-r from-blue-700 via-blue-600 to-cyan-500 p-8 text-white shadow-2xl">
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
 
         <div>
 
@@ -44,37 +27,53 @@ export default function WalletCard() {
             <Wallet size={24} />
 
             <span className="text-lg font-medium">
-              Wallet Balance
+              AbuPay Wallet
             </span>
 
           </div>
 
-          <h2 className="mt-4 text-5xl font-bold">
+          <div className="mt-5 flex items-center gap-3">
 
-            ₦
+            <h2 className="text-5xl font-bold">
 
-            <CountUp
-              end={balance}
-              duration={1.8}
-              separator=","
-            />
+              {loading ? (
+                "Loading..."
+              ) : showBalance ? (
+                <>
+                  ₦
+                  <CountUp
+                    end={balance}
+                    duration={1.5}
+                    separator=","
+                  />
+                </>
+              ) : (
+                "₦ ••••••"
+              )}
 
-          </h2>
+            </h2>
 
-          <p className="mt-2 text-white/80">
+            <button
+              onClick={() =>
+                setShowBalance(!showBalance)
+              }
+              className="rounded-full bg-white/10 p-2 hover:bg-white/20"
+            >
+              <Eye size={18} />
+            </button>
+
+          </div>
+
+          <p className="mt-2 text-sm text-white/80">
             Available Balance
           </p>
 
         </div>
 
-        <div className="hidden md:block">
-
-          <Wallet
-            size={90}
-            className="opacity-20"
-          />
-
-        </div>
+        <Wallet
+          size={90}
+          className="hidden opacity-20 md:block"
+        />
 
       </div>
 
@@ -84,7 +83,7 @@ export default function WalletCard() {
 
           <ArrowDownCircle className="mx-auto mb-2" />
 
-          <p className="text-sm">
+          <p className="text-sm font-medium">
             Fund Wallet
           </p>
 
@@ -94,7 +93,7 @@ export default function WalletCard() {
 
           <Send className="mx-auto mb-2" />
 
-          <p className="text-sm">
+          <p className="text-sm font-medium">
             Transfer
           </p>
 
@@ -104,7 +103,7 @@ export default function WalletCard() {
 
           <History className="mx-auto mb-2" />
 
-          <p className="text-sm">
+          <p className="text-sm font-medium">
             History
           </p>
 

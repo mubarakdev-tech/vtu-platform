@@ -32,7 +32,7 @@ export default function FAQ() {
   return (
     <section
       id="faq"
-      className="bg-white py-24"
+      className="scroll-mt-24 bg-white py-24"
     >
       <div className="mx-auto max-w-4xl px-6">
 
@@ -42,11 +42,12 @@ export default function FAQ() {
             FAQ
           </span>
 
-          <h2 className="mt-6 text-5xl font-bold">
+          <h2 className="mt-6 text-5xl font-bold text-gray-900">
             Frequently Asked Questions
           </h2>
 
         </div>
+
 
         <div className="mt-16 space-y-5">
 
@@ -54,7 +55,7 @@ export default function FAQ() {
 
             <div
               key={faq.question}
-              className="rounded-2xl border"
+              className="rounded-2xl border bg-white"
             >
 
               <button
@@ -64,24 +65,26 @@ export default function FAQ() {
                 className="flex w-full items-center justify-between p-6 text-left"
               >
 
-                <span className="font-semibold">
+                <span className="font-semibold text-gray-900">
                   {faq.question}
                 </span>
 
+
                 <ChevronDown
                   className={`transition ${
-                    open === index ? "rotate-180" : ""
+                    open === index
+                      ? "rotate-180"
+                      : ""
                   }`}
                 />
 
               </button>
 
+
               {open === index && (
 
-                <div className="px-6 pb-6 text-gray-600 leading-8">
-
+                <div className="px-6 pb-6 leading-8 text-gray-600">
                   {faq.answer}
-
                 </div>
 
               )}

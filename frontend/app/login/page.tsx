@@ -1,24 +1,27 @@
-```tsx
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import toast from "react-hot-toast";
+
+import AuthLayout from "@/components/auth/AuthLayout";
+import AuthCard from "@/components/auth/AuthCard";
+import AuthInput from "@/components/auth/AuthInput";
+import PasswordInput from "@/components/auth/PasswordInput";
+import AuthButton from "@/components/auth/AuthButton";
 
 import { loginSchema } from "@/schemas/authSchema";
 import useAuth from "@/hooks/useAuth";
 
-
 type LoginForm = z.infer<typeof loginSchema>;
 
-
 export default function LoginPage() {
-
   const router = useRouter();
 
   const { login, loading } = useAuth();
-
 
   const {
     register,
@@ -28,100 +31,100 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   });
 
-
   const onSubmit = async (data: LoginForm) => {
-
     try {
-
-      const response = await login(
+      await login(
         data.email,
         data.password
       );
 
-
-      localStorage.setItem(
-        "user",
-        JSON.stringify(response.user)
+      toast.success(
+        "Welcome back to AbuPay!"
       );
-
 
       router.push("/dashboard");
 
-
     } catch (error: any) {
 
-      console.error(
-        error.response?.data?.message ||
-        error.message ||
-        "Login failed"
+      toast.error(
+        error?.response?.data?.message ||
+        "Login failed. Please try again."
       );
 
     }
-
   };
 
-
   return (
+    <AuthLayout
+      title="Welcome Back"
+      subtitle="Login to your AbuPay account"
+    >
+      <AuthCard>
 
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="w-full max-w-md rounded-lg bg-white p-8 shadow"
-      >
-
-        <h1 className="mb-6 text-center text-3xl font-bold">
-          Login
-        </h1>
-
-
-        <input
-          type="email"
-          placeholder="Email"
-          className="mb-2 w-full rounded border p-3"
-          {...register("email")}
-        />
-
-
-        {errors.email && (
-          <p className="mb-3 text-sm text-red-600">
-            {errors.email.message}
-          </p>
-        )}
-
-
-
-        <input
-          type="password"
-          placeholder="Password"
-          className="mb-2 w-full rounded border p-3"
-          {...register("password")}
-        />
-
-
-        {errors.password && (
-          <p className="mb-3 text-sm text-red-600">
-            {errors.password.message}
-          </p>
-        )}
-
-
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded bg-blue-600 p-3 text-white hover:bg-blue-700"
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-2"
         >
 
-          {loading ? "Logging in..." : "Login"}
+          <AuthInput
+            label="Email Address"
+            type="email"
+            placeholder="example@email.com"
+            {...register("email")}
+            error={errors.email?.message}
+          />
 
-        </button>
+          <PasswordInput
+            label="Password"
+            placeholder="Enter your password"
+            {...register("password")}
+            error={errors.password?.message}
+          />
 
+          <div className="mb-5 flex items-center justify-between text-sm">
 
-      </form>
+            <label className="flex items-center gap-2 text-gray-600">
 
-    </div>
+              <input
+                type="checkbox"
+                className="rounded"
+              />
 
+              Remember me
+
+            </label>
+
+            <Link
+              href="#"
+              className="text-blue-600 hover:underline"
+            >
+              Forgot password?
+            </Link>
+
+          </div>
+
+          <AuthButton
+            loading={loading}
+          >
+            Login Securely
+          </AuthButton>
+
+          <p className="pt-5 text-center text-sm text-gray-600">
+
+            Don't have an account?
+
+            <Link
+              href="/register"
+              className="ml-1 font-semibold text-blue-600 hover:underline"
+            >
+              Create Account
+            </Link>
+
+          </p>
+
+        </form>
+
+      </AuthCard>
+    </AuthLayout>
   );
 }
-```

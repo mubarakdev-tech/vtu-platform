@@ -10,7 +10,7 @@ export default function AuthCard({
   children,
 }: AuthCardProps) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
+    <div className="rounded-3xl border border-gray-100 bg-white p-8 shadow-xl transition-all duration-300 hover:shadow-2xl">
       {children}
     </div>
   );

@@ -1,32 +1,31 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import api from "@/lib/api";
-import { Wallet } from "@/types/wallet";
+import { getWallet } from "@/services/wallet.service";
 
 export default function useWallet() {
-  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  const loadWallet = async () => {
+    try {
+      const response = await getWallet();
+
+      setBalance(Number(response.balance ?? 0));
+    } catch (error) {
+      console.error("Wallet error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchWallet = async () => {
-      try {
-        const response = await api.get("/wallet");
-
-        setWallet(response.data);
-
-      } catch (error) {
-        console.error("Wallet error:", error);
-
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchWallet();
-
+    loadWallet();
   }, []);
 
   return {
-    wallet,
+    balance,
     loading,
+    refreshWallet: loadWallet,
   };
 }

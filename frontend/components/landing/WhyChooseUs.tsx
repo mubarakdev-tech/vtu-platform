@@ -56,7 +56,7 @@ export default function WhyChooseUs() {
   return (
     <section
       id="why"
-      className="bg-white py-24"
+      className="scroll-mt-24 bg-white py-24"
     >
       <div className="mx-auto max-w-7xl px-6">
 
@@ -78,6 +78,7 @@ export default function WhyChooseUs() {
 
         </div>
 
+
         <div className="mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
 
           {features.map((feature) => {
@@ -90,17 +91,22 @@ export default function WhyChooseUs() {
                 className="rounded-3xl border bg-white p-8 transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl"
               >
 
-                <div className={`mb-6 flex h-16 w-16 items-center justify-center rounded-2xl ${feature.color}`}>
+                <div
+                  className={`mb-6 flex h-16 w-16 items-center justify-center rounded-2xl ${feature.color}`}
+                >
                   <Icon size={30} />
                 </div>
+
 
                 <h3 className="text-2xl font-bold">
                   {feature.title}
                 </h3>
 
+
                 <p className="mt-4 leading-8 text-gray-500">
                   {feature.description}
                 </p>
+
 
               </div>
             );
