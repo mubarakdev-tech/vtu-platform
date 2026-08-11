@@ -1,15 +1,20 @@
-import axios from "axios";
+import api from "@/lib/api";
+import { TransactionsResponse } from "@/types/transaction";
 
-const API =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5000/api";
+export interface TransactionFilters {
+  page?: number;
+  limit?: number;
+  status?: string;
+  category?: string;
+  type?: string;
+  search?: string;
+}
 
-export const getTransactions = async (token: string) => {
-  const res = await axios.get(`${API}/transactions`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+export const getTransactions = async (
+  filters: TransactionFilters = {}
+): Promise<TransactionsResponse> => {
+  const { data } = await api.get("/transactions", {
+    params: filters,
   });
-
-  return res.data;
+  return data;
 };

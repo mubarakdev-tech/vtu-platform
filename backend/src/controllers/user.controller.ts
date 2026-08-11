@@ -1,18 +1,18 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/user.model";
+import Wallet from "../models/wallet.model";
 import { AuthRequest } from "../middleware/auth.middleware";
 import cloudinary from "../config/cloudinary";
 
 // ==========================
 // GET PROFILE
 // ==========================
-export const getProfile = async (
-  req: AuthRequest,
-  res: Response
-) => {
+export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
-    const user = await User.findById(req.user?.id).select("-password");
+    const userId = req.user?._id || req.user?.id;
+
+    const user = await User.findById(userId).select("-password");
 
     if (!user) {
       return res.status(404).json({
@@ -20,7 +20,27 @@ export const getProfile = async (
       });
     }
 
-    return res.status(200).json(user);
+    // Get wallet balance (create if missing)
+    let wallet = await Wallet.findOne({ user: userId });
+
+    if (!wallet) {
+      wallet = await Wallet.create({
+        user: userId,
+        balance: 0,
+      });
+    }
+
+    return res.status(200).json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      isVerified: user.isVerified,
+      profilePicture: user.profilePicture,
+      walletBalance: wallet.balance,
+      createdAt: user.createdAt,
+    });
   } catch (error: any) {
     return res.status(500).json({
       message: "Server error",
@@ -32,14 +52,12 @@ export const getProfile = async (
 // ==========================
 // UPDATE PROFILE
 // ==========================
-export const updateProfile = async (
-  req: AuthRequest,
-  res: Response
-) => {
+export const updateProfile = async (req: AuthRequest, res: Response) => {
   try {
     const { name, phone } = req.body;
+    const userId = req.user?._id || req.user?.id;
 
-    const user = await User.findById(req.user?.id);
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -61,25 +79,23 @@ export const updateProfile = async (
     // UPLOAD PROFILE PICTURE
     // ==========================
     if (req.file) {
-      const uploadResult = await new Promise<any>(
-        (resolve, reject) => {
-          const uploadStream = cloudinary.uploader.upload_stream(
-            {
-              folder: "abupay/profile-pictures",
-              resource_type: "image",
-            },
-            (error, result) => {
-              if (error) {
-                reject(error);
-              } else {
-                resolve(result);
-              }
+      const uploadResult = await new Promise<any>((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: "abupay/profile-pictures",
+            resource_type: "image",
+          },
+          (error, result) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve(result);
             }
-          );
+          }
+        );
 
-          uploadStream.end(req.file?.buffer);
-        }
-      );
+        uploadStream.end(req.file?.buffer);
+      });
 
       user.profilePicture = uploadResult.secure_url;
     }
@@ -111,17 +127,12 @@ export const updateProfile = async (
 // ==========================
 // CHANGE PASSWORD
 // ==========================
-export const changePassword = async (
-  req: AuthRequest,
-  res: Response
-) => {
+export const changePassword = async (req: AuthRequest, res: Response) => {
   try {
-    const {
-      currentPassword,
-      newPassword,
-    } = req.body;
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user?._id || req.user?.id;
 
-    const user = await User.findById(req.user?.id);
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -129,10 +140,7 @@ export const changePassword = async (
       });
     }
 
-    const isMatch = await bcrypt.compare(
-      currentPassword,
-      user.password
-    );
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
 
     if (!isMatch) {
       return res.status(400).json({
@@ -140,10 +148,7 @@ export const changePassword = async (
       });
     }
 
-    user.password = await bcrypt.hash(
-      newPassword,
-      10
-    );
+    user.password = await bcrypt.hash(newPassword, 10);
 
     await user.save();
 

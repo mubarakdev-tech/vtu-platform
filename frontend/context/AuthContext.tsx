@@ -35,7 +35,8 @@ export function AuthProvider({
   const refreshUser = async () => {
     try {
       const { data } = await api.get("/auth/me");
-      setUser(data);
+
+      setUser(data.user || data);
     } catch {
       setUser(null);
     } finally {
@@ -47,22 +48,23 @@ export function AuthProvider({
     refreshUser();
   }, []);
 
+  // Login
   const login = async (
     email: string,
     password: string
-  ) => {
-    await api.post("/auth/login", {
+  ): Promise<User> => {
+    const { data } = await api.post("/auth/login", {
       email,
       password,
     });
 
-    const { data } = await api.get("/auth/me");
+    // Login response already contains the user
+    setUser(data.user);
 
-    setUser(data);
-
-    return data;
+    return data.user;
   };
 
+  // Logout
   const logout = async () => {
     await api.post("/auth/logout");
     setUser(null);
