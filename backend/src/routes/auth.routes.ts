@@ -1,28 +1,71 @@
-import { Router, Response } from "express";
+import { Router } from "express";
+
 import {
   register,
   login,
   logout,
+  forgotPassword,
+  resetPassword,
+  getMe,
 } from "../controllers/auth.controller";
-import {
-  protect,
-  AuthRequest,
-} from "../middleware/auth.middleware";
+
+import { protect } from "../middleware/auth.middleware";
 
 const router = Router();
 
-// Public routes
-router.post("/register", register);
-router.post("/login", login);
-router.post("/logout", logout);
+// ==========================
+// REGISTER
+// ==========================
 
-// Protected route
+router.post(
+  "/register",
+  register
+);
+
+// ==========================
+// LOGIN
+// ==========================
+
+router.post(
+  "/login",
+  login
+);
+
+// ==========================
+// CURRENT USER
+// ==========================
+
 router.get(
   "/me",
   protect,
-  (req: AuthRequest, res: Response) => {
-    res.json(req.user);
-  }
+  getMe
+);
+
+// ==========================
+// LOGOUT
+// ==========================
+
+router.post(
+  "/logout",
+  logout
+);
+
+// ==========================
+// FORGOT PASSWORD
+// ==========================
+
+router.post(
+  "/forgot-password",
+  forgotPassword
+);
+
+// ==========================
+// RESET PASSWORD
+// ==========================
+
+router.post(
+  "/reset-password/:token",
+  resetPassword
 );
 
 export default router;

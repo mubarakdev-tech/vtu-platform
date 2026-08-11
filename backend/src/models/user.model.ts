@@ -1,18 +1,28 @@
-import mongoose from "mongoose";
+import mongoose, { Schema } from "mongoose";
 
 export interface IUser extends mongoose.Document {
   name: string;
   email: string;
-  phone: string;
+  phone?: string | null;
   password: string;
-  role: "user" | "admin";
+
+  role: "user" | "admin" | "super_admin";
+
   isVerified: boolean;
-  verificationToken?: string;
+  verificationToken?: string | null;
+
+  // Password reset
+  resetPasswordToken?: string | null;
+  resetPasswordExpires?: Date | null;
+
+  // AbuPay profile
+  profilePicture?: string | null;
+
   createdAt: Date;
+  updatedAt: Date;
 }
 
-
-const userSchema = new mongoose.Schema<IUser>(
+const userSchema = new Schema<IUser>(
   {
     name: {
       type: String,
@@ -20,50 +30,72 @@ const userSchema = new mongoose.Schema<IUser>(
       trim: true,
     },
 
-
     email: {
       type: String,
       required: true,
       unique: true,
       lowercase: true,
-    },
-
-
-    phone: {
-      type: String,
-      required: true,
       trim: true,
     },
 
+    phone: {
+      type: String,
+      trim: true,
+      default: null,
+    },
 
     password: {
       type: String,
       required: true,
     },
 
-
     role: {
       type: String,
-      enum: ["user", "admin"],
+      enum: ["user", "admin", "super_admin"],
       default: "user",
     },
-
 
     isVerified: {
       type: Boolean,
       default: false,
     },
 
-
     verificationToken: {
       type: String,
+      default: null,
     },
 
+    // ==========================
+    // PASSWORD RESET
+    // ==========================
+
+    resetPasswordToken: {
+      type: String,
+      default: null,
+    },
+
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+    },
+
+    // ==========================
+    // ABUPAY PROFILE PICTURE
+    // ==========================
+
+    profilePicture: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
 
+// Prevent OverwriteModelError during development
+const User =
+  mongoose.models.User ||
+  mongoose.model<IUser>("User", userSchema);
 
-export default mongoose.model<IUser>("User", userSchema);
+export default User;
