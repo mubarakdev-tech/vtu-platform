@@ -1,26 +1,10 @@
-import axios from "axios";
+import api from "@/lib/api";
 
-const API =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5000/api";
-
-export const buyAirtime = async (
-  token: string,
-  data: {
-    network: string;
-    phone: string;
-    amount: number;
-  }
-) => {
-  const res = await axios.post(
-    `${API}/airtime/buy`,
-    data,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
-
-  return res.data;
+export const buyAirtime = async (data: {
+  network: string;
+  phone: string;
+  amount: number;
+}) => {
+  const { data: response } = await api.post("/airtime/buy", data);
+  return response;
 };

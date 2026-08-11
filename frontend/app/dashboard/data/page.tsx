@@ -1,10 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { Wifi, Loader2, Check } from "lucide-react";
 import { getDataPlans, buyData } from "@/services/data";
+import useAuth from "@/hooks/useAuth";
 
+const networks = [
+  { id: "mtn", name: "MTN", color: "bg-yellow-400", text: "text-black" },
+  { id: "airtel", name: "Airtel", color: "bg-red-500", text: "text-white" },
+  { id: "glo", name: "Glo", color: "bg-green-600", text: "text-white" },
+  { id: "9mobile", name: "9mobile", color: "bg-emerald-700", text: "text-white" },
+];
 
 interface Plan {
   name: string;
@@ -12,313 +19,224 @@ interface Plan {
   amount: number;
 }
 
-
 export default function DataPage() {
-
-  const router = useRouter();
-
+  const { user } = useAuth();
 
   const [network, setNetwork] = useState("mtn");
-
   const [plans, setPlans] = useState<Plan[]>([]);
-
-  const [selectedPlan, setSelectedPlan] = useState("");
-
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [phone, setPhone] = useState("");
-
   const [loadingPlans, setLoadingPlans] = useState(false);
-
   const [loadingPurchase, setLoadingPurchase] = useState(false);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
-
-
+  // Load plans when network changes
   useEffect(() => {
-
     loadPlans();
-
   }, [network]);
 
-
-
   const loadPlans = async () => {
-
-    const token = localStorage.getItem("token");
-
-
-    if (!token) return;
-
-
     try {
-
       setLoadingPlans(true);
+      setSelectedPlan(null);
+      setMessage(null);
 
+      const result = await getDataPlans(network);
 
-      const result = await getDataPlans(
-        token,
-        network
-      );
-
-
-      if (result.success) {
-
+      if (result.success && result.data) {
         setPlans(result.data);
-
-
-        if (result.data.length > 0) {
-
-          setSelectedPlan(
-            result.data[0].variation_code
-          );
-
-        }
-
-
       } else {
-
-        alert(result.message);
-
+        setPlans([]);
+        setMessage({
+          type: "error",
+          text: result.message || "Unable to load data plans",
+        });
       }
-
-
     } catch (error: any) {
-
-      alert(
-        error.response?.data?.message ||
-        "Unable to load plans."
-      );
-
-
+      setPlans([]);
+      setMessage({
+        type: "error",
+        text: error?.response?.data?.message || "Failed to load plans",
+      });
     } finally {
-
       setLoadingPlans(false);
-
     }
-
   };
-
-
-
 
   const handlePurchase = async () => {
-
-    const token = localStorage.getItem("token");
-
-
-    if (!token) {
-
-      alert("Please login first.");
-
+    if (!phone || phone.length < 11) {
+      setMessage({ type: "error", text: "Please enter a valid phone number" });
       return;
-
     }
 
-
-
-    if (!phone || !selectedPlan) {
-
-      alert("Complete all fields.");
-
+    if (!selectedPlan) {
+      setMessage({ type: "error", text: "Please select a data plan" });
       return;
-
     }
-
-
-
-    const plan = plans.find(
-      (p) =>
-        p.variation_code === selectedPlan
-    );
-
-
-
-    if (!plan) {
-
-      alert("Invalid plan selected.");
-
-      return;
-
-    }
-
-
-
 
     try {
-
       setLoadingPurchase(true);
+      setMessage(null);
 
-
-
-      const result = await buyData(
-        token,
-        {
-          network,
-          phone,
-          plan: selectedPlan,
-          amount: plan.amount,
-        }
-      );
-
-
+      const result = await buyData({
+        network,
+        phone,
+        plan: selectedPlan.variation_code,
+        amount: selectedPlan.amount,
+      });
 
       if (result.success) {
-
-
-        alert(
-          "Data purchased successfully."
-        );
-
-
+        setMessage({
+          type: "success",
+          text: `${selectedPlan.name} sent successfully to ${phone}`,
+        });
         setPhone("");
-
-
-
-        setTimeout(() => {
-
-          router.push("/dashboard");
-
-        }, 1500);
-
-
-
+        setSelectedPlan(null);
       } else {
-
-        alert(
-          result.message
-        );
-
+        setMessage({
+          type: "error",
+          text: result.message || "Purchase failed. Please try again.",
+        });
       }
-
-
-
     } catch (error: any) {
-
-
-      alert(
-        error.response?.data?.message ||
-        "Purchase failed."
-      );
-
-
+      setMessage({
+        type: "error",
+        text: error?.response?.data?.message || "Something went wrong",
+      });
     } finally {
-
       setLoadingPurchase(false);
-
     }
-
   };
 
-
-
-
   return (
+    <DashboardLayout>
+      <div className="mx-auto max-w-3xl space-y-8">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Buy Data</h1>
+          <p className="mt-1 text-gray-500">
+            Choose a network and select a data plan
+          </p>
+        </div>
 
-    <div className="max-w-xl space-y-6">
+        <div className="rounded-2xl border bg-white p-6 shadow-sm md:p-8">
+          {/* Network Selection */}
+          <div className="mb-8">
+            <label className="mb-3 block text-sm font-medium text-gray-700">
+              Select Network
+            </label>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {networks.map((net) => (
+                <button
+                  key={net.id}
+                  onClick={() => setNetwork(net.id)}
+                  className={`rounded-xl py-4 text-sm font-semibold transition ${
+                    network === net.id
+                      ? `${net.color} ${net.text} ring-2 ring-offset-2 ring-emerald-500`
+                      : "border bg-gray-50 hover:bg-gray-100"
+                  }`}
+                >
+                  {net.name}
+                </button>
+              ))}
+            </div>
+          </div>
 
+          {/* Phone Number */}
+          <div className="mb-8">
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Phone Number
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="08012345678"
+              maxLength={11}
+              className="w-full rounded-xl border px-4 py-3.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+            />
+          </div>
 
-      <h1 className="text-3xl font-bold">
-        Buy Data
-      </h1>
+          {/* Data Plans */}
+          <div className="mb-8">
+            <label className="mb-3 block text-sm font-medium text-gray-700">
+              Select Data Plan
+            </label>
 
+            {loadingPlans ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="animate-spin text-emerald-600" size={28} />
+              </div>
+            ) : plans.length === 0 ? (
+              <div className="rounded-xl border border-dashed py-10 text-center text-gray-400">
+                No plans available for this network
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {plans.map((plan) => (
+                  <button
+                    key={plan.variation_code}
+                    onClick={() => setSelectedPlan(plan)}
+                    className={`relative rounded-xl border p-4 text-left transition ${
+                      selectedPlan?.variation_code === plan.variation_code
+                        ? "border-emerald-600 bg-emerald-50 ring-2 ring-emerald-100"
+                        : "hover:border-emerald-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    {selectedPlan?.variation_code === plan.variation_code && (
+                      <div className="absolute top-3 right-3 rounded-full bg-emerald-600 p-1 text-white">
+                        <Check size={12} />
+                      </div>
+                    )}
 
+                    <p className="font-medium text-gray-900">{plan.name}</p>
+                    <p className="mt-1 text-lg font-bold text-emerald-600">
+                      ₦{plan.amount.toLocaleString()}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-      <div className="rounded-xl border bg-white p-6 shadow space-y-4">
+          {/* Buy Button */}
+          <button
+            onClick={handlePurchase}
+            disabled={loadingPurchase || !selectedPlan}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loadingPurchase ? (
+              <>
+                <Loader2 className="animate-spin" size={18} />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Wifi size={18} />
+                {selectedPlan
+                  ? `Buy ${selectedPlan.name} - ₦${selectedPlan.amount.toLocaleString()}`
+                  : "Select a Plan"}
+              </>
+            )}
+          </button>
 
-
-        <select
-          value={network}
-          onChange={(e)=>setNetwork(e.target.value)}
-          className="w-full rounded-lg border p-3"
-        >
-
-          <option value="mtn">
-            MTN
-          </option>
-
-          <option value="airtel">
-            Airtel
-          </option>
-
-          <option value="glo">
-            Glo
-          </option>
-
-          <option value="9mobile">
-            9mobile
-          </option>
-
-        </select>
-
-
-
-
-        <select
-          value={selectedPlan}
-          onChange={(e)=>setSelectedPlan(e.target.value)}
-          className="w-full rounded-lg border p-3"
-          disabled={loadingPlans}
-        >
-
-          {loadingPlans ? (
-
-            <option>
-              Loading plans...
-            </option>
-
-
-          ) : (
-
-            plans.map((plan)=>(
-
-              <option
-                key={plan.variation_code}
-                value={plan.variation_code}
-              >
-
-                {plan.name} - ₦
-                {plan.amount.toLocaleString()}
-
-              </option>
-
-            ))
-
+          {/* Message */}
+          {message && (
+            <div
+              className={`mt-4 rounded-xl px-4 py-3 text-center text-sm font-medium ${
+                message.type === "success"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-red-50 text-red-600"
+              }`}
+            >
+              {message.text}
+            </div>
           )}
-
-
-        </select>
-
-
-
-
-        <input
-          type="text"
-          placeholder="Phone Number"
-          value={phone}
-          onChange={(e)=>setPhone(e.target.value)}
-          className="w-full rounded-lg border p-3"
-        />
-
-
-
-
-        <button
-          onClick={handlePurchase}
-          disabled={loadingPurchase}
-          className="w-full rounded-lg bg-blue-600 p-3 text-white font-semibold"
-        >
-
-          {loadingPurchase
-            ? "Processing..."
-            : "Buy Data"}
-
-        </button>
-
-
-
+        </div>
       </div>
-
-
-    </div>
-
+    </DashboardLayout>
   );
-
 }
