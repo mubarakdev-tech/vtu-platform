@@ -52,14 +52,14 @@ export default function DataPage() {
         setPlans([]);
         setMessage({
           type: "error",
-          text: result.message || "Unable to load data plans",
+          text: result.message || "Unable to load data plans on AbuPay",
         });
       }
     } catch (error: any) {
       setPlans([]);
       setMessage({
         type: "error",
-        text: error?.response?.data?.message || "Failed to load plans",
+        text: error?.response?.data?.message || "Failed to load plans on AbuPay",
       });
     } finally {
       setLoadingPlans(false);
@@ -91,20 +91,20 @@ export default function DataPage() {
       if (result.success) {
         setMessage({
           type: "success",
-          text: `${selectedPlan.name} sent successfully to ${phone}`,
+          text: `${selectedPlan.name} sent successfully to ${phone} on AbuPay`,
         });
         setPhone("");
         setSelectedPlan(null);
       } else {
         setMessage({
           type: "error",
-          text: result.message || "Purchase failed. Please try again.",
+          text: result.message || "Purchase failed on AbuPay. Please try again.",
         });
       }
     } catch (error: any) {
       setMessage({
         type: "error",
-        text: error?.response?.data?.message || "Something went wrong",
+        text: error?.response?.data?.message || "Something went wrong on AbuPay",
       });
     } finally {
       setLoadingPurchase(false);
@@ -118,7 +118,7 @@ export default function DataPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Buy Data</h1>
           <p className="mt-1 text-gray-500">
-            Choose a network and select a data plan
+            Choose a network and select a data plan on AbuPay
           </p>
         </div>
 
@@ -172,25 +172,27 @@ export default function DataPage() {
               </div>
             ) : plans.length === 0 ? (
               <div className="rounded-xl border border-dashed py-10 text-center text-gray-400">
-                No plans available for this network
+                No plans available for this network on AbuPay
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
-                {plans.map((plan) => (
+                {plans.map((plan, index) => (
                   <button
-                    key={plan.variation_code}
+                    key={`${plan.variation_code}-${plan.amount}-${index}`}
                     onClick={() => setSelectedPlan(plan)}
                     className={`relative rounded-xl border p-4 text-left transition ${
-                      selectedPlan?.variation_code === plan.variation_code
+                      selectedPlan?.variation_code === plan.variation_code &&
+                      selectedPlan?.amount === plan.amount
                         ? "border-emerald-600 bg-emerald-50 ring-2 ring-emerald-100"
                         : "hover:border-emerald-300 hover:bg-gray-50"
                     }`}
                   >
-                    {selectedPlan?.variation_code === plan.variation_code && (
-                      <div className="absolute top-3 right-3 rounded-full bg-emerald-600 p-1 text-white">
-                        <Check size={12} />
-                      </div>
-                    )}
+                    {selectedPlan?.variation_code === plan.variation_code &&
+                      selectedPlan?.amount === plan.amount && (
+                        <div className="absolute top-3 right-3 rounded-full bg-emerald-600 p-1 text-white">
+                          <Check size={12} />
+                        </div>
+                      )}
 
                     <p className="font-medium text-gray-900">{plan.name}</p>
                     <p className="mt-1 text-lg font-bold text-emerald-600">

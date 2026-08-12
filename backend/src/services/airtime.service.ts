@@ -53,13 +53,17 @@ export const purchaseAirtime = async (
         });
 
       console.log("========== VTPASS RESPONSE ==========");
-      console.log(JSON.stringify(providerResponse, null, 2));
+      console.log(
+        JSON.stringify(providerResponse, null, 2)
+      );
       console.log("=====================================");
 
       // Refund wallet if VTpass fails
       if (!providerResponse.success) {
 
-        console.log("❌ VTpass failed. Refunding wallet...");
+        console.log(
+          "❌ VTpass failed. Refunding wallet..."
+        );
 
         await creditWallet({
           userId,
@@ -67,7 +71,9 @@ export const purchaseAirtime = async (
           session,
         });
 
-        console.log("✅ Wallet refunded successfully");
+        console.log(
+          "✅ Wallet refunded successfully"
+        );
 
         await createTransaction({
           userId,
@@ -75,7 +81,8 @@ export const purchaseAirtime = async (
           category: "AIRTIME",
           amount,
           status: "FAILED",
-          description: `${network.toUpperCase()} Airtime Refund`,
+          description:
+            `${network.toUpperCase()} Airtime Refund`,
           metadata: {
             network,
             phone,
@@ -90,7 +97,9 @@ export const purchaseAirtime = async (
         );
       }
 
-      console.log("✅ VTpass purchase successful");
+      console.log(
+        "✅ VTpass purchase successful"
+      );
 
       // Record successful transaction
       const transaction =
@@ -100,7 +109,8 @@ export const purchaseAirtime = async (
           category: "AIRTIME",
           amount,
           status: "SUCCESS",
-          description: `${network.toUpperCase()} Airtime Purchase`,
+          description:
+            `${network.toUpperCase()} Airtime Purchase`,
           metadata: {
             network,
             phone,
@@ -134,8 +144,8 @@ export const purchaseAirtime = async (
 
     await session.endSession();
 
-    console.log("========== AIRTIME PURCHASE ENDED ==========\n");
-
+    console.log(
+      "========== AIRTIME PURCHASE ENDED ==========\n"
+    );
   }
-
 };

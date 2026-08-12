@@ -32,8 +32,8 @@ export default function AirtimePage() {
       return;
     }
 
-    if (!amount || Number(amount) < 50) {
-      setMessage({ type: "error", text: "Minimum amount is ₦50" });
+    if (!amount || Number(amount) <= 0) {
+      setMessage({ type: "error", text: "Please enter a valid amount" });
       return;
     }
 
