@@ -5,12 +5,12 @@ export const getDataPlans = async (network: string) => {
   return data;
 };
 
-export const buyData = async (data: {
+export const buyData = async (payload: {
   network: string;
   phone: string;
   plan: string;
   amount: number;
 }) => {
-  const { data: response } = await api.post("/data/buy", data);
-  return response;
+  const { data } = await api.post("/data/buy", payload);
+  return data;
 };

@@ -5,10 +5,12 @@ export const getWallet = async () => {
   return data;
 };
 
-export const fundWallet = async (amount: number) => {
-  const { data } = await api.post("/wallet/fund", {
-    amount,
-  });
+export const initializeFunding = async (amount: number) => {
+  const { data } = await api.post("/wallet/fund/initialize", { amount });
+  return data;
+};
 
+export const verifyFunding = async (reference: string) => {
+  const { data } = await api.post("/wallet/fund/verify", { reference });
   return data;
 };

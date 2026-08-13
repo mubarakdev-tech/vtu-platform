@@ -1,50 +1,68 @@
-import { Response } from "express";
-import catchAsync from "../utils/catchAsync";
+import { Request, Response, NextFunction } from "express";
 import { purchaseData } from "../services/data.service";
 import { vtpassProvider } from "../providers/vtpass/vtpass.provider";
-import { AuthRequest } from "../middleware/auth.middleware";
+import AppError from "../utils/apperror";
 
-export const buyData = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.user?._id || req.user?.id;
+/**
+ * Get data plans for a network
+ */
+export const getDataPlans = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { network } = req.params;
 
-  if (!userId) {
-    return res.status(401).json({
-      success: false,
-      message: "Unauthorized",
+    if (!network) {
+      return next(new AppError("Network is required", 400));
+    }
+
+    console.log("Fetching data plans for network:", network);
+
+    const plans = await vtpassProvider.getDataPlans(network.toLowerCase());
+
+    console.log("Plans received from provider:", plans);
+
+    res.status(200).json({
+      success: true,
+      data: plans,
     });
+  } catch (error) {
+    next(error);
   }
+};
 
-  const { network, phone, plan, amount } = req.body;
+/**
+ * Buy data
+ */
+export const buyData = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = req.user?.id;
+    const { network, phone, plan, amount } = req.body;
 
-  if (!network || !phone || !plan || !amount) {
-    return res.status(400).json({
-      success: false,
-      message: "Network, phone, plan and amount are required",
+    if (!userId) {
+      return next(new AppError("Unauthorized", 401));
+    }
+
+    if (!network || !phone || !plan || !amount) {
+      return next(new AppError("All fields are required", 400));
+    }
+
+    const result = await purchaseData({
+      userId,
+      network,
+      phone,
+      plan,
+      amount: Number(amount),
     });
+
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
   }
-
-  const result = await purchaseData({
-    userId: userId.toString(),
-    network: network.toLowerCase(),
-    phone: phone.trim(),
-    plan,
-    amount: Number(amount),
-  });
-
-  return res.status(200).json(result);
-});
-
-export const getDataPlans = catchAsync(async (req: AuthRequest, res: Response) => {
-  const { network } = req.params;
-
-  if (!network) {
-    return res.status(400).json({
-      success: false,
-      message: "Network is required",
-    });
-  }
-
-  const result = await vtpassProvider.getDataPlans(network.toLowerCase());
-
-  return res.status(200).json(result);
-});
+};

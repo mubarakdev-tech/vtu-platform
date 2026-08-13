@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Wifi, Loader2, Check } from "lucide-react";
 import { getDataPlans, buyData } from "@/services/data";
-import useAuth from "@/hooks/useAuth";
 
 const networks = [
   { id: "mtn", name: "MTN", color: "bg-yellow-400", text: "text-black" },
@@ -20,8 +19,6 @@ interface Plan {
 }
 
 export default function DataPage() {
-  const { user } = useAuth();
-
   const [network, setNetwork] = useState("mtn");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
@@ -33,7 +30,6 @@ export default function DataPage() {
     text: string;
   } | null>(null);
 
-  // Load plans when network changes
   useEffect(() => {
     loadPlans();
   }, [network]);
@@ -43,23 +39,68 @@ export default function DataPage() {
       setLoadingPlans(true);
       setSelectedPlan(null);
       setMessage(null);
+      setPlans([]);
 
       const result = await getDataPlans(network);
 
-      if (result.success && result.data) {
-        setPlans(result.data);
-      } else {
-        setPlans([]);
+      let plansData: any[] = [];
+
+      if (Array.isArray(result)) {
+        plansData = result;
+      } else if (Array.isArray(result?.data)) {
+        plansData = result.data;
+      } else if (Array.isArray(result?.data?.content)) {
+        plansData = result.data.content;
+      } else if (Array.isArray(result?.content)) {
+        plansData = result.content;
+      } else if (Array.isArray(result?.plans)) {
+        plansData = result.plans;
+      } else if (Array.isArray(result?.data?.varations)) {
+        plansData = result.data.varations;
+      } else if (Array.isArray(result?.varations)) {
+        plansData = result.varations;
+      }
+
+      const normalized: Plan[] = plansData
+        .map((plan: any) => ({
+          name:
+            plan.name ||
+            plan.plan_name ||
+            plan.variation_name ||
+            plan.package ||
+            "Data Plan",
+          variation_code:
+            plan.variation_code ||
+            plan.plan_id ||
+            plan.code ||
+            plan.id ||
+            "",
+          amount: Number(
+            plan.amount ||
+              plan.price ||
+              plan.variation_amount ||
+              plan.fixedPrice ||
+              0
+          ),
+        }))
+        .filter((p) => p.variation_code && p.amount > 0);
+
+      setPlans(normalized);
+
+      if (normalized.length === 0) {
         setMessage({
           type: "error",
-          text: result.message || "Unable to load data plans on AbuPay",
+          text: "No data plans available for this network",
         });
       }
     } catch (error: any) {
+      console.error("Failed to load plans:", error);
       setPlans([]);
       setMessage({
         type: "error",
-        text: error?.response?.data?.message || "Failed to load plans on AbuPay",
+        text:
+          error?.response?.data?.message ||
+          "Failed to load data plans. Please try again.",
       });
     } finally {
       setLoadingPlans(false);
@@ -91,20 +132,22 @@ export default function DataPage() {
       if (result.success) {
         setMessage({
           type: "success",
-          text: `${selectedPlan.name} sent successfully to ${phone} on AbuPay`,
+          text: `${selectedPlan.name} sent successfully to ${phone}`,
         });
         setPhone("");
         setSelectedPlan(null);
       } else {
         setMessage({
           type: "error",
-          text: result.message || "Purchase failed on AbuPay. Please try again.",
+          text: result.message || "Purchase failed. Please try again.",
         });
       }
     } catch (error: any) {
       setMessage({
         type: "error",
-        text: error?.response?.data?.message || "Something went wrong on AbuPay",
+        text:
+          error?.response?.data?.message ||
+          "Something went wrong. Please try again.",
       });
     } finally {
       setLoadingPurchase(false);
@@ -118,7 +161,7 @@ export default function DataPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Buy Data</h1>
           <p className="mt-1 text-gray-500">
-            Choose a network and select a data plan on AbuPay
+            Choose a network and select a data plan
           </p>
         </div>
 
@@ -172,7 +215,7 @@ export default function DataPage() {
               </div>
             ) : plans.length === 0 ? (
               <div className="rounded-xl border border-dashed py-10 text-center text-gray-400">
-                No plans available for this network on AbuPay
+                No plans available for this network
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">

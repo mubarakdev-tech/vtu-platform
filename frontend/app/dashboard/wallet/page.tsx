@@ -1,25 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { Wallet, Eye, EyeOff, Plus, Loader2 } from "lucide-react";
 import {
-  Wallet,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  History,
-  Eye,
-  EyeOff,
-  Plus,
-  Loader2,
-} from "lucide-react";
-import useWallet from "@/hooks/useWallet";
-import { fundWallet } from "@/services/wallet.service";
+  getWallet,
+  initializeFunding,
+  verifyFunding,
+} from "@/services/wallet.service";
 import CountUp from "react-countup";
 
 const quickAmounts = [500, 1000, 2000, 5000, 10000, 20000];
 
+declare global {
+  interface Window {
+    PaystackPop: any;
+  }
+}
+
 export default function WalletPage() {
-  const { balance, loading, refreshWallet } = useWallet();
+  const [balance, setBalance] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [showBalance, setShowBalance] = useState(true);
   const [amount, setAmount] = useState("");
   const [funding, setFunding] = useState(false);
@@ -27,6 +28,35 @@ export default function WalletPage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const PAYSTACK_PUBLIC_KEY =
+    process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ||
+    "pk_test_c6f342365ea342d44c498bc68ecf3bb01b28be24";
+
+  const fetchWallet = async () => {
+    try {
+      setLoading(true);
+      const res = await getWallet();
+      setBalance(res?.data?.balance || res?.balance || 0);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWallet();
+
+    // Load Paystack script only once
+    if (!document.getElementById("paystack-script")) {
+      const script = document.createElement("script");
+      script.id = "paystack-script";
+      script.src = "https://js.paystack.co/v1/inline.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
 
   const handleFund = async () => {
     const value = Number(amount);
@@ -43,27 +73,88 @@ export default function WalletPage() {
       setFunding(true);
       setMessage(null);
 
-      const data = await fundWallet(value);
+      // 1. Initialize payment on backend
+      const result = await initializeFunding(value);
 
-      if (data.success) {
-        setMessage({
-          type: "success",
-          text: `Wallet funded successfully with ₦${value.toLocaleString()}`,
-        });
-        setAmount("");
-        refreshWallet();
-      } else {
+      if (!result.success || !result.data?.reference) {
         setMessage({
           type: "error",
-          text: data.message || "Funding failed. Please try again.",
+          text: result.message || "Unable to start payment",
         });
+        setFunding(false);
+        return;
       }
+
+      const { reference, email, access_code } = result.data;
+
+      // Wait until Paystack script is ready
+      if (!window.PaystackPop) {
+        setMessage({
+          type: "error",
+          text: "Paystack is still loading. Please try again in 2 seconds.",
+        });
+        setFunding(false);
+        return;
+      }
+
+      // 2. Open Paystack Popup
+      const handler = window.PaystackPop.setup({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: email,
+        amount: value * 100, // kobo
+        ref: reference,
+        currency: "NGN",
+        // Use normal function (not async) — required by Paystack
+        callback: function (response: any) {
+          // Call async logic inside
+          (async () => {
+            try {
+              const verifyResult = await verifyFunding(response.reference);
+
+              if (verifyResult.success) {
+                setMessage({
+                  type: "success",
+                  text: `Wallet funded successfully with ₦${value.toLocaleString()}`,
+                });
+                setAmount("");
+                await fetchWallet();
+              } else {
+                setMessage({
+                  type: "error",
+                  text: verifyResult.message || "Verification failed",
+                });
+              }
+            } catch (error: any) {
+              setMessage({
+                type: "error",
+                text:
+                  error?.response?.data?.message ||
+                  "Payment verification failed",
+              });
+            } finally {
+              setFunding(false);
+            }
+          })();
+        },
+        onClose: function () {
+          setFunding(false);
+          setMessage({
+            type: "error",
+            text: "Payment cancelled",
+          });
+        },
+      });
+
+      handler.openIframe();
     } catch (error: any) {
+      console.error("Fund Wallet Error:", error);
       setMessage({
         type: "error",
-        text: error?.response?.data?.message || "Something went wrong",
+        text:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Something went wrong. Please try again.",
       });
-    } finally {
       setFunding(false);
     }
   };
@@ -75,7 +166,7 @@ export default function WalletPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">My Wallet</h1>
           <p className="mt-1 text-gray-500">
-            Fund your wallet and manage your balance
+            Fund your wallet securely with Paystack
           </p>
         </div>
 
@@ -118,22 +209,6 @@ export default function WalletPage() {
 
             <Wallet size={80} className="hidden opacity-20 md:block" />
           </div>
-
-          {/* Quick Actions */}
-          <div className="mt-10 grid grid-cols-3 gap-3">
-            <button className="flex flex-col items-center gap-2 rounded-2xl bg-white/15 py-4 transition hover:bg-white/25">
-              <ArrowDownCircle size={22} />
-              <span className="text-sm font-medium">Fund</span>
-            </button>
-            <button className="flex flex-col items-center gap-2 rounded-2xl bg-white/15 py-4 transition hover:bg-white/25">
-              <ArrowUpCircle size={22} />
-              <span className="text-sm font-medium">Transfer</span>
-            </button>
-            <button className="flex flex-col items-center gap-2 rounded-2xl bg-white/15 py-4 transition hover:bg-white/25">
-              <History size={22} />
-              <span className="text-sm font-medium">History</span>
-            </button>
-          </div>
         </div>
 
         {/* Fund Wallet Section */}
@@ -147,12 +222,12 @@ export default function WalletPage() {
                 Fund Wallet
               </h2>
               <p className="text-sm text-gray-500">
-                Add money to your AbuPay wallet
+                Pay securely with card, bank transfer or USSD
               </p>
             </div>
           </div>
 
-          {/* Quick Amount Buttons */}
+          {/* Quick Amounts */}
           <div className="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-6">
             {quickAmounts.map((value) => (
               <button
@@ -207,7 +282,6 @@ export default function WalletPage() {
               )}
             </button>
 
-            {/* Message */}
             {message && (
               <div
                 className={`rounded-xl px-4 py-3 text-center text-sm font-medium ${
@@ -220,15 +294,6 @@ export default function WalletPage() {
               </div>
             )}
           </div>
-        </div>
-
-        {/* Note */}
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-          <p className="text-sm text-amber-800">
-            <strong>Note:</strong> Wallet funding is currently in test mode.
-            Real payment gateway (Paystack / Flutterwave) will be connected
-            soon.
-          </p>
         </div>
       </div>
     </DashboardLayout>
