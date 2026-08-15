@@ -13,10 +13,22 @@ api.interceptors.response.use(
   (response) => response,
 
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const requestUrl = error.config?.url || "";
+
+    // Do NOT redirect when /auth/me fails.
+    // AuthContext handles an unauthenticated session itself.
+    if (
+      status === 401 &&
+      !requestUrl.includes("/auth/me") &&
+      !requestUrl.includes("/auth/login")
+    ) {
       console.warn("Session expired.");
 
-      if (typeof window !== "undefined") {
+      if (
+        typeof window !== "undefined" &&
+        window.location.pathname !== "/login"
+      ) {
         window.location.href = "/login";
       }
     }

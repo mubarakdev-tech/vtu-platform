@@ -1,14 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { motion } from "framer-motion";
-import {
-  Wallet,
-  Smartphone,
-  Bell,
-  ArrowRight,
-} from "lucide-react";
+import { Bell } from "lucide-react";
 
 export default function HeroSection() {
   const hour = new Date().getHours();
@@ -39,50 +33,31 @@ export default function HeroSection() {
 
         <div className="relative grid items-center gap-10 lg:grid-cols-2">
 
-          {/* Left Side */}
+          {/* ================= LEFT SIDE ================= */}
 
           <div>
 
             <span className="inline-flex items-center rounded-full bg-white/15 px-4 py-2 text-sm font-medium backdrop-blur">
-
               👋 {greeting}
-
             </span>
 
             <h1 className="mt-6 text-4xl font-extrabold leading-tight lg:text-5xl">
-              Welcome back to <span className="text-emerald-300">AbuPay</span>
+              Welcome back to{" "}
+              <span className="text-emerald-300">
+                AbuPay
+              </span>
             </h1>
 
             <p className="mt-5 max-w-xl text-lg leading-8 text-blue-100">
               Fast, secure and reliable digital payments.
-              Buy airtime, data bundles, electricity tokens,
-              TV subscriptions and manage your wallet
-              from one trusted platform.
+              Buy airtime and data bundles, manage your
+              wallet and enjoy a simple, convenient payment
+              experience with AbuPay.
             </p>
-
-            <div className="mt-8 flex flex-wrap gap-4">
-
-              <Link
-                href="/wallet"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-blue-700 shadow-lg transition hover:bg-blue-50"
-              >
-                <Wallet size={20} />
-                Fund Wallet
-              </Link>
-
-              <Link
-                href="/airtime"
-                className="inline-flex items-center gap-2 rounded-xl border border-white/30 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
-              >
-                <Smartphone size={20} />
-                Buy Airtime
-              </Link>
-
-            </div>
 
           </div>
 
-          {/* Right Side */}
+          {/* ================= RIGHT SIDE ================= */}
 
           <motion.div
             initial={{ opacity: 0, x: 40 }}
@@ -90,20 +65,17 @@ export default function HeroSection() {
             transition={{ delay: 0.2 }}
             className="flex justify-center"
           >
-
             <Image
               src="/images/dashboard/abupay-dashboard-banner.png"
-              alt="AbuPay Dashboard Banner"
+              alt="AbuPay Dashboard"
               width={700}
               height={500}
               priority
               className="h-auto w-full max-w-2xl rounded-2xl drop-shadow-2xl"
             />
-
           </motion.div>
 
         </div>
-
       </div>
 
       {/* ================= ANNOUNCEMENT ================= */}
@@ -112,15 +84,15 @@ export default function HeroSection() {
 
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
 
+          {/* Announcement Content */}
+
           <div className="flex gap-4">
 
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100">
-
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-100">
               <Bell
                 className="text-emerald-600"
                 size={26}
               />
-
             </div>
 
             <div>
@@ -138,27 +110,17 @@ export default function HeroSection() {
               </div>
 
               <p className="mt-2 max-w-3xl leading-7 text-gray-600">
-                Welcome to AbuPay.
-                Airtime and Data services are fully operational.
-
-                Wallet funding with Paystack,
-                Electricity Bills,
-                TV Subscription,
-                Referral Rewards and more premium features
-                will be available soon.
+                Welcome to AbuPay. Airtime and Data
+                services are fully operational. Wallet
+                funding with Paystack is available, while
+                Electricity Bills, TV Subscription, Referral
+                Rewards and other premium features will be
+                introduced soon.
               </p>
 
             </div>
 
           </div>
-
-          <button className="flex items-center gap-2 self-start rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700">
-
-            Learn More
-
-            <ArrowRight size={18} />
-
-          </button>
 
         </div>
 

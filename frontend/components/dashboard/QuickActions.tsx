@@ -15,24 +15,26 @@ const actions = [
     icon: Smartphone,
     href: "/dashboard/airtime",
     color: "hover:bg-yellow-400 hover:text-black",
+    disabled: false,
   },
   {
     title: "Data",
     icon: Wifi,
     href: "/dashboard/data",
     color: "hover:bg-blue-600 hover:text-white",
+    disabled: false,
   },
   {
     title: "Electricity",
     icon: Zap,
-    href: "/dashboard/electricity",
-    color: "hover:bg-amber-500 hover:text-white",
+    color: "",
+    disabled: true,
   },
   {
     title: "Cable TV",
     icon: Tv,
-    href: "/dashboard/cable",
-    color: "hover:bg-purple-600 hover:text-white",
+    color: "",
+    disabled: true,
   },
 ];
 
@@ -48,10 +50,27 @@ export default function QuickActions() {
           {actions.map((action) => {
             const Icon = action.icon;
 
+            // Disabled services: display only, no link/click
+            if (action.disabled) {
+              return (
+                <div
+                  key={action.title}
+                  className="flex cursor-not-allowed flex-col items-center justify-center rounded-xl border bg-gray-50 p-6 text-center text-gray-400"
+                >
+                  <Icon className="mb-3" size={32} />
+                  <p className="font-medium">{action.title}</p>
+                  <span className="mt-1 text-xs">
+                    Coming Soon
+                  </span>
+                </div>
+              );
+            }
+
+            // Active services
             return (
               <Link
                 key={action.title}
-                href={action.href}
+                href={action.href!}
                 className={`flex flex-col items-center justify-center rounded-xl border bg-white p-6 text-center transition ${action.color} hover:shadow-md`}
               >
                 <Icon className="mb-3" size={32} />

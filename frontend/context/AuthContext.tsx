@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   ReactNode,
 } from "react";
@@ -19,9 +20,7 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(
-  undefined
-);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({
   children,
@@ -31,20 +30,40 @@ export function AuthProvider({
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load current user when app starts
+  // Prevent multiple initial session checks
+  const hasCheckedSession = useRef(false);
+  const isCheckingSession = useRef(false);
+
+  // Load current user
   const refreshUser = async () => {
+    // Prevent duplicate requests
+    if (isCheckingSession.current) {
+      return;
+    }
+
+    isCheckingSession.current = true;
+
     try {
       const { data } = await api.get("/auth/me");
 
       setUser(data.user || data);
-    } catch {
+    } catch (error) {
+      console.log("Session check failed:", error);
       setUser(null);
     } finally {
+      isCheckingSession.current = false;
       setLoading(false);
     }
   };
 
+  // Check session once when AuthProvider starts
   useEffect(() => {
+    if (hasCheckedSession.current) {
+      return;
+    }
+
+    hasCheckedSession.current = true;
+
     refreshUser();
   }, []);
 
@@ -58,7 +77,6 @@ export function AuthProvider({
       password,
     });
 
-    // Login response already contains the user
     setUser(data.user);
 
     return data.user;
@@ -66,8 +84,11 @@ export function AuthProvider({
 
   // Logout
   const logout = async () => {
-    await api.post("/auth/logout");
-    setUser(null);
+    try {
+      await api.post("/auth/logout");
+    } finally {
+      setUser(null);
+    }
   };
 
   return (

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import HeroSection from "@/components/dashboard/HeroSection";
-import WalletCard from "@/components/dashboard/WalletCard";
 import StatCard from "@/components/dashboard/StatCard";
 import QuickActions from "@/components/dashboard/QuickActions";
 import StatisticsChart from "@/components/dashboard/StatisticsChart";
@@ -27,6 +26,7 @@ export default function DashboardPage() {
 
   const { user, loading } = useAuth();
 
+  // Show announcement/welcome message once
   useEffect(() => {
     const seen = localStorage.getItem("abupay-welcome-seen");
 
@@ -40,7 +40,8 @@ export default function DashboardPage() {
       <DashboardLayout>
         <div className="flex h-[70vh] items-center justify-center">
           <div className="text-center">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent"></div>
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
+
             <p className="mt-4 text-gray-500">
               Loading AbuPay...
             </p>
@@ -52,22 +53,27 @@ export default function DashboardPage() {
 
   return (
     <>
+      {/* Welcome / Announcement Popup */}
       <WelcomeModal
         open={showWelcome}
         userName={user?.name || "AbuPay User"}
-        onClose={() => setShowWelcome(false)}
+        onClose={() => {
+          localStorage.setItem("abupay-welcome-seen", "true");
+          setShowWelcome(false);
+        }}
       />
 
       <DashboardLayout>
         <div className="space-y-6">
 
-          {/* Hero Banner */}
+          {/* =========================
+              HERO SECTION
+          ========================== */}
           <HeroSection />
 
-          {/* Wallet */}
-          <WalletCard />
-
-          {/* Statistics */}
+          {/* =========================
+              STATISTICS
+          ========================== */}
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 
             <StatCard
@@ -100,10 +106,14 @@ export default function DashboardPage() {
 
           </div>
 
-          {/* Quick Actions */}
+          {/* =========================
+              QUICK ACTIONS
+          ========================== */}
           <QuickActions />
 
-          {/* Statistics + Network */}
+          {/* =========================
+              STATISTICS + NETWORK
+          ========================== */}
           <div className="grid gap-6 lg:grid-cols-3">
 
             <div className="lg:col-span-2">
@@ -114,10 +124,14 @@ export default function DashboardPage() {
 
           </div>
 
-          {/* Services */}
+          {/* =========================
+              AVAILABLE SERVICES
+          ========================== */}
           <ServicesGrid />
 
-          {/* Transactions */}
+          {/* =========================
+              RECENT TRANSACTIONS
+          ========================== */}
           <TransactionsTable />
 
         </div>
