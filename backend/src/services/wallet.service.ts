@@ -32,6 +32,9 @@ export const getWallet = async (userId: string) => {
 
 /**
  * Debit wallet
+ *
+ * Returns balance information so the calling
+ * financial operation can record the movement.
  */
 export const debitWallet = async ({
   userId,
@@ -42,7 +45,9 @@ export const debitWallet = async ({
     throw new AppError("Invalid amount", 400);
   }
 
-  const wallet = await Wallet.findOne({ user: userId }).session(session || null);
+  const wallet = await Wallet.findOne({ user: userId }).session(
+    session || null
+  );
 
   if (!wallet) {
     throw new AppError("Wallet not found", 404);
@@ -52,14 +57,26 @@ export const debitWallet = async ({
     throw new AppError("Insufficient wallet balance", 400);
   }
 
+  const balanceBefore = wallet.balance;
+
   wallet.balance -= amount;
+
+  const balanceAfter = wallet.balance;
+
   await wallet.save({ session });
 
-  return wallet;
+  return {
+    wallet,
+    balanceBefore,
+    balanceAfter,
+  };
 };
 
 /**
  * Credit wallet
+ *
+ * Returns balance information so the calling
+ * financial operation can record the movement.
  */
 export const creditWallet = async ({
   userId,
@@ -70,7 +87,11 @@ export const creditWallet = async ({
     throw new AppError("Invalid amount", 400);
   }
 
-  let wallet = await Wallet.findOne({ user: userId }).session(session || null);
+  let wallet = await Wallet.findOne({ user: userId }).session(
+    session || null
+  );
+
+  let balanceBefore = 0;
 
   if (!wallet) {
     wallet = await Wallet.create(
@@ -82,10 +103,21 @@ export const creditWallet = async ({
       ],
       { session }
     ).then((docs) => docs[0]);
+
+    balanceBefore = 0;
   } else {
+    balanceBefore = wallet.balance;
+
     wallet.balance += amount;
+
     await wallet.save({ session });
   }
 
-  return wallet;
+  const balanceAfter = wallet.balance;
+
+  return {
+    wallet,
+    balanceBefore,
+    balanceAfter,
+  };
 };

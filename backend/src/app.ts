@@ -13,58 +13,108 @@ import airtimeRoutes from "./routes/airtime.routes";
 import transactionRoutes from "./routes/transaction.routes";
 import dataRoutes from "./routes/data.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
+import financialLedgerRoutes from "./routes/financial-ledger.routes";
 
 import { errorHandler } from "./middleware/error.middleware";
 import logger from "./utils/logger";
 
 const app = express();
 
-/**
- * Security Middleware
- */
-
-app.use(helmet());
+// =====================================================
+// SECURITY
+// =====================================================
 
 app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    credentials: true,
+  helmet({
+    crossOriginResourcePolicy: {
+      policy: "cross-origin",
+    },
   })
 );
 
+// =====================================================
+// CORS
+// =====================================================
+
+const frontendUrl =
+  process.env.FRONTEND_URL ||
+  "http://localhost:3000";
+
+app.use(
+  cors({
+    origin: frontendUrl,
+    credentials: true,
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+    ],
+  })
+);
+
+// =====================================================
+// COMPRESSION
+// =====================================================
+
 app.use(compression());
 
-app.use(express.json());
+// =====================================================
+// BODY PARSING
+// =====================================================
+
+app.use(
+  express.json({
+    limit: "10mb",
+  })
+);
 
 app.use(
   express.urlencoded({
     extended: true,
+    limit: "10mb",
   })
 );
 
-// Read secure cookies
+// =====================================================
+// COOKIE PARSER
+// =====================================================
+
 app.use(cookieParser());
 
-/**
- * Rate Limiting
- */
+// =====================================================
+// RATE LIMITING
+// =====================================================
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
+
   max: 500,
+
   standardHeaders: true,
+
   legacyHeaders: false,
+
   message: {
     success: false,
-    message: "Too many requests. Please try again later.",
+    message:
+      "Too many requests. Please try again later.",
   },
 });
 
 app.use("/api", limiter);
 
-/**
- * HTTP Logging
- */
+// =====================================================
+// HTTP LOGGING
+// =====================================================
 
 app.use(
   morgan("combined", {
@@ -76,50 +126,127 @@ app.use(
   })
 );
 
-/**
- * Health Check
- */
+// =====================================================
+// HEALTH CHECK
+// =====================================================
 
 app.get("/", (req, res) => {
-  res.json({
+  res.status(200).json({
     success: true,
-    message: "VTU Platform API is running 🚀",
+    message:
+      "VTU Platform API is running 🚀",
   });
 });
 
-/**
- * API Routes
- */
+// =====================================================
+// API HEALTH CHECK
+// =====================================================
 
-app.use("/api/auth", authRoutes);
-
-app.use("/api/user", userRoutes);
-
-app.use("/api/wallet", walletRoutes);
-
-app.use("/api/airtime", airtimeRoutes);
-
-app.use("/api/data", dataRoutes);
-
-app.use("/api/transactions", transactionRoutes);
-
-app.use("/api/dashboard", dashboardRoutes);
-
-/**
- * 404 Handler
- */
-
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Route not found",
+app.get("/api", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message:
+      "AbuPay API is running 🚀",
   });
 });
 
-/**
- * Global Error Handler
- */
+// =====================================================
+// AUTH ROUTES
+// =====================================================
+
+app.use(
+  "/api/auth",
+  authRoutes
+);
+
+// =====================================================
+// USER ROUTES
+// =====================================================
+
+app.use(
+  "/api/user",
+  userRoutes
+);
+
+// =====================================================
+// WALLET ROUTES
+// =====================================================
+
+app.use(
+  "/api/wallet",
+  walletRoutes
+);
+
+// =====================================================
+// AIRTIME ROUTES
+// =====================================================
+
+app.use(
+  "/api/airtime",
+  airtimeRoutes
+);
+
+// =====================================================
+// DATA ROUTES
+// =====================================================
+
+app.use(
+  "/api/data",
+  dataRoutes
+);
+
+// =====================================================
+// TRANSACTION ROUTES
+// =====================================================
+
+app.use(
+  "/api/transactions",
+  transactionRoutes
+);
+
+// =====================================================
+// DASHBOARD ROUTES
+// =====================================================
+
+app.use(
+  "/api/dashboard",
+  dashboardRoutes
+);
+
+// =====================================================
+// FINANCIAL LEDGER ROUTES
+// =====================================================
+
+app.use(
+  "/api/financial-ledger",
+  financialLedgerRoutes
+);
+
+// =====================================================
+// 404 HANDLER
+// =====================================================
+
+app.use(
+  (
+    req: express.Request,
+    res: express.Response
+  ) => {
+    res.status(404).json({
+      success: false,
+      message: "Route not found",
+      path: req.originalUrl,
+    });
+  }
+);
+
+// =====================================================
+// GLOBAL ERROR HANDLER
+// =====================================================
 
 app.use(errorHandler);
+
+// =====================================================
+// EXPORT
+// =====================================================
 
 export default app;

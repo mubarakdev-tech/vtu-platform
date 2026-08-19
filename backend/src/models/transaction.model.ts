@@ -16,6 +16,13 @@ export interface ITransaction extends Document {
 
   amount: number;
 
+  balanceBefore?: number;
+  balanceAfter?: number;
+
+  gateway?: "PAYSTACK" | "OTHER";
+
+  gatewayReference?: string;
+
   status: "PENDING" | "SUCCESS" | "FAILED";
 
   reference: string;
@@ -31,6 +38,7 @@ const transactionSchema = new Schema<ITransaction>(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
 
     type: {
@@ -56,6 +64,26 @@ const transactionSchema = new Schema<ITransaction>(
     amount: {
       type: Number,
       required: true,
+      min: 0,
+    },
+
+    balanceBefore: {
+      type: Number,
+    },
+
+    balanceAfter: {
+      type: Number,
+    },
+
+    gateway: {
+      type: String,
+      enum: ["PAYSTACK", "OTHER"],
+    },
+
+    gatewayReference: {
+      type: String,
+      sparse: true,
+      index: true,
     },
 
     status: {
@@ -68,6 +96,7 @@ const transactionSchema = new Schema<ITransaction>(
       type: String,
       unique: true,
       required: true,
+      index: true,
     },
 
     description: {
@@ -81,6 +110,15 @@ const transactionSchema = new Schema<ITransaction>(
   },
   {
     timestamps: true,
+  }
+);
+
+// Prevent duplicate successful processing of the same gateway payment
+transactionSchema.index(
+  { gateway: 1, gatewayReference: 1 },
+  {
+    unique: true,
+    sparse: true,
   }
 );
 

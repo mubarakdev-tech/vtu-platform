@@ -13,16 +13,26 @@ import {
   X,
   CheckCircle,
 } from "lucide-react";
+
 import {
   getWallet,
+  calculateFundingFee,
   initializeFunding,
   verifyFunding,
 } from "@/services/wallet.service";
+
 import CountUp from "react-countup";
 import useAuth from "@/hooks/useAuth";
 import jsPDF from "jspdf";
 
-const quickAmounts = [500, 1000, 2000, 5000, 10000, 20000];
+const quickAmounts = [
+  500,
+  1000,
+  2000,
+  5000,
+  10000,
+  20000,
+];
 
 declare global {
   interface Window {
@@ -44,23 +54,42 @@ export default function WalletPage() {
   const { user } = useAuth();
 
   const [balance, setBalance] = useState(0);
+
   const [loading, setLoading] = useState(true);
-  const [showBalance, setShowBalance] = useState(true);
+
+  const [showBalance, setShowBalance] =
+    useState(true);
 
   const [amount, setAmount] = useState("");
+
+  // ==========================================
+  // FUNDING FEE STATE
+  // ==========================================
+
+  const [fundingFee, setFundingFee] = useState(0);
+
+  const [fundingTotal, setFundingTotal] =
+    useState(0);
+
+  const [calculatingFee, setCalculatingFee] =
+    useState(false);
+
   const [funding, setFunding] = useState(false);
-  const [savingPdf, setSavingPdf] = useState(false);
+
+  const [savingPdf, setSavingPdf] =
+    useState(false);
 
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
 
-  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [receipt, setReceipt] =
+    useState<ReceiptData | null>(null);
 
   const PAYSTACK_PUBLIC_KEY =
     process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ||
-    "pk_test_c6f342365ea342d44c498bc68ecf3bb01b28be24";
+    "";
 
   // ==========================================
   // CUSTOMER DETAILS
@@ -83,37 +112,158 @@ export default function WalletPage() {
 
       const res = await getWallet();
 
-      const walletBalance = Number(
-        res?.data?.balance ??
-          res?.balance ??
-          0
+      console.log(
+        "WALLET API RESPONSE:",
+        res
       );
 
-      setBalance(walletBalance);
+      const walletBalance = Number(
+        res?.data?.balance ?? 0
+      );
+
+      console.log(
+        "WALLET BALANCE FROM BACKEND:",
+        walletBalance
+      );
+
+      if (
+        Number.isFinite(walletBalance)
+      ) {
+        setBalance(walletBalance);
+      } else {
+        setBalance(0);
+      }
     } catch (error) {
-      console.error("Failed to fetch wallet:", error);
+      console.error(
+        "Failed to fetch wallet:",
+        error
+      );
+
+      setBalance(0);
     } finally {
       setLoading(false);
     }
   };
 
   // ==========================================
-  // LOAD PAYSTACK
+  // CALCULATE FUNDING FEE
+  // ==========================================
+
+  const updateFundingFee = async (
+    rawAmount: string | number
+  ) => {
+    const value = Number(rawAmount);
+
+    // Clear fee when amount is empty
+    if (
+      rawAmount === "" ||
+      !Number.isFinite(value) ||
+      value <= 0
+    ) {
+      setFundingFee(0);
+      setFundingTotal(0);
+      return;
+    }
+
+    // Don't calculate below minimum
+    if (value < 100) {
+      setFundingFee(0);
+      setFundingTotal(0);
+      return;
+    }
+
+    // Whole Naira only
+    if (!Number.isInteger(value)) {
+      setFundingFee(0);
+      setFundingTotal(0);
+      return;
+    }
+
+    try {
+      setCalculatingFee(true);
+
+      const result =
+        await calculateFundingFee(value);
+
+      console.log(
+        "FUNDING FEE RESPONSE:",
+        result
+      );
+
+      const fee = Number(
+        result?.data?.estimatedFee ?? 0
+      );
+
+      const total = Number(
+        result?.data?.estimatedTotal ??
+          value + fee
+      );
+
+      if (Number.isFinite(fee)) {
+        setFundingFee(fee);
+      } else {
+        setFundingFee(0);
+      }
+
+      if (Number.isFinite(total)) {
+        setFundingTotal(total);
+      } else {
+        setFundingTotal(value);
+      }
+    } catch (error) {
+      console.error(
+        "Failed to calculate funding fee:",
+        error
+      );
+
+      setFundingFee(0);
+      setFundingTotal(0);
+    } finally {
+      setCalculatingFee(false);
+    }
+  };
+
+  // ==========================================
+  // LOAD WALLET + PAYSTACK
   // ==========================================
 
   useEffect(() => {
     fetchWallet();
 
-    if (!document.getElementById("paystack-script")) {
-      const script = document.createElement("script");
+    if (
+      !document.getElementById(
+        "paystack-script"
+      )
+    ) {
+      const script =
+        document.createElement(
+          "script"
+        );
 
       script.id = "paystack-script";
-      script.src = "https://js.paystack.co/v1/inline.js";
+
+      script.src =
+        "https://js.paystack.co/v1/inline.js";
+
       script.async = true;
 
-      document.body.appendChild(script);
+      document.body.appendChild(
+        script
+      );
     }
   }, []);
+
+  // ==========================================
+  // HANDLE AMOUNT CHANGE
+  // ==========================================
+
+  const handleAmountChange = (
+    value: string
+  ) => {
+    setAmount(value);
+
+    updateFundingFee(value);
+  };
 
   // ==========================================
   // FUND WALLET
@@ -122,50 +272,187 @@ export default function WalletPage() {
   const handleFund = async () => {
     const value = Number(amount);
 
-    if (!value || value < 100) {
+    // ========================================
+    // VALIDATE FRONTEND AMOUNT
+    // ========================================
+
+    if (
+      !Number.isFinite(value) ||
+      value < 100
+    ) {
       setMessage({
         type: "error",
-        text: "Minimum funding amount is ₦100",
+        text:
+          "Minimum funding amount is ₦100",
       });
 
       return;
     }
 
-    // Capture balance BEFORE funding
-    const previousBalance = Number(balance);
+    // Only whole Naira amounts
+    if (!Number.isInteger(value)) {
+      setMessage({
+        type: "error",
+        text:
+          "Please enter a whole number amount.",
+      });
+
+      return;
+    }
+
+    const previousBalance =
+      Number(balance);
 
     try {
       setFunding(true);
+
       setMessage(null);
 
       // ========================================
-      // INITIALIZE PAYMENT
+      // INITIALIZE PAYMENT ON BACKEND
       // ========================================
 
-      const result = await initializeFunding(value);
+      console.log(
+        "================================="
+      );
+
+      console.log(
+        "INITIALIZING WALLET FUNDING"
+      );
+
+      console.log(
+        "Amount entered:",
+        value
+      );
+
+      console.log(
+        "Amount type:",
+        typeof value
+      );
+
+      console.log(
+        "================================="
+      );
+
+      const result =
+        await initializeFunding(
+          value
+        );
+
+      console.log(
+        "PAYSTACK INITIALIZE RESPONSE:",
+        result
+      );
+
+      // ========================================
+      // CHECK INITIALIZATION
+      // ========================================
 
       if (
-        !result.success ||
-        !result.data?.reference
+        !result?.success ||
+        !result?.data?.reference
       ) {
         setMessage({
           type: "error",
           text:
-            result.message ||
+            result?.message ||
             "Unable to start payment",
         });
 
         setFunding(false);
+
         return;
       }
 
-      const {
-        reference,
-        email,
-      } = result.data;
+      // ========================================
+      // GET VALUES FROM BACKEND
+      // ========================================
+
+      const reference =
+        result.data.reference;
+
+      const email =
+        result.data.email ||
+        (user as any)?.email ||
+        "";
+
+      const initializedAmount =
+        Number(
+          result.data.amount
+        );
+
+      const initializedAmountInKobo =
+        Number(
+          result.data.amountInKobo
+        );
+
+      console.log(
+        "================================="
+      );
+
+      console.log(
+        "BACKEND INITIALIZED AMOUNT"
+      );
+
+      console.log(
+        "Naira:",
+        initializedAmount
+      );
+
+      console.log(
+        "Kobo:",
+        initializedAmountInKobo
+      );
+
+      console.log(
+        "Reference:",
+        reference
+      );
+
+      console.log(
+        "================================="
+      );
 
       // ========================================
-      // WAIT FOR PAYSTACK
+      // VALIDATE BACKEND RESPONSE
+      // ========================================
+
+      if (
+        !Number.isFinite(
+          initializedAmount
+        ) ||
+        initializedAmount <= 0
+      ) {
+        setMessage({
+          type: "error",
+          text:
+            "Invalid amount returned by payment server.",
+        });
+
+        setFunding(false);
+
+        return;
+      }
+
+      if (
+        !Number.isInteger(
+          initializedAmountInKobo
+        ) ||
+        initializedAmountInKobo <= 0
+      ) {
+        setMessage({
+          type: "error",
+          text:
+            "Invalid Paystack amount returned by payment server.",
+        });
+
+        setFunding(false);
+
+        return;
+      }
+
+      // ========================================
+      // WAIT FOR PAYSTACK SCRIPT
       // ========================================
 
       if (!window.PaystackPop) {
@@ -176,6 +463,27 @@ export default function WalletPage() {
         });
 
         setFunding(false);
+
+        return;
+      }
+
+      // ========================================
+      // MAKE SURE PUBLIC KEY EXISTS
+      // ========================================
+
+      if (!PAYSTACK_PUBLIC_KEY) {
+        console.error(
+          "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY is missing"
+        );
+
+        setMessage({
+          type: "error",
+          text:
+            "Paystack public key is not configured.",
+        });
+
+        setFunding(false);
+
         return;
       }
 
@@ -183,42 +491,102 @@ export default function WalletPage() {
       // PAYSTACK POPUP
       // ========================================
 
+      console.log(
+        "================================="
+      );
+
+      console.log(
+        "OPENING PAYSTACK POPUP"
+      );
+
+      console.log(
+        "Reference:",
+        reference
+      );
+
+      console.log(
+        "Amount:",
+        initializedAmountInKobo
+      );
+
+      console.log(
+        "Amount in Naira:",
+        initializedAmount
+      );
+
+      console.log(
+        "================================="
+      );
+
       const handler =
         window.PaystackPop.setup({
-          key: PAYSTACK_PUBLIC_KEY,
+          key:
+            PAYSTACK_PUBLIC_KEY,
 
-          email:
-            email ||
-            (user as any)?.email ||
-            "",
+          email,
 
-          amount: value * 100,
+          amount:
+            initializedAmountInKobo,
 
-          ref: reference,
+          ref:
+            reference,
 
           currency: "NGN",
 
-          // ====================================
+          // ==================================
           // PAYMENT SUCCESS
-          // ====================================
+          // ==================================
 
           callback: function (
             response: any
           ) {
             (async () => {
               try {
+                console.log(
+                  "================================="
+                );
+
+                console.log(
+                  "PAYSTACK CALLBACK"
+                );
+
+                console.log(
+                  response
+                );
+
+                console.log(
+                  "================================="
+                );
+
+                // =================================
+                // VERIFY PAYMENT ON BACKEND
+                // =================================
+
+                const callbackReference =
+                  response?.reference ||
+                  reference;
+
                 const verifyResult =
                   await verifyFunding(
-                    response.reference
+                    callbackReference
                   );
 
+                console.log(
+                  "VERIFY FUNDING RESPONSE:",
+                  verifyResult
+                );
+
+                // =================================
+                // VERIFY RESULT
+                // =================================
+
                 if (
-                  !verifyResult.success
+                  !verifyResult?.success
                 ) {
                   setMessage({
                     type: "error",
                     text:
-                      verifyResult.message ||
+                      verifyResult?.message ||
                       "Payment verification failed",
                   });
 
@@ -226,46 +594,69 @@ export default function WalletPage() {
                 }
 
                 // =================================
-                // GET NEW BALANCE
-                // =================================
-
-                let newBalance = 0;
-
-                newBalance = Number(
-                  verifyResult?.data
-                    ?.walletBalance ??
-                    verifyResult?.data
-                      ?.balance ??
-                    verifyResult?.walletBalance ??
-                    verifyResult?.balance ??
-                    previousBalance + value
-                );
-
-                // Safety fallback
-                if (
-                  !newBalance ||
-                  newBalance <
-                    previousBalance
-                ) {
-                  newBalance =
-                    previousBalance +
-                    value;
-                }
-
-                // =================================
-                // TRANSACTION INFORMATION
+                // TRANSACTION
                 // =================================
 
                 const transaction =
-                  verifyResult?.transaction ||
-                  verifyResult?.data
+                  verifyResult
+                    ?.data
                     ?.transaction;
 
-                const receiptReference =
+                // =================================
+                // TRANSACTION AMOUNT
+                // =================================
+
+                const transactionAmount =
+                  Number(
+                    transaction?.amount ??
+                      verifyResult
+                        ?.data
+                        ?.amount ??
+                      initializedAmount
+                  );
+
+                // =================================
+                // PREVIOUS BALANCE
+                // =================================
+
+                const previousWalletBalance =
+                  Number(
+                    transaction
+                      ?.balanceBefore ??
+                      previousBalance
+                  );
+
+                // =================================
+                // NEW BALANCE
+                // =================================
+
+                const verifiedBalance =
+                  Number(
+                    verifyResult
+                      ?.data
+                      ?.walletBalance ??
+                      verifyResult
+                        ?.data
+                        ?.balance ??
+                      previousWalletBalance +
+                        transactionAmount
+                  );
+
+                // =================================
+                // TRANSACTION REFERENCE
+                // =================================
+
+                const transactionReference =
                   transaction?.reference ||
-                  response.reference ||
-                  reference ||
-                  `ABP-${Date.now()}`;
+                  verifyResult
+                    ?.data
+                    ?.transactionReference ||
+                  callbackReference ||
+                  reference;
+
+                // =================================
+                // TRANSACTION DATE
+                // =================================
 
                 const transactionDate =
                   transaction?.createdAt
@@ -280,18 +671,21 @@ export default function WalletPage() {
 
                 setReceipt({
                   reference:
-                    receiptReference,
+                    transactionReference,
 
                   date:
                     transactionDate,
 
                   customerName,
 
-                  amount: value,
+                  amount:
+                    transactionAmount,
 
-                  previousBalance,
+                  previousBalance:
+                    previousWalletBalance,
 
-                  newBalance,
+                  newBalance:
+                    verifiedBalance,
 
                   status:
                     transaction?.status ||
@@ -302,18 +696,33 @@ export default function WalletPage() {
                 // UPDATE BALANCE
                 // =================================
 
-                setBalance(newBalance);
+                setBalance(
+                  verifiedBalance
+                );
 
                 setAmount("");
 
+                // Clear displayed fee
+                setFundingFee(0);
+
+                setFundingTotal(0);
+
+                // =================================
+                // SUCCESS MESSAGE
+                // =================================
+
                 setMessage({
                   type: "success",
-                  text: `Wallet funded successfully with ₦${value.toLocaleString()}`,
+
+                  text:
+                    `Wallet funded successfully with ₦${transactionAmount.toLocaleString()}`,
                 });
 
-                // Refresh wallet
-                await fetchWallet();
+                // =================================
+                // REFRESH DATABASE BALANCE
+                // =================================
 
+                await fetchWallet();
               } catch (error: any) {
                 console.error(
                   "Wallet verification error:",
@@ -322,9 +731,12 @@ export default function WalletPage() {
 
                 setMessage({
                   type: "error",
+
                   text:
                     error?.response
-                      ?.data?.message ||
+                      ?.data
+                      ?.message ||
+                    error?.message ||
                     "Payment verification failed",
                 });
               } finally {
@@ -333,22 +745,26 @@ export default function WalletPage() {
             })();
           },
 
-          // ====================================
+          // ==================================
           // PAYSTACK CLOSED
-          // ====================================
+          // ==================================
 
           onClose: function () {
             setFunding(false);
 
             setMessage({
               type: "error",
-              text: "Payment cancelled",
+              text:
+                "Payment cancelled",
             });
           },
         });
 
-      handler.openIframe();
+      // ========================================
+      // OPEN PAYSTACK
+      // ========================================
 
+      handler.openIframe();
     } catch (error: any) {
       console.error(
         "Fund Wallet Error:",
@@ -357,8 +773,11 @@ export default function WalletPage() {
 
       setMessage({
         type: "error",
+
         text:
-          error?.response?.data?.message ||
+          error?.response
+            ?.data
+            ?.message ||
           error?.message ||
           "Something went wrong. Please try again.",
       });
@@ -379,16 +798,18 @@ export default function WalletPage() {
     try {
       setSavingPdf(true);
 
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
+      const pdf =
+        new jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
+        });
 
       const pageWidth =
         pdf.internal.pageSize.getWidth();
 
       const leftMargin = 25;
+
       const rightMargin = 25;
 
       const contentWidth =
@@ -402,7 +823,8 @@ export default function WalletPage() {
       // LOGO
       // ========================================
 
-      const logo = new Image();
+      const logo =
+        new Image();
 
       logo.src =
         "/images/abupay-logo.png";
@@ -439,7 +861,8 @@ export default function WalletPage() {
           logoHeight
         );
 
-        y += logoHeight + 8;
+        y +=
+          logoHeight + 8;
       } else {
         y += 5;
       }
@@ -617,8 +1040,6 @@ export default function WalletPage() {
         receipt.customerName
       );
 
-      // PHONE REMOVED FROM WALLET RECEIPT
-
       addRow(
         "Service",
         "Wallet Funding"
@@ -777,7 +1198,6 @@ export default function WalletPage() {
       pdf.save(
         `AbuPay-Receipt-${receipt.reference}.pdf`
       );
-
     } catch (error) {
       console.error(
         "PDF generation failed:",
@@ -789,7 +1209,6 @@ export default function WalletPage() {
         text:
           "Unable to save receipt. Please try again.",
       });
-
     } finally {
       setSavingPdf(false);
     }
@@ -830,7 +1249,8 @@ New Wallet Balance:
 
 Status:
 ${
-  receipt.status === "SUCCESS"
+  receipt.status ===
+  "SUCCESS"
     ? "SUCCESSFUL"
     : receipt.status
 }
@@ -844,10 +1264,6 @@ Powered by Abu Niematullah Ventures
     `.trim();
 
     try {
-      // ========================================
-      // NATIVE SHARE
-      // ========================================
-
       if (
         typeof navigator !==
           "undefined" &&
@@ -862,11 +1278,9 @@ Powered by Abu Niematullah Ventures
         return;
       }
 
-      // ========================================
-      // COPY FALLBACK
-      // ========================================
-
-      if (navigator.clipboard) {
+      if (
+        navigator.clipboard
+      ) {
         await navigator.clipboard.writeText(
           shareText
         );
@@ -885,7 +1299,6 @@ Powered by Abu Niematullah Ventures
         text:
           "Sharing is not supported on this browser.",
       });
-
     } catch (error) {
       console.log(
         "Share cancelled:",
@@ -900,6 +1313,7 @@ Powered by Abu Niematullah Ventures
 
   const closeReceipt = () => {
     setReceipt(null);
+
     setMessage(null);
   };
 
@@ -1000,10 +1414,12 @@ Powered by Abu Niematullah Ventures
           <div className="mb-6 flex items-center gap-3">
 
             <div className="rounded-xl bg-emerald-100 p-2.5">
+
               <Plus
                 className="text-emerald-600"
                 size={20}
               />
+
             </div>
 
             <div>
@@ -1030,11 +1446,15 @@ Powered by Abu Niematullah Ventures
                 <button
                   key={value}
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
                     setAmount(
                       String(value)
-                    )
-                  }
+                    );
+
+                    updateFundingFee(
+                      value
+                    );
+                  }}
                   className={`rounded-xl border py-3 text-sm font-medium transition ${
                     amount ===
                     String(value)
@@ -1069,13 +1489,15 @@ Powered by Abu Niematullah Ventures
 
                 <input
                   type="number"
+                  min="100"
+                  step="1"
                   value={amount}
                   onChange={(e) =>
-                    setAmount(
+                    handleAmountChange(
                       e.target.value
                     )
                   }
-                  placeholder="0.00"
+                  placeholder="0"
                   className="w-full rounded-xl border py-3.5 pr-4 pl-9 text-lg outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 />
 
@@ -1086,6 +1508,100 @@ Powered by Abu Niematullah Ventures
               </p>
 
             </div>
+
+            {/* ========================================
+                FUNDING FEE DISPLAY
+            ======================================== */}
+
+            {Number(amount) >= 100 &&
+              Number.isInteger(
+                Number(amount)
+              ) && (
+
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+
+                  <div className="space-y-3">
+
+                    {/* AMOUNT */}
+
+                    <div className="flex items-center justify-between text-sm">
+
+                      <span className="text-gray-500">
+                        Wallet funding
+                      </span>
+
+                      <span className="font-medium text-gray-900">
+                        ₦
+                        {Number(
+                          amount
+                        ).toLocaleString()}
+                      </span>
+
+                    </div>
+
+                    {/* PAYSTACK FEE */}
+
+                    <div className="flex items-center justify-between text-sm">
+
+                      <span className="text-gray-500">
+                        Payment processing fee
+                      </span>
+
+                      <span className="font-medium text-gray-900">
+
+                        {calculatingFee ? (
+                          <Loader2
+                            size={16}
+                            className="animate-spin"
+                          />
+                        ) : (
+                          <>
+                            ₦
+                            {fundingFee.toLocaleString()}
+                          </>
+                        )}
+
+                      </span>
+
+                    </div>
+
+                    <div className="border-t border-dashed border-gray-300" />
+
+                    {/* TOTAL */}
+
+                    <div className="flex items-center justify-between">
+
+                      <span className="font-semibold text-gray-800">
+                        Total you will pay
+                      </span>
+
+                      <span className="text-lg font-bold text-emerald-700">
+
+                        {calculatingFee ? (
+                          <Loader2
+                            size={18}
+                            className="animate-spin"
+                          />
+                        ) : (
+                          <>
+                            ₦
+                            {fundingTotal.toLocaleString()}
+                          </>
+                        )}
+
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                  <p className="mt-3 text-xs text-gray-400">
+                    The payment processing fee is displayed before you proceed. Your AbuPay wallet will be credited with the wallet funding amount.
+                  </p>
+
+                </div>
+
+              )}
 
             {/* FUND BUTTON */}
 
@@ -1133,17 +1649,13 @@ Powered by Abu Niematullah Ventures
 
         </div>
 
-        {/* ======================================
-            RECEIPT MODAL
-        ======================================= */}
+        {/* RECEIPT MODAL */}
 
         {receipt && (
 
           <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
 
             <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
-
-              {/* RECEIPT */}
 
               <div className="overflow-hidden rounded-t-2xl bg-white">
 
@@ -1206,8 +1718,6 @@ Powered by Abu Niematullah Ventures
                       receipt.customerName
                     }
                   />
-
-                  {/* PHONE REMOVED */}
 
                   <ReceiptRow
                     label="Service"
@@ -1273,8 +1783,6 @@ Powered by Abu Niematullah Ventures
 
               <div className="flex gap-3 rounded-b-2xl border-t bg-gray-50 p-5">
 
-                {/* SAVE PDF */}
-
                 <button
                   type="button"
                   onClick={
@@ -1307,8 +1815,6 @@ Powered by Abu Niematullah Ventures
 
                 </button>
 
-                {/* SHARE */}
-
                 <button
                   type="button"
                   onClick={
@@ -1324,8 +1830,6 @@ Powered by Abu Niematullah Ventures
                   Share
 
                 </button>
-
-                {/* CLOSE */}
 
                 <button
                   type="button"

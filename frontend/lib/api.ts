@@ -1,35 +1,81 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL:
+    process.env.NEXT_PUBLIC_API_URL ||
+    "http://localhost:5000/api",
+
   withCredentials: true,
+
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Response Interceptor
-api.interceptors.response.use(
-  (response) => response,
+// ==========================================
+// REQUEST INTERCEPTOR
+// ==========================================
+
+api.interceptors.request.use(
+  (config) => {
+    // Authentication is handled through
+    // the HttpOnly cookie.
+    //
+    // DO NOT manually add Authorization:
+    // Bearer token here.
+
+    return config;
+  },
 
   (error) => {
-    const status = error.response?.status;
-    const requestUrl = error.config?.url || "";
+    return Promise.reject(error);
+  }
+);
 
-    // Do NOT redirect when /auth/me fails.
-    // AuthContext handles an unauthenticated session itself.
+// ==========================================
+// RESPONSE INTERCEPTOR
+// ==========================================
+
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+
+  (error) => {
+    const status =
+      error.response?.status;
+
+    const requestUrl =
+      error.config?.url || "";
+
+    console.error(
+      "API ERROR:",
+      status,
+      requestUrl,
+      error.response?.data
+    );
+
     if (
       status === 401 &&
-      !requestUrl.includes("/auth/me") &&
-      !requestUrl.includes("/auth/login")
+      !requestUrl.includes(
+        "/auth/me"
+      ) &&
+      !requestUrl.includes(
+        "/auth/login"
+      )
     ) {
-      console.warn("Session expired.");
+      console.warn(
+        "Session expired."
+      );
 
       if (
-        typeof window !== "undefined" &&
-        window.location.pathname !== "/login"
+        typeof window !==
+          "undefined" &&
+        window.location.pathname !==
+          "/login"
       ) {
-        window.location.href = "/login";
+        window.location.href =
+          "/login";
       }
     }
 

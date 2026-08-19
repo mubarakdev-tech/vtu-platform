@@ -7,34 +7,45 @@ import crypto from "crypto";
 import transporter from "../config/email";
 import { AuthRequest } from "../middleware/auth.middleware";
 
-// ==========================
-// CREATE JWT TOKEN
-// ==========================
+// ==========================================
+// CREATE JWT
+// ==========================================
 
 const createToken = (id: string) => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error(
+      "JWT_SECRET is not configured"
+    );
+  }
+
   return jwt.sign(
     { id },
-    process.env.JWT_SECRET as string,
+    process.env.JWT_SECRET,
     {
       expiresIn: "7d",
     }
   );
 };
 
-// ==========================
+// ==========================================
 // COOKIE OPTIONS
-// ==========================
+// ==========================================
 
 const cookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "strict" as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000,
+
+  // localhost development
+  secure: false,
+
+  sameSite: "lax" as const,
+
+  maxAge:
+    7 * 24 * 60 * 60 * 1000,
 };
 
-// ==========================
-// REGISTER USER
-// ==========================
+// ==========================================
+// REGISTER
+// ==========================================
 
 export const register = async (
   req: Request,
@@ -48,20 +59,33 @@ export const register = async (
       password,
     } = req.body;
 
-    const existingUser = await User.findOne({
-      email,
-    });
-
-    if (existingUser) {
+    if (
+      !name ||
+      !email ||
+      !phone ||
+      !password
+    ) {
       return res.status(400).json({
-        message: "User already exists",
+        success: false,
+        message:
+          "Name, email, phone and password are required.",
       });
     }
 
-    const hashedPassword = await bcrypt.hash(
-      password,
-      10
-    );
+    const existingUser =
+      await User.findOne({
+        email,
+      });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "User already exists.",
+      });
+    }
+
+    const hashedPassword =
+      await bcrypt.hash(password, 10);
 
     const user = await User.create({
       name,
@@ -70,17 +94,23 @@ export const register = async (
       password: hashedPassword,
     });
 
-    // Create wallet automatically
+    // ========================================
+    // CREATE WALLET
+    // ========================================
+
     await Wallet.create({
       user: user._id,
       balance: 0,
     });
 
+    // ========================================
+    // CREATE TOKEN
+    // ========================================
+
     const token = createToken(
       user._id.toString()
     );
 
-    // Store JWT securely
     res.cookie(
       "token",
       token,
@@ -88,7 +118,9 @@ export const register = async (
     );
 
     return res.status(201).json({
-      message: "User created successfully",
+      success: true,
+      message:
+        "User created successfully",
 
       user: {
         id: user._id,
@@ -104,15 +136,16 @@ export const register = async (
     );
 
     return res.status(500).json({
+      success: false,
       message: "Server error",
       error: error.message,
     });
   }
 };
 
-// ==========================
-// LOGIN USER
-// ==========================
+// ==========================================
+// LOGIN
+// ==========================================
 
 export const login = async (
   req: Request,
@@ -124,39 +157,65 @@ export const login = async (
       password,
     } = req.body;
 
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Email and password are required.",
+      });
+    }
+
     const user = await User.findOne({
       email,
     });
 
     if (!user) {
       return res.status(400).json({
-        message: "Invalid email or password",
+        success: false,
+        message:
+          "Invalid email or password.",
       });
     }
 
-    const isMatch = await bcrypt.compare(
-      password,
-      user.password
-    );
+    const isMatch =
+      await bcrypt.compare(
+        password,
+        user.password
+      );
 
     if (!isMatch) {
       return res.status(400).json({
-        message: "Invalid email or password",
+        success: false,
+        message:
+          "Invalid email or password.",
       });
     }
+
+    // ========================================
+    // CREATE JWT
+    // ========================================
 
     const token = createToken(
       user._id.toString()
     );
 
-    // Store JWT securely
+    // ========================================
+    // SAVE TOKEN IN HTTP-ONLY COOKIE
+    // ========================================
+
     res.cookie(
       "token",
       token,
       cookieOptions
     );
 
+    console.log(
+      "LOGIN SUCCESS:",
+      user.email
+    );
+
     return res.status(200).json({
+      success: true,
       message: "Login successful",
 
       user: {
@@ -173,15 +232,16 @@ export const login = async (
     );
 
     return res.status(500).json({
+      success: false,
       message: "Server error",
       error: error.message,
     });
   }
 };
 
-// ==========================
+// ==========================================
 // GET CURRENT USER
-// ==========================
+// ==========================================
 
 export const getMe = async (
   req: AuthRequest,
@@ -190,7 +250,9 @@ export const getMe = async (
   try {
     if (!req.user) {
       return res.status(401).json({
-        message: "Not authorized. Please login.",
+        success: false,
+        message:
+          "Not authorized. Please login.",
       });
     }
 
@@ -211,15 +273,15 @@ export const getMe = async (
     );
 
     return res.status(500).json({
+      success: false,
       message: "Server error",
-      error: error.message,
     });
   }
 };
 
-// ==========================
-// LOGOUT USER
-// ==========================
+// ==========================================
+// LOGOUT
+// ==========================================
 
 export const logout = (
   req: Request,
@@ -227,19 +289,20 @@ export const logout = (
 ) => {
   res.clearCookie("token", {
     httpOnly: true,
-    secure:
-      process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    secure: false,
+    sameSite: "lax",
   });
 
   return res.status(200).json({
-    message: "Logged out successfully",
+    success: true,
+    message:
+      "Logged out successfully",
   });
 };
 
-// ==========================
+// ==========================================
 // FORGOT PASSWORD
-// ==========================
+// ==========================================
 
 export const forgotPassword = async (
   req: Request,
@@ -254,46 +317,43 @@ export const forgotPassword = async (
 
     if (!user) {
       return res.status(404).json({
+        success: false,
         message: "User not found",
       });
     }
 
-    // Generate secure reset token
-    const resetToken = crypto
-      .randomBytes(32)
-      .toString("hex");
+    const resetToken =
+      crypto
+        .randomBytes(32)
+        .toString("hex");
 
-    // Save reset token
     user.resetPasswordToken =
       resetToken;
 
-    // Token expires after 15 minutes
     user.resetPasswordExpires =
       new Date(
-        Date.now() + 15 * 60 * 1000
+        Date.now() +
+          15 * 60 * 1000
       );
 
     await user.save();
 
-    // Password reset link
     const resetLink =
       `http://localhost:3000/reset-password/${resetToken}`;
 
-    // Send reset email
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: user.email,
-      subject: "AbuPay Password Reset",
+      subject:
+        "AbuPay Password Reset",
 
       html: `
-        <div
-          style="
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: auto;
-            padding: 20px;
-          "
-        >
+        <div style="
+          font-family: Arial, sans-serif;
+          max-width: 600px;
+          margin: auto;
+          padding: 20px;
+        ">
 
           <h2 style="color: #2563eb;">
             AbuPay Password Reset
@@ -309,8 +369,8 @@ export const forgotPassword = async (
           </p>
 
           <p>
-            Click the button below to create a
-            new password:
+            Click the button below to create
+            a new password:
           </p>
 
           <p>
@@ -320,7 +380,7 @@ export const forgotPassword = async (
                 display: inline-block;
                 padding: 12px 20px;
                 background-color: #2563eb;
-                color: #ffffff;
+                color: white;
                 text-decoration: none;
                 border-radius: 6px;
               "
@@ -349,6 +409,7 @@ export const forgotPassword = async (
     });
 
     return res.status(200).json({
+      success: true,
       message:
         "Password reset email sent successfully",
     });
@@ -359,15 +420,16 @@ export const forgotPassword = async (
     );
 
     return res.status(500).json({
+      success: false,
       message: "Server error",
       error: error.message,
     });
   }
 };
 
-// ==========================
+// ==========================================
 // RESET PASSWORD
-// ==========================
+// ==========================================
 
 export const resetPassword = async (
   req: Request,
@@ -377,61 +439,66 @@ export const resetPassword = async (
     const { token } = req.params;
     const { newPassword } = req.body;
 
-    // Check token
     if (!token) {
       return res.status(400).json({
-        message: "Reset token is required",
+        success: false,
+        message:
+          "Reset token is required",
       });
     }
 
-    // Check password
     if (!newPassword) {
       return res.status(400).json({
+        success: false,
         message:
           "New password is required",
       });
     }
 
-    // Password length
     if (newPassword.length < 6) {
       return res.status(400).json({
+        success: false,
         message:
           "Password must be at least 6 characters",
       });
     }
 
-    // Find user with valid token
-    const user = await User.findOne({
-      resetPasswordToken: token,
+    const user =
+      await User.findOne({
+        resetPasswordToken: token,
 
-      resetPasswordExpires: {
-        $gt: new Date(),
-      },
-    });
+        resetPasswordExpires: {
+          $gt: new Date(),
+        },
+      });
 
     if (!user) {
       return res.status(400).json({
+        success: false,
         message:
           "Invalid or expired reset token",
       });
     }
 
-    // Hash new password
     const hashedPassword =
       await bcrypt.hash(
         newPassword,
         10
       );
 
-    user.password = hashedPassword;
+    user.password =
+      hashedPassword;
 
-    // Invalidate reset token
-    user.resetPasswordToken = null;
-    user.resetPasswordExpires = null;
+    user.resetPasswordToken =
+      null;
+
+    user.resetPasswordExpires =
+      null;
 
     await user.save();
 
     return res.status(200).json({
+      success: true,
       message:
         "Password reset successfully",
     });
@@ -442,8 +509,8 @@ export const resetPassword = async (
     );
 
     return res.status(500).json({
+      success: false,
       message: "Server error",
-      error: error.message,
     });
   }
 };

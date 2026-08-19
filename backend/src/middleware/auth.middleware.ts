@@ -16,41 +16,94 @@ export const protect = async (
   next: NextFunction
 ) => {
   try {
-    // Read JWT from HttpOnly cookie
+    // ==========================================
+    // GET TOKEN FROM HTTP-ONLY COOKIE
+    // ==========================================
+
     const token = req.cookies?.token;
 
     if (!token) {
+      console.log("AUTH ERROR: No token cookie found");
+
       return res.status(401).json({
+        success: false,
         message: "Not authorized. Please login.",
       });
     }
 
-    // Verify JWT
+    // ==========================================
+    // CHECK JWT SECRET
+    // ==========================================
+
+    if (!process.env.JWT_SECRET) {
+      console.error("AUTH ERROR: JWT_SECRET is missing");
+
+      return res.status(500).json({
+        success: false,
+        message: "Authentication configuration error",
+      });
+    }
+
+    // ==========================================
+    // VERIFY TOKEN
+    // ==========================================
+
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET as string
+      process.env.JWT_SECRET
     ) as JwtPayload;
 
-    // Get logged-in user (exclude password)
-    const user = await User.findById(decoded.id).select("-password");
+    if (!decoded?.id) {
+      console.log("AUTH ERROR: Invalid token payload");
+
+      return res.status(401).json({
+        success: false,
+        message: "Invalid authentication token.",
+      });
+    }
+
+    // ==========================================
+    // FIND USER
+    // ==========================================
+
+    const user = await User.findById(
+      decoded.id
+    ).select("-password");
 
     if (!user) {
+      console.log(
+        "AUTH ERROR: User not found:",
+        decoded.id
+      );
+
       return res.status(401).json({
+        success: false,
         message: "User not found.",
       });
     }
 
+    // ==========================================
+    // ATTACH USER TO REQUEST
+    // ==========================================
+
     req.user = user;
 
+    console.log(
+      "AUTH SUCCESS:",
+      user.email
+    );
+
     next();
-
   } catch (error: any) {
-
-    console.error("JWT ERROR:", error.message);
+    console.error(
+      "JWT ERROR:",
+      error?.message
+    );
 
     return res.status(401).json({
-      message: "Session expired. Please login again.",
+      success: false,
+      message:
+        "Session expired. Please login again.",
     });
-
   }
 };
