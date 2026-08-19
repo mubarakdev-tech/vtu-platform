@@ -13,9 +13,7 @@ import { AuthRequest } from "../middleware/auth.middleware";
 
 const createToken = (id: string) => {
   if (!process.env.JWT_SECRET) {
-    throw new Error(
-      "JWT_SECRET is not configured"
-    );
+    throw new Error("JWT_SECRET is not configured");
   }
 
   return jwt.sign(
@@ -33,14 +31,9 @@ const createToken = (id: string) => {
 
 const cookieOptions = {
   httpOnly: true,
-
-  // localhost development
   secure: false,
-
   sameSite: "lax" as const,
-
-  maxAge:
-    7 * 24 * 60 * 60 * 1000,
+  maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
 // ==========================================
@@ -74,7 +67,7 @@ export const register = async (
 
     const existingUser =
       await User.findOne({
-        email,
+        email: email.toLowerCase().trim(),
       });
 
     if (existingUser) {
@@ -89,7 +82,7 @@ export const register = async (
 
     const user = await User.create({
       name,
-      email,
+      email: email.toLowerCase().trim(),
       phone,
       password: hashedPassword,
     });
@@ -127,6 +120,7 @@ export const register = async (
         name: user.name,
         email: user.email,
         phone: user.phone,
+        role: user.role,
       },
     });
   } catch (error: any) {
@@ -144,7 +138,7 @@ export const register = async (
 };
 
 // ==========================================
-// LOGIN
+// NORMAL USER LOGIN
 // ==========================================
 
 export const login = async (
@@ -166,7 +160,7 @@ export const login = async (
     }
 
     const user = await User.findOne({
-      email,
+      email: email.toLowerCase().trim(),
     });
 
     if (!user) {
@@ -191,17 +185,9 @@ export const login = async (
       });
     }
 
-    // ========================================
-    // CREATE JWT
-    // ========================================
-
     const token = createToken(
       user._id.toString()
     );
-
-    // ========================================
-    // SAVE TOKEN IN HTTP-ONLY COOKIE
-    // ========================================
 
     res.cookie(
       "token",
@@ -223,6 +209,7 @@ export const login = async (
         name: user.name,
         email: user.email,
         phone: user.phone,
+        role: user.role,
       },
     });
   } catch (error: any) {
@@ -235,6 +222,124 @@ export const login = async (
       success: false,
       message: "Server error",
       error: error.message,
+    });
+  }
+};
+
+// ==========================================
+// ADMIN LOGIN
+// ==========================================
+
+export const adminLogin = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const {
+      email,
+      password,
+    } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Email and password are required.",
+      });
+    }
+
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Invalid email or password.",
+      });
+    }
+
+    // ========================================
+    // ADMIN ROLE CHECK
+    // ========================================
+
+    if (
+      user.role !== "admin" &&
+      user.role !== "super_admin"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Access denied. Admin privileges required.",
+      });
+    }
+
+    // ========================================
+    // PASSWORD CHECK
+    // ========================================
+
+    const isMatch =
+      await bcrypt.compare(
+        password,
+        user.password
+      );
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Invalid email or password.",
+      });
+    }
+
+    // ========================================
+    // CREATE TOKEN
+    // ========================================
+
+    const token = createToken(
+      user._id.toString()
+    );
+
+    // ========================================
+    // SAVE COOKIE
+    // ========================================
+
+    res.cookie(
+      "token",
+      token,
+      cookieOptions
+    );
+
+    console.log(
+      "ADMIN LOGIN SUCCESS:",
+      user.email,
+      "ROLE:",
+      user.role
+    );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Admin login successful",
+
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+      },
+    });
+  } catch (error: any) {
+    console.error(
+      "Admin login error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
     });
   }
 };
@@ -264,6 +369,7 @@ export const getMe = async (
         name: req.user.name,
         email: req.user.email,
         phone: req.user.phone,
+        role: req.user.role,
       },
     });
   } catch (error: any) {
@@ -312,7 +418,7 @@ export const forgotPassword = async (
     const { email } = req.body;
 
     const user = await User.findOne({
-      email,
+      email: email?.toLowerCase().trim(),
     });
 
     if (!user) {
@@ -511,6 +617,121 @@ export const resetPassword = async (
     return res.status(500).json({
       success: false,
       message: "Server error",
+    });
+  }
+};
+
+// ==========================================
+// CHANGE PASSWORD
+// ==========================================
+
+export const changePassword = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Not authorized. Please login.",
+      });
+    }
+
+    const {
+      currentPassword,
+      newPassword,
+    } = req.body;
+
+    if (
+      !currentPassword ||
+      !newPassword
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Current password and new password are required.",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "New password must be at least 6 characters.",
+      });
+    }
+
+    const user =
+      await User.findById(
+        req.user._id
+      );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found.",
+      });
+    }
+
+    const isMatch =
+      await bcrypt.compare(
+        currentPassword,
+        user.password
+      );
+
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Current password is incorrect.",
+      });
+    }
+
+    const samePassword =
+      await bcrypt.compare(
+        newPassword,
+        user.password
+      );
+
+    if (samePassword) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "New password must be different from your current password.",
+      });
+    }
+
+    const hashedPassword =
+      await bcrypt.hash(
+        newPassword,
+        10
+      );
+
+    user.password =
+      hashedPassword;
+
+    await user.save();
+
+    console.log(
+      "PASSWORD CHANGED SUCCESSFULLY:",
+      user.email
+    );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Password changed successfully.",
+    });
+  } catch (error: any) {
+    console.error(
+      "Change password error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error.",
     });
   }
 };

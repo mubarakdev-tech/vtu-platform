@@ -35,14 +35,67 @@ app.use(
 // =====================================================
 // CORS
 // =====================================================
+//
+// Customer application:
+// http://localhost:3000
+//
+// Admin application:
+// http://localhost:3001
+//
+// Backend:
+// http://localhost:5000
+//
+// =====================================================
 
-const frontendUrl =
-  process.env.FRONTEND_URL ||
-  "http://localhost:3000";
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+];
 
 app.use(
   cors({
-    origin: frontendUrl,
+    origin: function (
+      origin,
+      callback
+    ) {
+      // Allow requests from Postman,
+      // curl and other clients without
+      // an Origin header.
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      // Allow customer frontend.
+      if (
+        origin ===
+        "http://localhost:3000"
+      ) {
+        callback(null, true);
+        return;
+      }
+
+      // Allow admin frontend.
+      if (
+        origin ===
+        "http://localhost:3001"
+      ) {
+        callback(null, true);
+        return;
+      }
+
+      console.log(
+        "CORS BLOCKED ORIGIN:",
+        origin
+      );
+
+      callback(
+        new Error(
+          "Not allowed by CORS"
+        )
+      );
+    },
+
     credentials: true,
 
     methods: [
@@ -65,7 +118,9 @@ app.use(
 // COMPRESSION
 // =====================================================
 
-app.use(compression());
+app.use(
+  compression()
+);
 
 // =====================================================
 // BODY PARSING
@@ -88,29 +143,36 @@ app.use(
 // COOKIE PARSER
 // =====================================================
 
-app.use(cookieParser());
+app.use(
+  cookieParser()
+);
 
 // =====================================================
 // RATE LIMITING
 // =====================================================
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+const limiter =
+  rateLimit({
+    windowMs:
+      15 * 60 * 1000,
 
-  max: 500,
+    max: 500,
 
-  standardHeaders: true,
+    standardHeaders: true,
 
-  legacyHeaders: false,
+    legacyHeaders: false,
 
-  message: {
-    success: false,
-    message:
-      "Too many requests. Please try again later.",
-  },
-});
+    message: {
+      success: false,
+      message:
+        "Too many requests. Please try again later.",
+    },
+  });
 
-app.use("/api", limiter);
+app.use(
+  "/api",
+  limiter
+);
 
 // =====================================================
 // HTTP LOGGING
@@ -119,8 +181,12 @@ app.use("/api", limiter);
 app.use(
   morgan("combined", {
     stream: {
-      write: (message) => {
-        logger.info(message.trim());
+      write: (
+        message
+      ) => {
+        logger.info(
+          message.trim()
+        );
       },
     },
   })
@@ -130,25 +196,37 @@ app.use(
 // HEALTH CHECK
 // =====================================================
 
-app.get("/", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message:
-      "VTU Platform API is running 🚀",
-  });
-});
+app.get(
+  "/",
+  (
+    req,
+    res
+  ) => {
+    res.status(200).json({
+      success: true,
+      message:
+        "VTU Platform API is running 🚀",
+    });
+  }
+);
 
 // =====================================================
 // API HEALTH CHECK
 // =====================================================
 
-app.get("/api", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message:
-      "AbuPay API is running 🚀",
-  });
-});
+app.get(
+  "/api",
+  (
+    req,
+    res
+  ) => {
+    res.status(200).json({
+      success: true,
+      message:
+        "AbuPay API is running 🚀",
+    });
+  }
+);
 
 // =====================================================
 // AUTH ROUTES
@@ -228,13 +306,15 @@ app.use(
 
 app.use(
   (
-    req: express.Request,
-    res: express.Response
+    req,
+    res
   ) => {
     res.status(404).json({
       success: false,
-      message: "Route not found",
-      path: req.originalUrl,
+      message:
+        "Route not found",
+      path:
+        req.originalUrl,
     });
   }
 );
@@ -243,7 +323,9 @@ app.use(
 // GLOBAL ERROR HANDLER
 // =====================================================
 
-app.use(errorHandler);
+app.use(
+  errorHandler
+);
 
 // =====================================================
 // EXPORT

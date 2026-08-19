@@ -6,17 +6,18 @@ import { AuthRequest } from "./auth.middleware";
  * ADMIN ONLY MIDDLEWARE
  * ==========================================
  *
- * This middleware must run AFTER protect.
+ * Must run AFTER protect.
  *
  * protect:
- *   1. Checks the login cookie
- *   2. Verifies the JWT
- *   3. Finds the user
- *   4. Attaches the user to req.user
+ * - verifies login
+ * - verifies JWT
+ * - finds user
+ * - attaches req.user
  *
  * adminOnly:
- *   Checks whether the authenticated user
- *   has ADMIN role.
+ * - allows admin
+ * - allows super_admin
+ * - rejects normal users
  */
 
 export const adminOnly = (
@@ -26,25 +27,32 @@ export const adminOnly = (
 ) => {
   try {
     // ========================================
-    // USER MUST ALREADY BE AUTHENTICATED
+    // USER MUST BE AUTHENTICATED
     // ========================================
 
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message:
-          "Not authorized. Please login.",
+        message: "Not authorized. Please login.",
       });
     }
 
     // ========================================
-    // CHECK ADMIN ROLE
+    // CHECK USER ROLE
     // ========================================
 
-    const role =
-      String(req.user.role || "").toUpperCase();
+    const role = String(
+      req.user.role || ""
+    ).toLowerCase();
 
-    if (role !== "ADMIN") {
+    // ========================================
+    // ADMIN OR SUPER ADMIN ONLY
+    // ========================================
+
+    if (
+      role !== "admin" &&
+      role !== "super_admin"
+    ) {
       console.log(
         "ADMIN ACCESS DENIED:",
         req.user.email,
@@ -65,7 +73,9 @@ export const adminOnly = (
 
     console.log(
       "ADMIN ACCESS GRANTED:",
-      req.user.email
+      req.user.email,
+      "Role:",
+      req.user.role
     );
 
     next();
