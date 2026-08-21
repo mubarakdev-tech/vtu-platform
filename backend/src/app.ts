@@ -14,6 +14,7 @@ import transactionRoutes from "./routes/transaction.routes";
 import dataRoutes from "./routes/data.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import financialLedgerRoutes from "./routes/financial-ledger.routes";
+import announcementRoutes from "./routes/announcement.routes";
 
 import { errorHandler } from "./middleware/error.middleware";
 import logger from "./utils/logger";
@@ -54,10 +55,7 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: function (
-      origin,
-      callback
-    ) {
+    origin: function (origin, callback) {
       // Allow requests from Postman,
       // curl and other clients without
       // an Origin header.
@@ -67,33 +65,20 @@ app.use(
       }
 
       // Allow customer frontend.
-      if (
-        origin ===
-        "http://localhost:3000"
-      ) {
+      if (origin === "http://localhost:3000") {
         callback(null, true);
         return;
       }
 
       // Allow admin frontend.
-      if (
-        origin ===
-        "http://localhost:3001"
-      ) {
+      if (origin === "http://localhost:3001") {
         callback(null, true);
         return;
       }
 
-      console.log(
-        "CORS BLOCKED ORIGIN:",
-        origin
-      );
+      console.log("CORS BLOCKED ORIGIN:", origin);
 
-      callback(
-        new Error(
-          "Not allowed by CORS"
-        )
-      );
+      callback(new Error("Not allowed by CORS"));
     },
 
     credentials: true,
@@ -118,9 +103,7 @@ app.use(
 // COMPRESSION
 // =====================================================
 
-app.use(
-  compression()
-);
+app.use(compression());
 
 // =====================================================
 // BODY PARSING
@@ -143,36 +126,28 @@ app.use(
 // COOKIE PARSER
 // =====================================================
 
-app.use(
-  cookieParser()
-);
+app.use(cookieParser());
 
 // =====================================================
 // RATE LIMITING
 // =====================================================
 
-const limiter =
-  rateLimit({
-    windowMs:
-      15 * 60 * 1000,
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
 
-    max: 500,
+  max: 500,
 
-    standardHeaders: true,
+  standardHeaders: true,
 
-    legacyHeaders: false,
+  legacyHeaders: false,
 
-    message: {
-      success: false,
-      message:
-        "Too many requests. Please try again later.",
-    },
-  });
+  message: {
+    success: false,
+    message: "Too many requests. Please try again later.",
+  },
+});
 
-app.use(
-  "/api",
-  limiter
-);
+app.use("/api", limiter);
 
 // =====================================================
 // HTTP LOGGING
@@ -181,12 +156,8 @@ app.use(
 app.use(
   morgan("combined", {
     stream: {
-      write: (
-        message
-      ) => {
-        logger.info(
-          message.trim()
-        );
+      write: (message) => {
+        logger.info(message.trim());
       },
     },
   })
@@ -196,37 +167,23 @@ app.use(
 // HEALTH CHECK
 // =====================================================
 
-app.get(
-  "/",
-  (
-    req,
-    res
-  ) => {
-    res.status(200).json({
-      success: true,
-      message:
-        "VTU Platform API is running 🚀",
-    });
-  }
-);
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "VTU Platform API is running 🚀",
+  });
+});
 
 // =====================================================
 // API HEALTH CHECK
 // =====================================================
 
-app.get(
-  "/api",
-  (
-    req,
-    res
-  ) => {
-    res.status(200).json({
-      success: true,
-      message:
-        "AbuPay API is running 🚀",
-    });
-  }
-);
+app.get("/api", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "AbuPay API is running 🚀",
+  });
+});
 
 // =====================================================
 // AUTH ROUTES
@@ -301,20 +258,24 @@ app.use(
 );
 
 // =====================================================
+// ANNOUNCEMENT ROUTES
+// =====================================================
+
+app.use(
+  "/api/announcements",
+  announcementRoutes
+);
+
+// =====================================================
 // 404 HANDLER
 // =====================================================
 
 app.use(
-  (
-    req,
-    res
-  ) => {
+  (req, res) => {
     res.status(404).json({
       success: false,
-      message:
-        "Route not found",
-      path:
-        req.originalUrl,
+      message: "Route not found",
+      path: req.originalUrl,
     });
   }
 );
@@ -323,9 +284,7 @@ app.use(
 // GLOBAL ERROR HANDLER
 // =====================================================
 
-app.use(
-  errorHandler
-);
+app.use(errorHandler);
 
 // =====================================================
 // EXPORT

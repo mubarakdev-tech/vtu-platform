@@ -42,7 +42,6 @@ export default function Sidebar() {
       router.push("/login");
     } catch {
       toast.error("Failed to logout");
-      // Still redirect in case cookie is already invalid
       router.push("/login");
     }
   };
@@ -52,6 +51,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="border-b border-white/20 p-6">
         <h1 className="text-3xl font-extrabold">AbuPay</h1>
+
         <p className="mt-1 text-sm text-emerald-100">
           Fast • Secure • Reliable
         </p>
@@ -77,7 +77,10 @@ export default function Sidebar() {
                 size={20}
                 className="transition group-hover:scale-110"
               />
-              <span className="font-medium">{item.title}</span>
+
+              <span className="font-medium">
+                {item.title}
+              </span>
             </Link>
           );
         })}
@@ -85,14 +88,21 @@ export default function Sidebar() {
 
       {/* Bottom */}
       <div className="border-t border-white/20 p-5">
-        <button
-          type="button"
-          className="mb-3 flex w-full items-center gap-3 rounded-xl bg-white/10 px-4 py-3 transition hover:bg-white/20"
+
+        {/* Help Center */}
+        <Link
+          href="/dashboard/help"
+          className={`mb-3 flex w-full items-center gap-3 rounded-xl px-4 py-3 transition ${
+            pathname === "/dashboard/help"
+              ? "bg-white text-emerald-700 shadow-lg"
+              : "bg-white/10 hover:bg-white/20"
+          }`}
         >
           <HelpCircle size={20} />
-          Help Center
-        </button>
+          <span>Help Center</span>
+        </Link>
 
+        {/* Logout */}
         <button
           type="button"
           onClick={handleLogout}
@@ -105,6 +115,7 @@ export default function Sidebar() {
         <p className="mt-6 text-center text-xs text-emerald-100">
           AbuPay v1.0.0
         </p>
+
       </div>
     </aside>
   );

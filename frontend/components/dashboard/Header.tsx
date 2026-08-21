@@ -3,11 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
-  Bell,
   Search,
   Wallet,
   UserCircle,
-  HelpCircle,
 } from "lucide-react";
 
 import useAuth from "@/hooks/useAuth";
@@ -128,31 +126,6 @@ export default function Header() {
           </Link>
 
           {/* ==================================
-              NOTIFICATION
-          ================================== */}
-
-          <button
-            type="button"
-            onClick={() => {
-              // Notifications page can be connected
-              // when the notification route is ready.
-            }}
-            aria-label="Notifications"
-            className="relative rounded-full p-3 transition hover:bg-gray-100"
-          >
-
-            <Bell
-              size={22}
-              className="text-gray-700"
-            />
-
-            {/* Notification indicator */}
-
-            <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-red-500" />
-
-          </button>
-
-          {/* ==================================
               PROFILE
           ================================== */}
 
@@ -177,20 +150,6 @@ export default function Header() {
               </p>
 
             </div>
-
-          </Link>
-
-          {/* ==================================
-              HELP CENTER
-          ================================== */}
-
-          <Link
-            href="/dashboard/help"
-            aria-label="Help Center"
-            className="hidden rounded-full p-3 text-gray-600 transition hover:bg-gray-100 md:block"
-          >
-
-            <HelpCircle size={22} />
 
           </Link>
 

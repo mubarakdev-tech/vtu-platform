@@ -18,6 +18,19 @@ export interface IUser extends mongoose.Document {
   // AbuPay profile
   profilePicture?: string | null;
 
+  // ==========================================
+  // REFERRAL SYSTEM
+  // ==========================================
+
+  // Unique referral code belonging to this user
+  referralCode?: string | null;
+
+  // User who referred this customer
+  referredBy?: mongoose.Types.ObjectId | null;
+
+  // Number of customers referred
+  referralCount: number;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -51,7 +64,11 @@ const userSchema = new Schema<IUser>(
 
     role: {
       type: String,
-      enum: ["user", "admin", "super_admin"],
+      enum: [
+        "user",
+        "admin",
+        "super_admin",
+      ],
       default: "user",
     },
 
@@ -65,9 +82,9 @@ const userSchema = new Schema<IUser>(
       default: null,
     },
 
-    // ==========================
+    // ==========================================
     // PASSWORD RESET
-    // ==========================
+    // ==========================================
 
     resetPasswordToken: {
       type: String,
@@ -79,13 +96,38 @@ const userSchema = new Schema<IUser>(
       default: null,
     },
 
-    // ==========================
-    // ABUPAY PROFILE PICTURE
-    // ==========================
+    // ==========================================
+    // PROFILE PICTURE
+    // ==========================================
 
     profilePicture: {
       type: String,
       default: null,
+    },
+
+    // ==========================================
+    // REFERRAL SYSTEM
+    // ==========================================
+
+    referralCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+      uppercase: true,
+      trim: true,
+      default: null,
+    },
+
+    referredBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    referralCount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
   },
   {
@@ -96,6 +138,9 @@ const userSchema = new Schema<IUser>(
 // Prevent OverwriteModelError during development
 const User =
   mongoose.models.User ||
-  mongoose.model<IUser>("User", userSchema);
+  mongoose.model<IUser>(
+    "User",
+    userSchema
+  );
 
 export default User;

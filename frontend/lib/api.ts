@@ -42,11 +42,30 @@ api.interceptors.response.use(
   },
 
   (error) => {
-    const status =
-      error.response?.status;
+    const status = error.response?.status;
 
     const requestUrl =
       error.config?.url || "";
+
+    // ==========================================
+    // AUTH SESSION CHECK
+    // ==========================================
+    //
+    // /auth/me returning 401 simply means there
+    // is no active login session.
+    //
+    // Do NOT treat this as a console API error.
+    //
+    if (
+      status === 401 &&
+      requestUrl.includes("/auth/me")
+    ) {
+      return Promise.reject(error);
+    }
+
+    // ==========================================
+    // LOG OTHER API ERRORS
+    // ==========================================
 
     console.error(
       "API ERROR:",
@@ -55,27 +74,23 @@ api.interceptors.response.use(
       error.response?.data
     );
 
+    // ==========================================
+    // SESSION EXPIRED
+    // ==========================================
+
     if (
       status === 401 &&
-      !requestUrl.includes(
-        "/auth/me"
-      ) &&
-      !requestUrl.includes(
-        "/auth/login"
-      )
+      !requestUrl.includes("/auth/login")
     ) {
       console.warn(
         "Session expired."
       );
 
       if (
-        typeof window !==
-          "undefined" &&
-        window.location.pathname !==
-          "/login"
+        typeof window !== "undefined" &&
+        window.location.pathname !== "/login"
       ) {
-        window.location.href =
-          "/login";
+        window.location.href = "/login";
       }
     }
 

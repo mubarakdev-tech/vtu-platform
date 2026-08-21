@@ -1,220 +1,343 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import MainLayout from "@/components/layout/MainLayout";
+import { Button } from "@/components/ui/button";
 
-import AuthLayout from "@/components/auth/AuthLayout";
-import AuthCard from "@/components/auth/AuthCard";
-import AuthInput from "@/components/auth/AuthInput";
-import PasswordInput from "@/components/auth/PasswordInput";
-import AuthButton from "@/components/auth/AuthButton";
-
-import { registerSchema } from "@/schemas/authSchema";
-import useAuth from "@/hooks/useAuth";
-
-
-type RegisterForm = z.infer<typeof registerSchema>;
-
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:5000/api";
 
 export default function RegisterPage() {
-
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const { register: registerUser, loading } = useAuth();
+  // Get referral code from:
+  // /auth/register?ref=ABU12345678
+  const referralFromUrl =
+    searchParams.get("ref") || "";
 
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [referralCode, setReferralCode] =
+    useState(referralFromUrl.toUpperCase());
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<RegisterForm>({
-    resolver: zodResolver(registerSchema),
-  });
+  const [loading, setLoading] =
+    useState(false);
 
+  const [error, setError] =
+    useState("");
 
+  const [success, setSuccess] =
+    useState("");
 
-  const onSubmit = async (
-    data: RegisterForm
+  const handleRegister = async (
+    e: React.FormEvent
   ) => {
+    e.preventDefault();
 
-    try {
+    setError("");
+    setSuccess("");
 
-      await registerUser(
-        data.name,
-        data.email,
-        data.phone,
-        data.password
+    // ==========================================
+    // BASIC VALIDATION
+    // ==========================================
+
+    if (
+      !name ||
+      !email ||
+      !phone ||
+      !password
+    ) {
+      setError(
+        "Please fill in all required fields."
       );
 
-
-      router.push("/login");
-
-
-    } catch (error:any) {
-
-      console.error(
-        error?.response?.data?.message ||
-        error.message
-      );
-
+      return;
     }
 
+    if (password.length < 6) {
+      setError(
+        "Password must be at least 6 characters."
+      );
+
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // ==========================================
+      // REGISTER USER
+      // ==========================================
+
+      const response = await fetch(
+        `${API_URL}/auth/register`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          credentials: "include",
+
+          body: JSON.stringify({
+            name: name.trim(),
+
+            email:
+              email.trim().toLowerCase(),
+
+            phone: phone.trim(),
+
+            password,
+
+            // Send referral code if provided
+            referralCode:
+              referralCode.trim()
+                ? referralCode
+                    .trim()
+                    .toUpperCase()
+                : undefined,
+          }),
+        }
+      );
+
+      const result =
+        await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message ||
+            "Registration failed."
+        );
+      }
+
+      // ==========================================
+      // SUCCESS
+      // ==========================================
+
+      setSuccess(
+        "Account created successfully. Welcome to AbuPay!"
+      );
+
+      // ==========================================
+      // GO TO DASHBOARD
+      // ==========================================
+
+      setTimeout(() => {
+        router.push("/dashboard");
+        router.refresh();
+      }, 800);
+    } catch (err: any) {
+      console.error(
+        "Registration error:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Unable to create account."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-
-
   return (
+    <MainLayout>
+      <div className="flex items-center justify-center px-4 py-20">
+        <div className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-lg">
 
-    <AuthLayout
+          {/* ==========================================
+              TITLE
+          ========================================== */}
 
-      title="Create Account"
+          <div className="mb-6 text-center">
 
-      subtitle="Join AbuPay and start making secure payments"
+            <h1 className="text-2xl font-bold text-gray-900">
+              Create your AbuPay account
+            </h1>
 
-    >
+            <p className="mt-2 text-sm text-gray-500">
+              Join AbuPay and enjoy fast and
+              convenient digital payments.
+            </p>
 
-      <AuthCard>
+          </div>
 
+          {/* ==========================================
+              ERROR
+          ========================================== */}
 
-        <form
+          {error && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
 
-          onSubmit={
-            handleSubmit(onSubmit)
-          }
+          {/* ==========================================
+              SUCCESS
+          ========================================== */}
 
-          className="space-y-3"
+          {success && (
+            <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {success}
+            </div>
+          )}
 
-        >
+          {/* ==========================================
+              FORM
+          ========================================== */}
 
-
-          <AuthInput
-
-            label="Full Name"
-
-            placeholder="Enter your full name"
-
-            {...register("name")}
-
-            error={
-              errors.name?.message
-            }
-
-          />
-
-
-
-          <AuthInput
-
-            label="Email Address"
-
-            type="email"
-
-            placeholder="example@email.com"
-
-            {...register("email")}
-
-            error={
-              errors.email?.message
-            }
-
-          />
-
-
-
-          <AuthInput
-
-            label="Phone Number"
-
-            placeholder="08012345678"
-
-            {...register("phone")}
-
-            error={
-              errors.phone?.message
-            }
-
-          />
-
-
-
-          <PasswordInput
-
-            label="Password"
-
-            placeholder="Create password"
-
-            {...register("password")}
-
-            error={
-              errors.password?.message
-            }
-
-          />
-
-
-
-          <PasswordInput
-
-            label="Confirm Password"
-
-            placeholder="Repeat password"
-
-            {...register("confirmPassword")}
-
-            error={
-              errors.confirmPassword?.message
-            }
-
-          />
-
-
-
-          <AuthButton
-
-            loading={loading}
-
+          <form
+            onSubmit={handleRegister}
+            className="space-y-4"
           >
 
-            Create Account
+            {/* NAME */}
 
-          </AuthButton>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Full Name
+              </label>
 
+              <input
+                type="text"
+                placeholder="Enter your full name"
+                value={name}
+                onChange={(e) =>
+                  setName(e.target.value)
+                }
+                className="w-full rounded-lg border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                disabled={loading}
+              />
+            </div>
 
+            {/* EMAIL */}
 
-          <p className="pt-4 text-center text-sm text-gray-600">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Email
+              </label>
 
+              <input
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) =>
+                  setEmail(e.target.value)
+                }
+                className="w-full rounded-lg border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                disabled={loading}
+              />
+            </div>
 
-            Already have an account?
+            {/* PHONE */}
 
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Phone Number
+              </label>
+
+              <input
+                type="tel"
+                placeholder="Enter your phone number"
+                value={phone}
+                onChange={(e) =>
+                  setPhone(e.target.value)
+                }
+                className="w-full rounded-lg border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                disabled={loading}
+              />
+            </div>
+
+            {/* PASSWORD */}
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Password
+              </label>
+
+              <input
+                type="password"
+                placeholder="Create a password"
+                value={password}
+                onChange={(e) =>
+                  setPassword(e.target.value)
+                }
+                className="w-full rounded-lg border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                disabled={loading}
+              />
+            </div>
+
+            {/* REFERRAL */}
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Referral Code
+                <span className="ml-1 font-normal text-gray-400">
+                  (Optional)
+                </span>
+              </label>
+
+              <input
+                type="text"
+                placeholder="Enter referral code"
+                value={referralCode}
+                onChange={(e) =>
+                  setReferralCode(
+                    e.target.value.toUpperCase()
+                  )
+                }
+                className="w-full rounded-lg border px-3 py-2.5 uppercase outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                disabled={loading}
+              />
+
+              <p className="mt-1 text-xs text-gray-500">
+                If someone referred you, enter
+                their referral code here.
+              </p>
+            </div>
+
+            {/* SUBMIT */}
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading}
+            >
+              {loading
+                ? "Creating Account..."
+                : "Create Account"}
+            </Button>
+
+          </form>
+
+          {/* ==========================================
+              LOGIN
+          ========================================== */}
+
+          <p className="mt-6 text-center text-sm text-gray-600">
+
+            Already have an account?{" "}
 
             <Link
-
-              href="/login"
-
-              className="ml-1 font-semibold text-blue-600 hover:underline"
-
+              href="/auth/login"
+              className="font-medium text-blue-600 hover:underline"
             >
-
               Login
-
             </Link>
-
 
           </p>
 
-
-
-        </form>
-
-
-      </AuthCard>
-
-
-    </AuthLayout>
-
+        </div>
+      </div>
+    </MainLayout>
   );
-
 }

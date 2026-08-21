@@ -38,6 +38,16 @@ interface FinancialData {
   };
 }
 
+interface Announcement {
+  _id: string;
+  title: string;
+  message: string;
+  type: "INFO" | "SUCCESS" | "WARNING" | "ERROR";
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:5000/api";
@@ -47,6 +57,12 @@ const formatMoney = (amount: number) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+
+const formatDate = (date: string) =>
+  new Date(date).toLocaleString("en-NG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -61,6 +77,36 @@ export default function Home() {
   const [loginLoading, setLoginLoading] = useState(false);
 
   const [error, setError] = useState("");
+
+  // ==========================================
+  // ANNOUNCEMENT STATES
+  // ==========================================
+
+  const [announcements, setAnnouncements] =
+    useState<Announcement[]>([]);
+
+  const [announcementTitle, setAnnouncementTitle] =
+    useState("");
+
+  const [announcementMessage, setAnnouncementMessage] =
+    useState("");
+
+  const [announcementType, setAnnouncementType] =
+    useState<
+      "INFO" | "SUCCESS" | "WARNING" | "ERROR"
+    >("INFO");
+
+  const [announcementLoading, setAnnouncementLoading] =
+    useState(false);
+
+  const [announcementError, setAnnouncementError] =
+    useState("");
+
+  const [announcementSuccess, setAnnouncementSuccess] =
+    useState("");
+
+  const [announcementRefreshing, setAnnouncementRefreshing] =
+    useState(false);
 
   // ==========================================
   // CHANGE PASSWORD STATES
@@ -88,6 +134,251 @@ export default function Home() {
     useState("");
 
   // ==========================================
+  // LOAD FINANCIAL DATA
+  // ==========================================
+
+  const loadFinancialData = async () => {
+    try {
+      setError("");
+
+      const response = await fetch(
+        `${API_URL}/financial-ledger/summary`,
+        {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        }
+      );
+
+      const result = await response.json();
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        throw new Error(
+          result.message ||
+            "Unable to load financial data"
+        );
+      }
+
+      setFinancialData(
+        result.data || null
+      );
+    } catch (error: any) {
+      console.error(
+        "Financial dashboard error:",
+        error
+      );
+
+      setError(
+        error?.message ||
+          "Unable to load financial data"
+      );
+    }
+  };
+
+  // ==========================================
+  // LOAD ANNOUNCEMENTS
+  // ==========================================
+
+  const loadAnnouncements = async () => {
+    try {
+      setAnnouncementError("");
+
+      const response = await fetch(
+        `${API_URL}/announcements`,
+        {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        }
+      );
+
+      const result = await response.json();
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        throw new Error(
+          result.message ||
+            "Unable to load announcements"
+        );
+      }
+
+      setAnnouncements(
+        result.announcements || []
+      );
+    } catch (error: any) {
+      console.error(
+        "Announcement loading error:",
+        error
+      );
+
+      setAnnouncementError(
+        error?.message ||
+          "Unable to load announcements"
+      );
+    }
+  };
+
+  // ==========================================
+  // REFRESH ANNOUNCEMENTS
+  // ==========================================
+
+  const refreshAnnouncements = async () => {
+    try {
+      setAnnouncementRefreshing(true);
+
+      await loadAnnouncements();
+    } finally {
+      setAnnouncementRefreshing(false);
+    }
+  };
+
+  // ==========================================
+  // CREATE ANNOUNCEMENT
+  // ==========================================
+
+  const handleCreateAnnouncement = async (
+    event: FormEvent
+  ) => {
+    event.preventDefault();
+
+    setAnnouncementError("");
+    setAnnouncementSuccess("");
+
+    if (!announcementTitle.trim()) {
+      setAnnouncementError(
+        "Please enter an announcement title."
+      );
+      return;
+    }
+
+    if (!announcementMessage.trim()) {
+      setAnnouncementError(
+        "Please enter an announcement message."
+      );
+      return;
+    }
+
+    try {
+      setAnnouncementLoading(true);
+
+      const response = await fetch(
+        `${API_URL}/announcements`,
+        {
+          method: "POST",
+          credentials: "include",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            title: announcementTitle.trim(),
+            message: announcementMessage.trim(),
+            type: announcementType,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        throw new Error(
+          result.message ||
+            "Unable to create announcement."
+        );
+      }
+
+      setAnnouncementSuccess(
+        "Announcement published successfully."
+      );
+
+      setAnnouncementTitle("");
+      setAnnouncementMessage("");
+      setAnnouncementType("INFO");
+
+      await loadAnnouncements();
+    } catch (error: any) {
+      console.error(
+        "Announcement creation error:",
+        error
+      );
+
+      setAnnouncementError(
+        error?.message ||
+          "Unable to create announcement."
+      );
+    } finally {
+      setAnnouncementLoading(false);
+    }
+  };
+
+  // ==========================================
+  // DELETE ANNOUNCEMENT
+  // ==========================================
+
+  const handleDeleteAnnouncement = async (
+    id: string
+  ) => {
+    const confirmed =
+      window.confirm(
+        "Are you sure you want to delete this announcement?"
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setAnnouncementError("");
+      setAnnouncementSuccess("");
+
+      const response = await fetch(
+        `${API_URL}/announcements/${id}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      const result = await response.json();
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        throw new Error(
+          result.message ||
+            "Unable to delete announcement."
+        );
+      }
+
+      setAnnouncementSuccess(
+        "Announcement deleted successfully."
+      );
+
+      await loadAnnouncements();
+    } catch (error: any) {
+      console.error(
+        "Announcement deletion error:",
+        error
+      );
+
+      setAnnouncementError(
+        error?.message ||
+          "Unable to delete announcement."
+      );
+    }
+  };
+
+  // ==========================================
   // CHECK CURRENT LOGIN
   // ==========================================
 
@@ -110,9 +401,14 @@ export default function Home() {
 
       const result = await response.json();
 
-      if (result.success && result.user) {
+      if (
+        result.success &&
+        result.user
+      ) {
         setUser(result.user);
+
         await loadFinancialData();
+        await loadAnnouncements();
       } else {
         setUser(null);
       }
@@ -174,6 +470,7 @@ export default function Home() {
       setUser(result.user);
 
       await loadFinancialData();
+      await loadAnnouncements();
     } catch (error: any) {
       console.error(
         "Admin login error:",
@@ -190,52 +487,6 @@ export default function Home() {
   };
 
   // ==========================================
-  // LOAD FINANCIAL DATA
-  // ==========================================
-
-  const loadFinancialData = async () => {
-    try {
-      setError("");
-
-      const response = await fetch(
-        `${API_URL}/financial-ledger/summary`,
-        {
-          method: "GET",
-          credentials: "include",
-          cache: "no-store",
-        }
-      );
-
-      const result =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !result.success
-      ) {
-        throw new Error(
-          result.message ||
-            "Unable to load financial data"
-        );
-      }
-
-      setFinancialData(
-        result.data || null
-      );
-    } catch (error: any) {
-      console.error(
-        "Financial dashboard error:",
-        error
-      );
-
-      setError(
-        error?.message ||
-          "Unable to load financial data"
-      );
-    }
-  };
-
-  // ==========================================
   // CHANGE PASSWORD
   // ==========================================
 
@@ -247,7 +498,6 @@ export default function Home() {
     setPasswordMessage("");
     setPasswordError("");
 
-    // Check new password
     if (newPassword.length < 6) {
       setPasswordError(
         "New password must be at least 6 characters."
@@ -255,7 +505,6 @@ export default function Home() {
       return;
     }
 
-    // Check confirmation
     if (
       newPassword !== confirmPassword
     ) {
@@ -266,9 +515,7 @@ export default function Home() {
     }
 
     try {
-      setChangePasswordLoading(
-        true
-      );
+      setChangePasswordLoading(true);
 
       const response = await fetch(
         `${API_URL}/auth/change-password`,
@@ -319,9 +566,7 @@ export default function Home() {
           "Unable to change password."
       );
     } finally {
-      setChangePasswordLoading(
-        false
-      );
+      setChangePasswordLoading(false);
     }
   };
 
@@ -347,6 +592,7 @@ export default function Home() {
 
     setUser(null);
     setFinancialData(null);
+    setAnnouncements([]);
   };
 
   // ==========================================
@@ -554,7 +800,10 @@ export default function Home() {
             </button>
 
             <button
-              onClick={loadFinancialData}
+              onClick={async () => {
+                await loadFinancialData();
+                await loadAnnouncements();
+              }}
               className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
             >
               Refresh
@@ -991,6 +1240,413 @@ export default function Home() {
 
           </>
         )}
+
+        {/* =====================================================
+            ANNOUNCEMENT MANAGEMENT
+        ===================================================== */}
+
+        <section className="mt-10">
+
+          <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+
+            <div>
+
+              <p className="text-sm font-semibold text-blue-600">
+                AbuPay Communication
+              </p>
+
+              <h2 className="mt-1 text-2xl font-bold">
+                Announcement Management
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-500">
+                Publish important messages that will be visible to AbuPay customers.
+              </p>
+
+            </div>
+
+            <button
+              type="button"
+              onClick={refreshAnnouncements}
+              disabled={announcementRefreshing}
+              className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {announcementRefreshing
+                ? "Refreshing..."
+                : "Refresh Announcements"}
+            </button>
+
+          </div>
+
+          {announcementSuccess && (
+            <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+
+              <p className="text-sm font-semibold text-emerald-700">
+                ✓ {announcementSuccess}
+              </p>
+
+            </div>
+          )}
+
+          {announcementError && (
+            <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4">
+
+              <p className="text-sm font-semibold text-red-700">
+                {announcementError}
+              </p>
+
+            </div>
+          )}
+
+          <div className="grid gap-6 lg:grid-cols-[420px_1fr]">
+
+            {/* CREATE ANNOUNCEMENT */}
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+
+              <div className="mb-6">
+
+                <h3 className="text-lg font-bold text-slate-900">
+                  Create Announcement
+                </h3>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  Publish a new message to customers.
+                </p>
+
+              </div>
+
+              <form
+                onSubmit={
+                  handleCreateAnnouncement
+                }
+                className="space-y-5"
+              >
+
+                {/* TITLE */}
+
+                <div>
+
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Announcement Title
+                  </label>
+
+                  <input
+                    type="text"
+                    value={
+                      announcementTitle
+                    }
+                    onChange={(event) =>
+                      setAnnouncementTitle(
+                        event.target.value
+                      )
+                    }
+                    maxLength={150}
+                    required
+                    placeholder="e.g. AbuPay Maintenance Notice"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  />
+
+                  <p className="mt-1 text-xs text-slate-400">
+                    {announcementTitle.length}/150
+                  </p>
+
+                </div>
+
+                {/* MESSAGE */}
+
+                <div>
+
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Message
+                  </label>
+
+                  <textarea
+                    value={
+                      announcementMessage
+                    }
+                    onChange={(event) =>
+                      setAnnouncementMessage(
+                        event.target.value
+                      )
+                    }
+                    maxLength={1000}
+                    required
+                    rows={6}
+                    placeholder="Enter the announcement customers should see..."
+                    className="w-full resize-none rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  />
+
+                  <p className="mt-1 text-xs text-slate-400">
+                    {announcementMessage.length}/1000
+                  </p>
+
+                </div>
+
+                {/* TYPE */}
+
+                <div>
+
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Announcement Type
+                  </label>
+
+                  <select
+                    value={
+                      announcementType
+                    }
+                    onChange={(event) =>
+                      setAnnouncementType(
+                        event.target.value as
+                          | "INFO"
+                          | "SUCCESS"
+                          | "WARNING"
+                          | "ERROR"
+                      )
+                    }
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  >
+
+                    <option value="INFO">
+                      INFO
+                    </option>
+
+                    <option value="SUCCESS">
+                      SUCCESS
+                    </option>
+
+                    <option value="WARNING">
+                      WARNING
+                    </option>
+
+                    <option value="ERROR">
+                      ERROR
+                    </option>
+
+                  </select>
+
+                </div>
+
+                {/* PREVIEW */}
+
+                <div>
+
+                  <p className="mb-2 text-sm font-semibold text-slate-700">
+                    Preview
+                  </p>
+
+                  <div
+                    className={`rounded-xl border p-4 ${
+                      announcementType ===
+                      "SUCCESS"
+                        ? "border-emerald-200 bg-emerald-50"
+                        : announcementType ===
+                          "WARNING"
+                        ? "border-amber-200 bg-amber-50"
+                        : announcementType ===
+                          "ERROR"
+                        ? "border-red-200 bg-red-50"
+                        : "border-blue-200 bg-blue-50"
+                    }`}
+                  >
+
+                    <p
+                      className={`text-sm font-bold ${
+                        announcementType ===
+                        "SUCCESS"
+                          ? "text-emerald-800"
+                          : announcementType ===
+                            "WARNING"
+                          ? "text-amber-800"
+                          : announcementType ===
+                            "ERROR"
+                          ? "text-red-800"
+                          : "text-blue-800"
+                      }`}
+                    >
+                      {announcementTitle ||
+                        "Announcement title"}
+                    </p>
+
+                    <p
+                      className={`mt-1 text-sm ${
+                        announcementType ===
+                        "SUCCESS"
+                          ? "text-emerald-700"
+                          : announcementType ===
+                            "WARNING"
+                          ? "text-amber-700"
+                          : announcementType ===
+                            "ERROR"
+                          ? "text-red-700"
+                          : "text-blue-700"
+                      }`}
+                    >
+                      {announcementMessage ||
+                        "Your announcement message will appear here."}
+                    </p>
+
+                  </div>
+
+                </div>
+
+                {/* SUBMIT */}
+
+                <button
+                  type="submit"
+                  disabled={
+                    announcementLoading
+                  }
+                  className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3.5 font-semibold text-white shadow-lg shadow-blue-100 transition hover:from-blue-500 hover:to-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {announcementLoading
+                    ? "Publishing..."
+                    : "Publish Announcement"}
+                </button>
+
+              </form>
+
+            </div>
+
+            {/* EXISTING ANNOUNCEMENTS */}
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+
+              <div className="mb-6 flex items-center justify-between">
+
+                <div>
+
+                  <h3 className="text-lg font-bold text-slate-900">
+                    Published Announcements
+                  </h3>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    Active announcements currently visible to customers.
+                  </p>
+
+                </div>
+
+                <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
+                  {announcements.length}{" "}
+                  {announcements.length === 1
+                    ? "Announcement"
+                    : "Announcements"}
+                </div>
+
+              </div>
+
+              {announcements.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
+
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-200">
+
+                    <span className="text-xl">
+                      📢
+                    </span>
+
+                  </div>
+
+                  <h4 className="font-semibold text-slate-700">
+                    No announcements yet
+                  </h4>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    Create your first announcement using the form.
+                  </p>
+
+                </div>
+              ) : (
+                <div className="space-y-4">
+
+                  {announcements.map(
+                    (announcement) => (
+                      <div
+                        key={
+                          announcement._id
+                        }
+                        className="rounded-xl border border-slate-200 bg-slate-50 p-5"
+                      >
+
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+
+                          <div className="min-w-0 flex-1">
+
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                                  announcement.type ===
+                                  "SUCCESS"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : announcement.type ===
+                                      "WARNING"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : announcement.type ===
+                                      "ERROR"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-blue-100 text-blue-700"
+                                }`}
+                              >
+                                {
+                                  announcement.type
+                                }
+                              </span>
+
+                              {announcement.isActive && (
+                                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                                  ACTIVE
+                                </span>
+                              )}
+
+                            </div>
+
+                            <h4 className="text-base font-bold text-slate-900">
+                              {
+                                announcement.title
+                              }
+                            </h4>
+
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                              {
+                                announcement.message
+                              }
+                            </p>
+
+                            <p className="mt-3 text-xs text-slate-400">
+                              Published{" "}
+                              {formatDate(
+                                announcement.createdAt
+                              )}
+                            </p>
+
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDeleteAnnouncement(
+                                announcement._id
+                              )
+                            }
+                            className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-100"
+                          >
+                            Delete
+                          </button>
+
+                        </div>
+
+                      </div>
+                    )
+                  )}
+
+                </div>
+              )}
+
+            </div>
+
+          </div>
+
+        </section>
 
       </section>
 
