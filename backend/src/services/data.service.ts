@@ -1,566 +1,237 @@
 import mongoose from "mongoose";
-import AppError from "../utils/apperror";
-import { vtpassProvider } from "../providers/vtpass/vtpass.provider";
-import { debitWallet } from "./wallet.service";
-import { createTransaction } from "./transaction.service";
-import {
-  createFinancialLedgerEntry,
-} from "./financial-ledger.service";
+import AppError from "../utils/AppError";
+import { getProvider } from "../providers";
+import { debitWallet, creditWallet } from "./wallet.service";
 
-import {
-  dataMarginConfig,
-  calculateProviderCost,
-} from "../config/service-margin.config";
-
-interface PurchaseDataPayload {
+type BuyDataInput = {
   userId: string;
   network: string;
   phone: string;
   plan: string;
   amount: number;
-}
+  provider?: string;
+};
 
-export const purchaseData = async ({
+export const buyData = async ({
   userId,
   network,
   phone,
   plan,
   amount,
-}: PurchaseDataPayload) => {
-  // ==========================================
-  // VALIDATION
-  // ==========================================
-
+  provider = "vtpass",
+}: BuyDataInput) => {
   if (!userId) {
-    throw new AppError(
-      "User ID is required",
-      400
-    );
-  }
-
-  if (!network || !phone || !plan) {
-    throw new AppError(
-      "Network, phone and plan are required",
-      400
-    );
+    throw new AppError("Unauthorized", 401);
   }
 
   if (
-    !Number.isFinite(amount) ||
-    amount <= 0
+    !network ||
+    !phone ||
+    !plan ||
+    amount === undefined ||
+    amount === null
   ) {
     throw new AppError(
-      "Invalid data amount",
+      "network, phone, plan and amount are required",
       400
     );
   }
 
-  const normalizedNetwork =
-    network.toLowerCase();
+  const value = Number(amount);
 
-  const marginConfig =
-    dataMarginConfig[normalizedNetwork];
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new AppError("Invalid amount", 400);
+  }
 
-  if (!marginConfig) {
+  const providerName = String(provider || "vtpass")
+    .toLowerCase()
+    .trim();
+
+  const selectedProvider = getProvider(providerName);
+
+  if (
+    !selectedProvider ||
+    typeof selectedProvider.buyData !== "function"
+  ) {
     throw new AppError(
-      `Unsupported network: ${network}`,
+      "Selected provider does not support data purchase",
       400
     );
   }
 
-  // ==========================================
-  // CALCULATE PROVIDER COST / PROFIT
-  // ==========================================
-  //
-  // Currently marginPercent is null because
-  // we don't yet have your actual live VTpass
-  // merchant pricing.
-  //
-  // We therefore do NOT invent a provider cost
-  // or profit.
-  // ==========================================
+  const session = await mongoose.startSession();
 
-  const marginCalculation =
-    calculateProviderCost(
-      amount,
-      marginConfig.marginPercent
-    );
+  session.startTransaction();
 
-  const providerCost =
-    marginCalculation?.providerCost ??
-    undefined;
+  let debited = false;
 
-  const grossProfit =
-    marginCalculation?.grossProfit ??
-    undefined;
-
-  const session =
-    await mongoose.startSession();
+  let balanceBefore = 0;
+  let balanceAfter = 0;
 
   try {
-    let response: any;
+    /*
+     * DEBIT WALLET
+     *
+     * debitWallet returns:
+     * - balanceBefore
+     * - balanceAfter
+     */
+    const walletDebit = await debitWallet({
+      userId,
+      amount: value,
+      session,
+    });
+
+    debited = true;
+
+    balanceBefore = walletDebit.balanceBefore;
+    balanceAfter = walletDebit.balanceAfter;
+
+    console.log("========== DATA WALLET DEBIT ==========");
+    console.log("Balance Before:", balanceBefore);
+    console.log("Amount Paid   :", value);
+    console.log("Balance After :", balanceAfter);
+    console.log("=======================================");
+
+    /*
+     * CALL PROVIDER
+     */
+    const providerResult = await selectedProvider.buyData({
+      network: network.toLowerCase(),
+      phone: phone.trim(),
+      plan,
+      amount: value,
+    });
 
     console.log(
-      "\n======================================"
+      "DATA PROVIDER RESULT:",
+      JSON.stringify(providerResult, null, 2)
     );
 
-    console.log(
-      "DATA PURCHASE STARTED"
-    );
-
-    console.log(
-      "User ID :",
-      userId
-    );
-
-    console.log(
-      "Network :",
-      normalizedNetwork
-    );
-
-    console.log(
-      "Phone   :",
-      phone
-    );
-
-    console.log(
-      "Plan    :",
-      plan
-    );
-
-    console.log(
-      "Amount  :",
-      amount
-    );
-
-    console.log(
-      "Provider:",
-      marginConfig.provider
-    );
-
-    console.log(
-      "Margin %:",
-      marginConfig.marginPercent ??
-        "Not configured"
-    );
-
-    console.log(
-      "Provider Cost:",
-      providerCost ??
-        "Not available"
-    );
-
-    console.log(
-      "Gross Profit:",
-      grossProfit ??
-        "Not available"
-    );
-
-    console.log(
-      "======================================\n"
-    );
-
-    await session.withTransaction(
-      async () => {
-
-        // ======================================
-        // 1. DEBIT WALLET
-        // ======================================
-
-        const debitResult =
-          await debitWallet({
-            userId,
-            amount,
-            session,
-          });
-
-        const balanceBefore =
-          debitResult.balanceBefore;
-
-        const balanceAfter =
-          debitResult.balanceAfter;
-
-        console.log(
-          "========== WALLET BALANCE =========="
-        );
-
-        console.log(
-          "Balance Before :",
-          balanceBefore
-        );
-
-        console.log(
-          "Amount Debited :",
-          amount
-        );
-
-        console.log(
-          "Balance After  :",
-          balanceAfter
-        );
-
-        console.log(
-          "===================================="
-        );
-
-        console.log(
-          "✅ Wallet debited successfully"
-        );
-
-        // ======================================
-        // 2. CALL VTPASS
-        // ======================================
-
-        const providerResponse =
-          await vtpassProvider.buyData({
-            network:
-              normalizedNetwork,
-
-            phone:
-              phone.trim(),
-
-            plan,
-
-            amount,
-          });
-
-        console.log(
-          "========== VTPASS DATA RESPONSE =========="
-        );
-
-        console.log(
-          JSON.stringify(
-            providerResponse,
-            null,
-            2
-          )
-        );
-
-        console.log(
-          "=========================================="
-        );
-
-        // ======================================
-        // 3. VTPASS FAILED
-        // ======================================
-
-        if (
-          !providerResponse ||
-          !providerResponse.success
-        ) {
-          console.log(
-            "❌ VTpass data purchase failed"
-          );
-
-          throw new AppError(
-            providerResponse?.message ||
-              "Data purchase failed",
-            400
-          );
-        }
-
-        console.log(
-          "✅ VTpass data purchase successful"
-        );
-
-        // ======================================
-        // 4. CREATE CUSTOMER TRANSACTION
-        // ======================================
-
-        const transaction =
-          await createTransaction({
-            userId,
-
-            type: "DEBIT",
-
-            category: "DATA",
-
-            amount,
-
-            status: "SUCCESS",
-
-            description:
-              `${normalizedNetwork.toUpperCase()} Data Purchase`,
-
-            balanceBefore,
-
-            balanceAfter,
-
-            metadata: {
-              network:
-                normalizedNetwork,
-
-              phone,
-
-              plan,
-
-              provider:
-                marginConfig.provider,
-
-              customerAmount:
-                amount,
-
-              providerCost:
-                providerCost ?? null,
-
-              grossProfit:
-                grossProfit ?? null,
-
-              providerMarginPercent:
-                marginConfig.marginPercent,
-
-              providerResponse,
-            },
-
-            session,
-          });
-
-        console.log(
-          "========== DATA TRANSACTION =========="
-        );
-
-        console.log(
-          "Transaction Reference :",
-          transaction.reference
-        );
-
-        console.log(
-          "Transaction ID        :",
-          transaction._id
-        );
-
-        console.log(
-          "Balance Before        :",
-          transaction.balanceBefore
-        );
-
-        console.log(
-          "Amount                :",
-          transaction.amount
-        );
-
-        console.log(
-          "Balance After         :",
-          transaction.balanceAfter
-        );
-
-        console.log(
-          "======================================"
-        );
-
-        console.log(
-          "✅ Customer transaction saved"
-        );
-
-        // ======================================
-        // 5. CREATE FINANCIAL LEDGER
-        // ======================================
-
-        const ledgerEntry =
-          await createFinancialLedgerEntry({
-            type: "REVENUE",
-
-            category:
-              "DATA_SALE",
-
-            /**
-             * Amount paid by customer.
-             */
-            amount,
-
-            customerAmount:
-              amount,
-
-            /**
-             * Actual provider cost when
-             * margin is configured.
-             */
-            providerCost,
-
-            /**
-             * Actual AbuPay gross profit
-             * when margin is configured.
-             */
-            grossProfit,
-
-            provider:
-              marginConfig.provider,
-
-            service:
-              `${normalizedNetwork.toUpperCase()} Data`,
-
-            user:
-              userId,
-
-            transaction:
-              transaction._id,
-
-            reference:
-              `DATA-SALE-${transaction.reference}`,
-
-            description:
-              `${normalizedNetwork.toUpperCase()} Data Sale`,
-
-            metadata: {
-              network:
-                normalizedNetwork,
-
-              phone,
-
-              plan,
-
-              customerAmount:
-                amount,
-
-              provider:
-                marginConfig.provider,
-
-              providerCost:
-                providerCost ?? null,
-
-              grossProfit:
-                grossProfit ?? null,
-
-              marginPercent:
-                marginConfig.marginPercent,
-
-              customerTransactionReference:
-                transaction.reference,
-
-              providerResponse,
-            },
-
-            session,
-          });
-
-        console.log(
-          "========== FINANCIAL LEDGER =========="
-        );
-
-        console.log(
-          "Ledger Reference:",
-          ledgerEntry.reference
-        );
-
-        console.log(
-          "Category:",
-          ledgerEntry.category
-        );
-
-        console.log(
-          "Customer Amount:",
-          ledgerEntry.customerAmount
-        );
-
-        console.log(
-          "Provider:",
-          ledgerEntry.provider
-        );
-
-        console.log(
-          "Provider Cost:",
-          ledgerEntry.providerCost ??
-            "Not available"
-        );
-
-        console.log(
-          "Gross Profit:",
-          ledgerEntry.grossProfit ??
-            "Not available"
-        );
-
-        console.log(
-          "======================================"
-        );
-
-        console.log(
-          "✅ Financial ledger saved"
-        );
-
-        // ======================================
-        // 6. RESPONSE
-        // ======================================
-
-        response = {
-          success: true,
-
-          message:
-            "Data purchase successful",
-
-          walletBalance:
-            balanceAfter,
-
-          balanceBefore,
-
-          balanceAfter,
-
-          transaction,
-
-          ledgerEntry,
-
-          providerResponse,
-
-          financial: {
-            customerAmount:
-              amount,
-
-            providerCost:
-              providerCost ?? null,
-
-            grossProfit:
-              grossProfit ?? null,
-
-            marginPercent:
-              marginConfig.marginPercent,
-
-            provider:
-              marginConfig.provider,
-          },
-        };
-      }
-    );
-
-    // ==========================================
-    // 7. VERIFY TRANSACTION COMPLETED
-    // ==========================================
-
-    if (!response) {
-      throw new AppError(
-        "Data purchase failed",
-        500
-      );
+    /*
+     * PROVIDER FAILED
+     *
+     * Refund the customer's wallet.
+     */
+    if (!providerResult?.success) {
+      const refund = await creditWallet({
+        userId,
+        amount: value,
+        session,
+      });
+
+      console.log("========== DATA REFUND ==========");
+      console.log("Refund Amount :", value);
+      console.log("Balance After :", refund.balanceAfter);
+      console.log("=================================");
+
+      await session.commitTransaction();
+      session.endSession();
+
+      return {
+        success: false,
+        message:
+          providerResult?.message ||
+          "Data purchase failed",
+
+        provider: providerName,
+
+        providerResponse:
+          providerResult?.data || providerResult,
+
+        walletBalance: refund.balanceAfter,
+
+        balanceBefore,
+        amountPaid: value,
+        balanceAfter: refund.balanceAfter,
+      };
     }
 
-    console.log(
-      "✅ DATA PURCHASE COMPLETED"
-    );
+    /*
+     * PURCHASE SUCCESSFUL
+     */
+    await session.commitTransaction();
+    session.endSession();
 
-    return response;
+    console.log("========== DATA PURCHASE SUCCESS ==========");
+    console.log("Balance Before:", balanceBefore);
+    console.log("Amount Paid   :", value);
+    console.log("Balance After :", balanceAfter);
+    console.log("===========================================");
 
+    return {
+      success: true,
+
+      message:
+        providerResult?.message ||
+        "Data purchase successful",
+
+      provider: providerName,
+
+      providerResponse:
+        providerResult?.data || providerResult,
+
+      /*
+       * IMPORTANT:
+       * These values are used by the frontend
+       * receipt.
+       */
+      walletBalance: balanceAfter,
+
+      balanceBefore,
+      amountPaid: value,
+      balanceAfter,
+    };
   } catch (error: any) {
-
     console.error(
-      "\n======================================"
+      "BUY DATA SERVICE ERROR:",
+      error?.message || error
     );
 
-    console.error(
-      "DATA PURCHASE ERROR"
-    );
+    /*
+     * Unexpected error.
+     *
+     * If wallet was debited, refund it.
+     */
+    try {
+      if (debited) {
+        const refund = await creditWallet({
+          userId,
+          amount: value,
+          session,
+        });
 
-    console.error(error);
+        console.log("========== DATA ERROR REFUND ==========");
+        console.log("Refund Amount :", value);
+        console.log("Balance After :", refund.balanceAfter);
+        console.log("=======================================");
+      }
 
-    console.error(
-      "======================================\n"
-    );
+      await session.commitTransaction();
+    } catch (rollbackError: any) {
+      console.error(
+        "Data buy rollback error:",
+        rollbackError?.message || rollbackError
+      );
 
-    throw error;
+      try {
+        if (session.inTransaction()) {
+          await session.abortTransaction();
+        }
+      } catch {
+        // Ignore transaction cleanup error
+      }
+    }
 
-  } finally {
+    session.endSession();
 
-    await session.endSession();
+    if (error instanceof AppError) {
+      throw error;
+    }
 
-    console.log(
-      "========== DATA PURCHASE ENDED ==========\n"
+    throw new AppError(
+      error?.message || "Data purchase failed",
+      500
     );
   }
 };

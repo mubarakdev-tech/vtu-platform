@@ -5,14 +5,16 @@ import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import {
   Wifi,
   Loader2,
+  Check,
+  X,
   Download,
   Share2,
-  X,
   CheckCircle,
+  ChevronDown,
 } from "lucide-react";
 import { getDataPlans, buyData } from "@/services/data";
-import useAuth from "@/hooks/useAuth";
-import jsPDF from "jspdf";
+import { PROVIDERS, ProviderId } from "@/lib/providers";
+import { jsPDF } from "jspdf";
 
 const networks = [
   {
@@ -48,46 +50,43 @@ interface Plan {
 }
 
 interface ReceiptData {
-  reference: string;
-  date: string;
-  customerName: string;
+  amount: number;
   phone: string;
   network: string;
   planName: string;
-  amount: number;
-  previousBalance: number;
-  newBalance: number;
+  reference: string;
+  date: string;
   status: string;
+  balanceBefore: number;
+  balanceAfter: number;
 }
 
 export default function DataPage() {
-  const { user } = useAuth();
-
+  const [provider, setProvider] = useState<ProviderId>("vtpass");
   const [network, setNetwork] = useState("mtn");
+
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
 
   const [phone, setPhone] = useState("");
 
   const [loadingPlans, setLoadingPlans] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [savingPdf, setSavingPdf] = useState(false);
+  const [loadingPurchase, setLoadingPurchase] = useState(false);
 
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
 
-  const [receipt, setReceipt] =
-    useState<ReceiptData | null>(null);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
-  // ==========================================
-  // LOAD DATA PLANS
-  // ==========================================
-
+  /*
+   * LOAD DATA PLANS
+   */
   useEffect(() => {
     loadPlans();
-  }, [network]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [network, provider]);
 
   const loadPlans = async () => {
     try {
@@ -96,7 +95,7 @@ export default function DataPage() {
       setMessage(null);
       setPlans([]);
 
-      const result = await getDataPlans(network);
+      const result = await getDataPlans(network, provider);
 
       console.log("DATA PLANS RESPONSE:", result);
 
@@ -106,16 +105,10 @@ export default function DataPage() {
         plansData = result;
       } else if (Array.isArray(result?.data)) {
         plansData = result.data;
-      } else if (Array.isArray(result?.data?.content)) {
-        plansData = result.data.content;
-      } else if (Array.isArray(result?.content)) {
-        plansData = result.content;
       } else if (Array.isArray(result?.plans)) {
         plansData = result.plans;
-      } else if (Array.isArray(result?.data?.varations)) {
-        plansData = result.data.varations;
-      } else if (Array.isArray(result?.varations)) {
-        plansData = result.varations;
+      } else if (Array.isArray(result?.data?.plans)) {
+        plansData = result.data.plans;
       }
 
       const normalized: Plan[] = plansData
@@ -124,26 +117,25 @@ export default function DataPage() {
             plan.name ||
             plan.plan_name ||
             plan.variation_name ||
-            plan.package ||
             "Data Plan",
 
-          variation_code:
+          variation_code: String(
             plan.variation_code ||
-            plan.plan_id ||
-            plan.code ||
-            plan.id ||
-            "",
+              plan.plan_id ||
+              plan.code ||
+              plan.id ||
+              ""
+          ),
 
           amount: Number(
             plan.amount ||
               plan.price ||
               plan.variation_amount ||
-              plan.fixedPrice ||
               0
           ),
         }))
         .filter(
-          (plan: Plan) =>
+          (plan) =>
             plan.variation_code &&
             plan.amount > 0
         );
@@ -153,13 +145,14 @@ export default function DataPage() {
       if (normalized.length === 0) {
         setMessage({
           type: "error",
-          text: "No data plans available for this network",
+          text:
+            "No data plans available for this network.",
         });
       }
     } catch (error: any) {
       console.error(
-        "Failed to load data plans:",
-        error
+        "LOAD DATA PLANS ERROR:",
+        error?.response?.data || error
       );
 
       setPlans([]);
@@ -175,15 +168,14 @@ export default function DataPage() {
     }
   };
 
-  // ==========================================
-  // BUY DATA
-  // ==========================================
-
+  /*
+   * PURCHASE DATA
+   */
   const handlePurchase = async () => {
-    if (!phone || phone.length !== 11) {
+    if (!phone || phone.length < 11) {
       setMessage({
         type: "error",
-        text: "Please enter a valid 11-digit phone number",
+        text: "Please enter a valid phone number.",
       });
       return;
     }
@@ -191,1175 +183,745 @@ export default function DataPage() {
     if (!selectedPlan) {
       setMessage({
         type: "error",
-        text: "Please select a data plan",
+        text: "Please select a data plan.",
       });
       return;
     }
 
     try {
-      setLoading(true);
+      setLoadingPurchase(true);
       setMessage(null);
 
-      const purchasePhone = phone;
-      const purchasePlan = selectedPlan;
-      const purchaseNetwork = network;
-      const purchaseAmount = Number(
-        selectedPlan.amount
-      );
-
       const result = await buyData({
-        network: purchaseNetwork,
-        phone: purchasePhone,
-        plan: purchasePlan.variation_code,
-        amount: purchaseAmount,
+        network,
+        phone,
+        plan: selectedPlan.variation_code,
+        amount: selectedPlan.amount,
+        provider,
       });
 
-      console.log(
-        "DATA PURCHASE RESPONSE:",
-        result
-      );
+      console.log("BUY DATA RESULT:", result);
 
-      if (!result.success) {
+      if (!result?.success) {
         setMessage({
           type: "error",
           text:
-            result.message ||
+            result?.message ||
             "Data purchase failed. Please try again.",
         });
-
         return;
       }
 
-      // ========================================
-      // TRANSACTION INFORMATION
-      // Same calculation as Airtime receipt
-      // ========================================
-
-      const transaction = result.transaction;
-
-      const newBalance = Number(
-        result.walletBalance || 0
-      );
+      /*
+       * Get transaction reference.
+       */
+      const reference =
+        result.providerResponse?.request_id ||
+        result.providerResponse?.data?.request_id ||
+        result.transaction?._id ||
+        result.transaction?.id ||
+        "DATA-" + Date.now();
 
       /*
-       * Wallet has already been debited.
-       *
-       * Previous balance =
-       * New balance + Amount paid
+       * Get wallet balances returned by backend.
        */
+      const balanceBefore = Number(
+        result.balanceBefore ?? 0
+      );
 
-      const previousBalance =
-        newBalance + purchaseAmount;
-
-      const customerName =
-        (user as any)?.name ||
-        (user as any)?.fullName ||
-        (user as any)?.username ||
-        (user as any)?.email ||
-        "AbuPay Customer";
-
-      const reference =
-        transaction?.reference ||
-        `ABP-${Date.now()}`;
-
-      const transactionDate =
-        transaction?.createdAt
-          ? new Date(
-              transaction.createdAt
-            ).toLocaleString()
-          : new Date().toLocaleString();
-
-      // ========================================
-      // CREATE DATA RECEIPT
-      // ========================================
+      const balanceAfter = Number(
+        result.balanceAfter ??
+          result.walletBalance ??
+          balanceBefore - selectedPlan.amount
+      );
 
       setReceipt({
-        reference,
-        date: transactionDate,
-        customerName,
-        phone: purchasePhone,
-        network: purchaseNetwork,
-        planName: purchasePlan.name,
-        amount: purchaseAmount,
-        previousBalance,
-        newBalance,
-        status:
-          transaction?.status ||
-          "SUCCESS",
+        amount: selectedPlan.amount,
+        phone,
+        network,
+        planName: selectedPlan.name,
+        reference: String(reference),
+        date: new Date().toLocaleString("en-NG"),
+        status: "SUCCESS",
+        balanceBefore,
+        balanceAfter,
       });
 
       setMessage({
         type: "success",
-        text: "Data purchase successful.",
+        text:
+          selectedPlan.name +
+          " sent successfully to " +
+          phone,
       });
-
-      // Clear form
 
       setPhone("");
       setSelectedPlan(null);
     } catch (error: any) {
       console.error(
-        "Data purchase error:",
-        error
+        "BUY DATA ERROR:",
+        error?.response?.data || error
       );
 
       setMessage({
         type: "error",
         text:
           error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
           "Something went wrong. Please try again.",
       });
     } finally {
-      setLoading(false);
+      setLoadingPurchase(false);
     }
   };
 
-  // ==========================================
-  // SAVE RECEIPT AS PDF
-  // Same PDF system as Airtime
-  // ==========================================
-
-  const saveReceipt = async () => {
-    if (!receipt) {
-      return;
-    }
-
-    try {
-      setSavingPdf(true);
-
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
-
-      const pageWidth =
-        pdf.internal.pageSize.getWidth();
-
-      const leftMargin = 25;
-      const rightMargin = 25;
-
-      const contentWidth =
-        pageWidth -
-        leftMargin -
-        rightMargin;
-
-      let y = 20;
-
-      // ========================================
-      // LOGO
-      // ========================================
-
-      const logo = new Image();
-
-      logo.src =
-        "/images/abupay-logo.png";
-
-      await new Promise<void>((resolve) => {
-        logo.onload = () => resolve();
-        logo.onerror = () => resolve();
-      });
-
-      if (
-        logo.complete &&
-        logo.naturalWidth > 0
-      ) {
-        const logoWidth = 38;
-
-        const logoHeight =
-          (logo.naturalHeight /
-            logo.naturalWidth) *
-          logoWidth;
-
-        pdf.addImage(
-          logo,
-          "PNG",
-          (pageWidth - logoWidth) / 2,
-          y,
-          logoWidth,
-          logoHeight
-        );
-
-        y += logoHeight + 8;
-      } else {
-        y += 5;
-      }
-
-      // ========================================
-      // ABUPAY
-      // ========================================
-
-      pdf.setFont(
-        "helvetica",
-        "bold"
-      );
-
-      pdf.setFontSize(23);
-
-      pdf.setTextColor(
-        20,
-        20,
-        20
-      );
-
-      pdf.text(
-        "AbuPay",
-        pageWidth / 2,
-        y,
-        {
-          align: "center",
-        }
-      );
-
-      y += 8;
-
-      // ========================================
-      // RECEIPT TITLE
-      // ========================================
-
-      pdf.setFont(
-        "helvetica",
-        "normal"
-      );
-
-      pdf.setFontSize(10);
-
-      pdf.setTextColor(
-        100,
-        100,
-        100
-      );
-
-      pdf.text(
-        "TRANSACTION RECEIPT",
-        pageWidth / 2,
-        y,
-        {
-          align: "center",
-        }
-      );
-
-      y += 12;
-
-      // ========================================
-      // SUCCESS BOX
-      // ========================================
-
-      pdf.setFillColor(
-        236,
-        253,
-        245
-      );
-
-      pdf.roundedRect(
-        leftMargin,
-        y,
-        contentWidth,
-        14,
-        3,
-        3,
-        "F"
-      );
-
-      pdf.setFont(
-        "helvetica",
-        "bold"
-      );
-
-      pdf.setFontSize(10);
-
-      pdf.setTextColor(
-        5,
-        150,
-        105
-      );
-
-      pdf.text(
-        "TRANSACTION SUCCESSFUL",
-        pageWidth / 2,
-        y + 9,
-        {
-          align: "center",
-        }
-      );
-
-      y += 24;
-
-      // ========================================
-      // RECEIPT ROW
-      // ========================================
-
-      const addRow = (
-        label: string,
-        value: string,
-        bold = false
-      ) => {
-        pdf.setFont(
-          "helvetica",
-          "normal"
-        );
-
-        pdf.setFontSize(10);
-
-        pdf.setTextColor(
-          110,
-          110,
-          110
-        );
-
-        pdf.text(
-          label,
-          leftMargin,
-          y
-        );
-
-        pdf.setFont(
-          "helvetica",
-          bold
-            ? "bold"
-            : "normal"
-        );
-
-        pdf.setTextColor(
-          30,
-          30,
-          30
-        );
-
-        pdf.text(
-          value,
-          pageWidth - rightMargin,
-          y,
-          {
-            align: "right",
-          }
-        );
-
-        y += 10;
-      };
-
-      // ========================================
-      // TRANSACTION DETAILS
-      // ========================================
-
-      addRow(
-        "Receipt Number",
-        receipt.reference
-      );
-
-      addRow(
-        "Date & Time",
-        receipt.date
-      );
-
-      addRow(
-        "Customer",
-        receipt.customerName
-      );
-
-      addRow(
-        "Phone",
-        receipt.phone
-      );
-
-      addRow(
-        "Service",
-        `${receipt.network.toUpperCase()} Data`
-      );
-
-      addRow(
-        "Data Plan",
-        receipt.planName
-      );
-
-      addRow(
-        "Payment Reference",
-        receipt.reference
-      );
-
-      // ========================================
-      // DIVIDER
-      // ========================================
-
-      y += 4;
-
-      pdf.setDrawColor(
-        190,
-        190,
-        190
-      );
-
-      pdf.setLineDashPattern(
-        [2, 2],
-        0
-      );
-
-      pdf.line(
-        leftMargin,
-        y,
-        pageWidth - rightMargin,
-        y
-      );
-
-      pdf.setLineDashPattern(
-        [],
-        0
-      );
-
-      y += 13;
-
-      // ========================================
-      // WALLET DETAILS
-      // ========================================
-
-      addRow(
-        "Previous Wallet Balance",
-        `₦${receipt.previousBalance.toLocaleString()}`
-      );
-
-      addRow(
-        "Amount Paid",
-        `₦${receipt.amount.toLocaleString()}`,
-        true
-      );
-
-      addRow(
-        "New Wallet Balance",
-        `₦${receipt.newBalance.toLocaleString()}`,
-        true
-      );
-
-      // ========================================
-      // FOOTER DIVIDER
-      // ========================================
+  /*
+   * DOWNLOAD PDF RECEIPT
+   */
+  const downloadPdf = (tx: ReceiptData) => {
+    const doc = new jsPDF();
+
+    /*
+     * Header
+     */
+    doc.setFillColor(5, 150, 105);
+    doc.rect(0, 0, 210, 38, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text("AbuPay", 20, 18);
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text("Data Purchase Receipt", 20, 29);
+
+    /*
+     * Success
+     */
+    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Data Purchase Successful", 20, 52);
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(120, 120, 120);
+    doc.text("Your data has been processed successfully.", 20, 60);
+
+    /*
+     * Amount
+     */
+    doc.setTextColor(120, 120, 120);
+    doc.text("Amount Paid", 20, 75);
+
+    doc.setTextColor(5, 150, 105);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      `NGN ${tx.amount.toLocaleString()}`,
+      20,
+      87
+    );
+
+    /*
+     * Status
+     */
+    doc.setFontSize(11);
+    doc.setTextColor(5, 150, 105);
+    doc.text("SUCCESS", 155, 87);
+
+    /*
+     * Main transaction details
+     */
+    let y = 105;
+
+    const rows = [
+      ["Before Balance", `NGN ${tx.balanceBefore.toLocaleString()}`],
+      ["Amount Paid", `NGN ${tx.amount.toLocaleString()}`],
+      ["After Balance", `NGN ${tx.balanceAfter.toLocaleString()}`],
+      ["Plan", tx.planName],
+      ["Network", tx.network.toUpperCase()],
+      ["Phone Number", tx.phone],
+      ["Reference", tx.reference],
+      ["Date", tx.date],
+      ["Status", tx.status],
+    ];
+
+    rows.forEach(([label, value]) => {
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+
+      doc.setTextColor(120, 120, 120);
+      doc.text(label, 20, y);
+
+      doc.setTextColor(30, 30, 30);
+      doc.setFont("helvetica", "bold");
+
+      doc.text(String(value), 75, y);
 
       y += 10;
+    });
 
-      pdf.setDrawColor(
-        230,
-        230,
-        230
-      );
+    /*
+     * Footer
+     */
+    doc.setDrawColor(220, 220, 220);
+    doc.line(20, y + 5, 190, y + 5);
 
-      pdf.line(
-        leftMargin,
-        y,
-        pageWidth - rightMargin,
-        y
-      );
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(120, 120, 120);
 
-      y += 16;
+    doc.text(
+      "Powered by Abu Niematullah Ventures",
+      20,
+      y + 17
+    );
 
-      // ========================================
-      // THANK YOU
-      // ========================================
+    doc.text(
+      "Fast • Secure • Reliable",
+      20,
+      y + 25
+    );
 
-      pdf.setFont(
-        "helvetica",
-        "bold"
-      );
-
-      pdf.setFontSize(11);
-
-      pdf.setTextColor(
-        40,
-        40,
-        40
-      );
-
-      pdf.text(
-        "Thank you for using AbuPay",
-        pageWidth / 2,
-        y,
-        {
-          align: "center",
-        }
-      );
-
-      y += 8;
-
-      // ========================================
-      // POWERED BY
-      // ========================================
-
-      pdf.setFont(
-        "helvetica",
-        "normal"
-      );
-
-      pdf.setFontSize(8);
-
-      pdf.setTextColor(
-        150,
-        150,
-        150
-      );
-
-      pdf.text(
-        "Powered by Abu Niematullah Ventures",
-        pageWidth / 2,
-        y,
-        {
-          align: "center",
-        }
-      );
-
-      // ========================================
-      // SAVE FILE
-      // ========================================
-
-      pdf.save(
-        `AbuPay-Data-Receipt-${receipt.reference}.pdf`
-      );
-    } catch (error) {
-      console.error(
-        "PDF generation failed:",
-        error
-      );
-
-      setMessage({
-        type: "error",
-        text:
-          "Unable to save receipt. Please try again.",
-      });
-    } finally {
-      setSavingPdf(false);
-    }
+    doc.save(
+      `AbuPay-Data-${tx.reference}.pdf`
+    );
   };
 
-  // ==========================================
-  // SHARE RECEIPT
-  // Same sharing system as Airtime
-  // ==========================================
+  /*
+   * SHARE RECEIPT
+   */
+  const shareReceipt = async (tx: ReceiptData) => {
+    const text = `AbuPay
 
-  const shareReceipt = async () => {
-    if (!receipt) {
-      return;
-    }
+DATA PURCHASE SUCCESSFUL
 
-    const shareText = `
-AbuPay Transaction Receipt
+Amount Paid: ₦${tx.amount.toLocaleString()}
 
-Receipt Number:
-${receipt.reference}
+Before Balance: ₦${tx.balanceBefore.toLocaleString()}
+Paid: ₦${tx.amount.toLocaleString()}
+After Balance: ₦${tx.balanceAfter.toLocaleString()}
 
-Date & Time:
-${receipt.date}
+Plan: ${tx.planName}
+Network: ${tx.network.toUpperCase()}
+Phone Number: ${tx.phone}
 
-Customer:
-${receipt.customerName}
-
-Phone:
-${receipt.phone}
-
-Service:
-${receipt.network.toUpperCase()} Data
-
-Data Plan:
-${receipt.planName}
-
-Amount Paid:
-₦${receipt.amount.toLocaleString()}
-
-Previous Wallet Balance:
-₦${receipt.previousBalance.toLocaleString()}
-
-New Wallet Balance:
-₦${receipt.newBalance.toLocaleString()}
-
-Status:
-${
-  receipt.status === "SUCCESS"
-    ? "SUCCESSFUL"
-    : receipt.status
-}
-
-Payment Reference:
-${receipt.reference}
-
-Thank you for using AbuPay.
+Reference: ${tx.reference}
+Date: ${tx.date}
+Status: ${tx.status}
 
 Powered by Abu Niematullah Ventures
-    `.trim();
+Fast • Secure • Reliable`;
 
-    try {
-      // ========================================
-      // NATIVE SHARE
-      // ========================================
-
-      if (
-        typeof navigator !==
-          "undefined" &&
-        navigator.share
-      ) {
+    if (navigator.share) {
+      try {
         await navigator.share({
-          title:
-            "AbuPay Data Purchase Receipt",
-          text: shareText,
+          title: "AbuPay Data Receipt",
+          text,
         });
 
         return;
+      } catch {
+        // Continue to WhatsApp fallback.
       }
-
-      // ========================================
-      // FALLBACK COPY
-      // ========================================
-
-      if (
-        navigator.clipboard
-      ) {
-        await navigator.clipboard.writeText(
-          shareText
-        );
-
-        setMessage({
-          type: "success",
-          text:
-            "Receipt copied. You can paste it into WhatsApp or another app.",
-        });
-
-        return;
-      }
-
-      setMessage({
-        type: "error",
-        text:
-          "Sharing is not supported on this browser.",
-      });
-    } catch (error) {
-      console.log(
-        "Share cancelled:",
-        error
-      );
     }
+
+    window.open(
+      "https://wa.me/?text=" +
+        encodeURIComponent(text),
+      "_blank"
+    );
   };
-
-  // ==========================================
-  // CLOSE RECEIPT
-  // ==========================================
-
-  const closeReceipt = () => {
-    setReceipt(null);
-    setMessage(null);
-  };
-
-  // ==========================================
-  // PAGE
-  // ==========================================
 
   return (
     <DashboardLayout>
-
-      <div className="mx-auto max-w-3xl space-y-8">
+      <div className="mx-auto max-w-2xl space-y-6">
 
         {/* PAGE HEADER */}
-
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
             Buy Data
           </h1>
 
           <p className="mt-1 text-gray-500">
-            Choose a network and select a data plan
+            Choose network and data plan
           </p>
         </div>
 
         {/* PURCHASE CARD */}
+        <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm md:p-8">
-
-          {/* NETWORK */}
-
-          <div className="mb-8">
-
-            <label className="mb-3 block text-sm font-medium text-gray-700">
-              Select Network
-            </label>
-
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-
-              {networks.map(
-                (net) => (
-                  <button
-                    key={net.id}
-                    type="button"
-                    onClick={() =>
-                      setNetwork(
-                        net.id
-                      )
-                    }
-                    className={`rounded-xl py-4 text-sm font-semibold transition ${
-                      network ===
-                      net.id
-                        ? `${net.color} ${net.text} ring-2 ring-offset-2 ring-emerald-500`
-                        : "border bg-gray-50 hover:bg-gray-100"
-                    }`}
-                  >
-                    {net.name}
-                  </button>
-                )
-              )}
-
-            </div>
-
-          </div>
-
-          {/* PHONE */}
-
-          <div className="mb-8">
-
+          {/* PROVIDER DROPDOWN */}
+          <div className="border-b p-5">
             <label className="mb-2 block text-sm font-medium text-gray-700">
-              Phone Number
+              Select Package
             </label>
 
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) =>
-                setPhone(
-                  e.target.value
-                    .replace(/\D/g, "")
-                    .slice(0, 11)
-                )
-              }
-              placeholder="08012345678"
-              maxLength={11}
-              className="w-full rounded-xl border px-4 py-3.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-            />
-
-          </div>
-
-          {/* DATA PLAN DROPDOWN */}
-
-          <div className="mb-8">
-
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Select Data Plan
-            </label>
-
-            {loadingPlans ? (
-
-              <div className="flex items-center justify-center rounded-xl border bg-gray-50 py-4">
-
-                <Loader2
-                  className="mr-2 animate-spin text-emerald-600"
-                  size={20}
-                />
-
-                <span className="text-sm text-gray-500">
-                  Loading data plans...
-                </span>
-
-              </div>
-
-            ) : plans.length === 0 ? (
-
-              <div className="rounded-xl border border-dashed py-8 text-center text-gray-400">
-                No plans available for this network
-              </div>
-
-            ) : (
-
+            <div className="relative">
               <select
-                value={
-                  selectedPlan?.variation_code ||
-                  ""
-                }
-                onChange={(e) => {
-
-                  const selected =
-                    plans.find(
-                      (plan) =>
-                        plan.variation_code ===
-                        e.target.value
-                    );
-
-                  setSelectedPlan(
-                    selected || null
-                  );
-
-                  setMessage(null);
-                }}
-                className="w-full rounded-xl border bg-white px-4 py-3.5 text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              >
-
-                <option value="">
-                  Select a data plan
-                </option>
-
-                {plans.map(
-                  (plan, index) => (
-
-                    <option
-                      key={`${plan.variation_code}-${plan.amount}-${index}`}
-                      value={
-                        plan.variation_code
-                      }
-                    >
-                      {plan.name} — ₦
-                      {plan.amount.toLocaleString()}
-                    </option>
-
+                value={provider}
+                onChange={(e) =>
+                  setProvider(
+                    e.target.value as ProviderId
                   )
-                )}
-
+                }
+                className="w-full appearance-none rounded-xl border bg-white px-4 py-3.5 pr-10 text-sm font-medium text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              >
+                {PROVIDERS.map((item) => (
+                  <option
+                    key={item.id}
+                    value={item.id}
+                  >
+                    {item.label}
+                    {item.description
+                      ? ` — ${item.description}`
+                      : ""}
+                  </option>
+                ))}
               </select>
 
-            )}
+              <ChevronDown
+                size={18}
+                className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+            </div>
 
-            {/* SELECTED PLAN */}
+            <p className="mt-2 text-xs text-gray-400">
+              Choose your preferred package source.
+            </p>
+          </div>
 
+          {/* NETWORK */}
+          <div className="border-b p-5">
+            <p className="mb-3 text-sm font-medium text-gray-700">
+              Select Network
+            </p>
+
+            <div className="space-y-2">
+              {networks.map((net) => (
+                <button
+                  key={net.id}
+                  type="button"
+                  onClick={() =>
+                    setNetwork(net.id)
+                  }
+                  className={
+                    network === net.id
+                      ? "flex w-full items-center justify-between rounded-xl border border-emerald-600 bg-emerald-50 px-4 py-3.5 text-left ring-1 ring-emerald-200 transition"
+                      : "flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-left transition hover:bg-gray-50"
+                  }
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={
+                        "flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold " +
+                        net.color +
+                        " " +
+                        net.text
+                      }
+                    >
+                      {net.name
+                        .slice(0, 3)
+                        .toUpperCase()}
+                    </div>
+
+                    <span className="font-medium text-gray-900">
+                      {net.name}
+                    </span>
+                  </div>
+
+                  {network === net.id && (
+                    <div className="rounded-full bg-emerald-600 p-1 text-white">
+                      <Check size={14} />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* PHONE + PLAN */}
+          <div className="space-y-5 p-5">
+
+            {/* PHONE */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Phone Number
+              </label>
+
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) =>
+                  setPhone(e.target.value)
+                }
+                placeholder="08012345678"
+                maxLength={11}
+                className="w-full rounded-xl border px-4 py-3.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              />
+            </div>
+
+            {/* DATA PLAN */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Select Data Plan
+              </label>
+
+              {loadingPlans ? (
+                <div className="flex items-center justify-center rounded-xl border py-10">
+                  <Loader2
+                    className="animate-spin text-emerald-600"
+                    size={28}
+                  />
+                </div>
+              ) : plans.length === 0 ? (
+                <div className="rounded-xl border border-dashed py-8 text-center text-gray-400">
+                  No plans available for this network
+                </div>
+              ) : (
+                <div className="relative">
+                  <select
+                    value={
+                      selectedPlan?.variation_code || ""
+                    }
+                    onChange={(e) => {
+                      const plan =
+                        plans.find(
+                          (item) =>
+                            item.variation_code ===
+                            e.target.value
+                        ) || null;
+
+                      setSelectedPlan(plan);
+                    }}
+                    className="w-full appearance-none rounded-xl border bg-white px-4 py-3.5 pr-10 text-sm font-medium text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  >
+                    <option value="">
+                      Select a data plan
+                    </option>
+
+                    {plans.map((plan, index) => (
+                      <option
+                        key={
+                          plan.variation_code +
+                          "-" +
+                          plan.amount +
+                          "-" +
+                          index
+                        }
+                        value={
+                          plan.variation_code
+                        }
+                      >
+                        {plan.name} — ₦
+                        {plan.amount.toLocaleString()}
+                      </option>
+                    ))}
+                  </select>
+
+                  <ChevronDown
+                    size={18}
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* SELECTED PLAN SUMMARY */}
             {selectedPlan && (
-
-              <div className="mt-3 rounded-xl bg-emerald-50 px-4 py-3">
-
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                 <div className="flex items-center justify-between">
-
                   <div>
-
-                    <p className="text-xs text-emerald-600">
+                    <p className="text-xs text-gray-500">
                       Selected Plan
                     </p>
 
-                    <p className="font-semibold text-gray-900">
+                    <p className="mt-1 font-semibold text-gray-900">
                       {selectedPlan.name}
                     </p>
-
                   </div>
 
-                  <p className="text-lg font-bold text-emerald-600">
+                  <p className="text-lg font-bold text-emerald-700">
                     ₦
                     {selectedPlan.amount.toLocaleString()}
                   </p>
-
                 </div>
-
               </div>
-
             )}
 
-          </div>
+            {/* PURCHASE BUTTON */}
+            <button
+              type="button"
+              onClick={handlePurchase}
+              disabled={
+                loadingPurchase ||
+                !selectedPlan
+              }
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingPurchase ? (
+                <>
+                  <Loader2
+                    className="animate-spin"
+                    size={18}
+                  />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Wifi size={18} />
+                  Buy Data
+                </>
+              )}
+            </button>
 
-          {/* BUY BUTTON */}
-
-          <button
-            type="button"
-            onClick={handlePurchase}
-            disabled={
-              loading ||
-              loadingPlans ||
-              !selectedPlan ||
-              phone.length !== 11
-            }
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-
-            {loading ? (
-
-              <>
-                <Loader2
-                  size={18}
-                  className="animate-spin"
-                />
-
-                Processing...
-              </>
-
-            ) : (
-
-              <>
-                <Wifi size={18} />
-
-                {selectedPlan
-                  ? `Buy ${selectedPlan.name} - ₦${selectedPlan.amount.toLocaleString()}`
-                  : "Select a Data Plan"}
-              </>
-
-            )}
-
-          </button>
-
-          {/* MESSAGE */}
-
-          {message &&
-            !receipt && (
+            {/* MESSAGE */}
+            {message && (
               <div
-                className={`mt-4 rounded-xl px-4 py-3 text-center text-sm font-medium ${
-                  message.type ===
-                  "success"
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-red-50 text-red-600"
-                }`}
+                className={
+                  message.type === "success"
+                    ? "rounded-xl bg-emerald-50 px-4 py-3 text-center text-sm font-medium text-emerald-700"
+                    : "rounded-xl bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-600"
+                }
               >
                 {message.text}
               </div>
             )}
-
-        </div>
-
-        {/* ====================================
-            RECEIPT MODAL
-        ===================================== */}
-
-        {receipt && (
-
-          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
-
-            <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
-
-              {/* RECEIPT */}
-
-              <div
-                id="abupay-data-receipt"
-                className="overflow-hidden rounded-t-2xl bg-white"
-              >
-
-                {/* LOGO */}
-
-                <div className="border-b px-6 py-7 text-center">
-
-                  <img
-                    src="/images/abupay-logo.png"
-                    alt="AbuPay"
-                    className="mx-auto mb-3 h-16 w-auto object-contain"
-                  />
-
-                  <h2 className="text-2xl font-bold tracking-tight text-gray-900">
-                    AbuPay
-                  </h2>
-
-                  <p className="mt-1 text-sm font-medium uppercase tracking-widest text-gray-500">
-                    Transaction Receipt
-                  </p>
-
-                </div>
-
-                {/* SUCCESS */}
-
-                <div className="flex items-center justify-center gap-2 border-b bg-emerald-50 px-6 py-4">
-
-                  <CheckCircle
-                    size={20}
-                    className="text-emerald-600"
-                  />
-
-                  <span className="font-bold text-emerald-700">
-                    TRANSACTION
-                    {" "}
-                    SUCCESSFUL
-                  </span>
-
-                </div>
-
-                {/* DETAILS */}
-
-                <div className="space-y-4 px-6 py-6">
-
-                  <ReceiptRow
-                    label="Receipt Number"
-                    value={
-                      receipt.reference
-                    }
-                  />
-
-                  <ReceiptRow
-                    label="Date & Time"
-                    value={
-                      receipt.date
-                    }
-                  />
-
-                  <ReceiptRow
-                    label="Customer"
-                    value={
-                      receipt.customerName
-                    }
-                  />
-
-                  <ReceiptRow
-                    label="Phone"
-                    value={
-                      receipt.phone
-                    }
-                  />
-
-                  <ReceiptRow
-                    label="Service"
-                    value={`${receipt.network.toUpperCase()} Data`}
-                  />
-
-                  <ReceiptRow
-                    label="Data Plan"
-                    value={
-                      receipt.planName
-                    }
-                  />
-
-                  <ReceiptRow
-                    label="Payment Reference"
-                    value={
-                      receipt.reference
-                    }
-                  />
-
-                  <div className="my-5 border-t border-dashed" />
-
-                  <ReceiptRow
-                    label="Previous Wallet Balance"
-                    value={`₦${receipt.previousBalance.toLocaleString()}`}
-                  />
-
-                  <ReceiptRow
-                    label="Amount Paid"
-                    value={`₦${receipt.amount.toLocaleString()}`}
-                    bold
-                  />
-
-                  <ReceiptRow
-                    label="New Wallet Balance"
-                    value={`₦${receipt.newBalance.toLocaleString()}`}
-                    bold
-                  />
-
-                </div>
-
-                {/* FOOTER */}
-
-                <div className="border-t px-6 py-6 text-center">
-
-                  <p className="font-medium text-gray-800">
-                    Thank you for using AbuPay
-                  </p>
-
-                  <p className="mt-2 text-xs text-gray-400">
-                    Powered by Abu
-                    {" "}
-                    Niematullah Ventures
-                  </p>
-
-                </div>
-
-              </div>
-
-              {/* BUTTONS */}
-
-              <div className="flex gap-3 rounded-b-2xl border-t bg-gray-50 p-5">
-
-                {/* SAVE PDF */}
-
-                <button
-                  type="button"
-                  onClick={
-                    saveReceipt
-                  }
-                  disabled={
-                    savingPdf
-                  }
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-
-                  {savingPdf ? (
-
-                    <>
-                      <Loader2
-                        size={18}
-                        className="animate-spin"
-                      />
-
-                      Saving...
-                    </>
-
-                  ) : (
-
-                    <>
-                      <Download
-                        size={18}
-                      />
-
-                      Save PDF
-                    </>
-
-                  )}
-
-                </button>
-
-                {/* SHARE */}
-
-                <button
-                  type="button"
-                  onClick={
-                    shareReceipt
-                  }
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 font-semibold text-gray-700 transition hover:bg-gray-100"
-                >
-
-                  <Share2
-                    size={18}
-                  />
-
-                  Share
-
-                </button>
-
-                {/* CLOSE */}
-
-                <button
-                  type="button"
-                  onClick={
-                    closeReceipt
-                  }
-                  className="rounded-xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-600 transition hover:bg-gray-100"
-                  aria-label="Close receipt"
-                >
-
-                  <X size={18} />
-
-                </button>
-
-              </div>
-
-            </div>
-
           </div>
-
-        )}
-
+        </div>
       </div>
 
+      {/* RECEIPT MODAL */}
+      {receipt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+
+            {/* RECEIPT HEADER */}
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Data Receipt
+              </h3>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setReceipt(null)
+                }
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-5 px-5 py-6">
+
+              {/* LOGO */}
+              <div className="flex justify-center">
+                <img
+                  src="/images/abupay-logo.png"
+                  alt="AbuPay"
+                  className="h-12 w-auto object-contain"
+                />
+              </div>
+
+              {/* SUCCESS */}
+              <div className="text-center">
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                  <CheckCircle size={28} />
+                </div>
+
+                <h2 className="text-xl font-bold text-gray-900">
+                  Data Purchase Successful
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Your data has been processed
+                </p>
+              </div>
+
+              {/* AMOUNT */}
+              <div className="text-center">
+                <p className="text-sm text-gray-500">
+                  Amount Paid
+                </p>
+
+                <p className="mt-1 text-3xl font-bold text-gray-900">
+                  ₦
+                  {receipt.amount.toLocaleString()}
+                </p>
+
+                <span className="mt-2 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  SUCCESS
+                </span>
+              </div>
+
+              {/* NETWORK + PHONE */}
+              <div className="rounded-xl bg-gray-50 p-4 text-center">
+                <p className="font-semibold text-gray-900">
+                  {receipt.network.toUpperCase()} •{" "}
+                  {receipt.phone}
+                </p>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  {receipt.planName}
+                </p>
+              </div>
+
+              {/* BALANCE MOVEMENT */}
+              <div className="grid grid-cols-3 gap-2">
+
+                <div className="rounded-xl bg-gray-50 p-3 text-center">
+                  <p className="text-xs text-gray-500">
+                    Before
+                  </p>
+
+                  <p className="mt-1 text-sm font-bold text-gray-900">
+                    ₦
+                    {receipt.balanceBefore.toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-emerald-50 p-3 text-center">
+                  <p className="text-xs text-emerald-600">
+                    Paid
+                  </p>
+
+                  <p className="mt-1 text-sm font-bold text-emerald-700">
+                    ₦
+                    {receipt.amount.toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-gray-50 p-3 text-center">
+                  <p className="text-xs text-gray-500">
+                    After
+                  </p>
+
+                  <p className="mt-1 text-sm font-bold text-gray-900">
+                    ₦
+                    {receipt.balanceAfter.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* DETAILS */}
+              <div className="space-y-3 rounded-xl bg-gray-50 p-4 text-sm">
+
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">
+                    Description
+                  </span>
+
+                  <span className="text-right font-medium">
+                    {receipt.network.toUpperCase()} Data Purchase
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">
+                    Plan
+                  </span>
+
+                  <span className="max-w-[200px] text-right font-medium">
+                    {receipt.planName}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">
+                    Network
+                  </span>
+
+                  <span className="font-medium uppercase">
+                    {receipt.network}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">
+                    Phone Number
+                  </span>
+
+                  <span className="font-medium">
+                    {receipt.phone}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">
+                    Reference
+                  </span>
+
+                  <span className="max-w-[180px] truncate text-right font-medium">
+                    {receipt.reference}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">
+                    Date
+                  </span>
+
+                  <span className="text-right font-medium">
+                    {receipt.date}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">
+                    Status
+                  </span>
+
+                  <span className="font-semibold text-emerald-600">
+                    {receipt.status}
+                  </span>
+                </div>
+              </div>
+
+              {/* FOOTER */}
+              <div className="text-center">
+                <p className="text-xs text-gray-400">
+                  Powered by Abu Niematullah Ventures
+                </p>
+
+                <p className="mt-1 text-xs text-gray-400">
+                  Fast • Secure • Reliable
+                </p>
+              </div>
+            </div>
+
+            {/* ACTIONS */}
+            <div className="grid grid-cols-2 gap-3 border-t px-5 py-4">
+
+              <button
+                type="button"
+                onClick={() =>
+                  downloadPdf(receipt)
+                }
+                className="flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
+                <Download size={16} />
+                PDF
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  shareReceipt(receipt)
+                }
+                className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              >
+                <Share2 size={16} />
+                Share
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
-  );
-}
-
-// ============================================
-// RECEIPT ROW
-// ============================================
-
-function ReceiptRow({
-  label,
-  value,
-  bold = false,
-}: {
-  label: string;
-  value: string;
-  bold?: boolean;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-
-      <span className="text-sm text-gray-500">
-        {label}
-      </span>
-
-      <span
-        className={`max-w-[60%] break-words text-right text-sm ${
-          bold
-            ? "font-bold text-gray-900"
-            : "font-medium text-gray-800"
-        }`}
-      >
-        {value}
-      </span>
-
-    </div>
   );
 }

@@ -1,18 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import {
   Smartphone,
   Loader2,
+  Check,
+  X,
   Download,
   Share2,
-  X,
-  CheckCircle,
+  CheckCircle2,
+  Phone,
+  Wallet,
+  ArrowDownCircle,
+  ArrowUpCircle,
 } from "lucide-react";
 import { buyAirtime } from "@/services/airtime";
-import useAuth from "@/hooks/useAuth";
-import jsPDF from "jspdf";
+import { PROVIDERS, ProviderId } from "@/lib/providers";
+import { jsPDF } from "jspdf";
 
 const networks = [
   {
@@ -41,36 +47,28 @@ const networks = [
   },
 ];
 
-const quickAmounts = [
-  100,
-  200,
-  500,
-  1000,
-  2000,
-  5000,
-];
+const quickAmounts = [100, 200, 500, 1000, 2000, 5000];
 
 interface ReceiptData {
-  reference: string;
-  date: string;
-  customerName: string;
+  amount: number;
   phone: string;
   network: string;
-  amount: number;
-  previousBalance: number;
-  newBalance: number;
+  reference: string;
+  date: string;
   status: string;
+  description: string;
+  balanceBefore: number;
+  balanceAfter: number;
 }
 
 export default function AirtimePage() {
-  const { user } = useAuth();
+  const [provider, setProvider] =
+    useState<ProviderId>("vtpass");
 
   const [network, setNetwork] = useState("mtn");
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("");
-
   const [loading, setLoading] = useState(false);
-  const [savingPdf, setSavingPdf] = useState(false);
 
   const [message, setMessage] = useState<{
     type: "success" | "error";
@@ -80,15 +78,11 @@ export default function AirtimePage() {
   const [receipt, setReceipt] =
     useState<ReceiptData | null>(null);
 
-  // ==========================================
-  // BUY AIRTIME
-  // ==========================================
-
   const handlePurchase = async () => {
-    if (!phone || phone.length !== 11) {
+    if (!phone || phone.length < 11) {
       setMessage({
         type: "error",
-        text: "Please enter a valid 11-digit phone number",
+        text: "Please enter a valid phone number",
       });
       return;
     }
@@ -96,7 +90,7 @@ export default function AirtimePage() {
     if (!amount || Number(amount) <= 0) {
       setMessage({
         type: "error",
-        text: "Please select an airtime amount",
+        text: "Please enter a valid amount",
       });
       return;
     }
@@ -105,101 +99,63 @@ export default function AirtimePage() {
       setLoading(true);
       setMessage(null);
 
-      const purchasePhone = phone;
-      const purchaseAmount = Number(amount);
-      const purchaseNetwork = network;
+      const value = Number(amount);
 
       const result = await buyAirtime({
-        network: purchaseNetwork,
-        phone: purchasePhone,
-        amount: purchaseAmount,
+        network,
+        phone,
+        amount: value,
+        provider,
       });
 
-      if (!result.success) {
+      if (result.success) {
+        const ref =
+          result.providerResponse?.request_id ||
+          result.providerResponse?.data?.request_id ||
+          result.transaction?._id ||
+          result.transaction?.id ||
+          `AIR-${Date.now()}`;
+
+        const balanceBefore = Number(
+          result.balanceBefore ??
+            result.transaction?.metadata?.balanceBefore ??
+            0
+        );
+
+        const balanceAfter = Number(
+          result.balanceAfter ??
+            result.transaction?.metadata?.balanceAfter ??
+            balanceBefore - value
+        );
+
+        setReceipt({
+          amount: value,
+          phone,
+          network,
+          reference: String(ref),
+          date: new Date().toLocaleString("en-NG"),
+          status: "SUCCESS",
+          description: `${network.toUpperCase()} Airtime Purchase`,
+          balanceBefore,
+          balanceAfter,
+        });
+
+        setMessage({
+          type: "success",
+          text: `Airtime of ₦${value.toLocaleString()} sent to ${phone}`,
+        });
+
+        setPhone("");
+        setAmount("");
+      } else {
         setMessage({
           type: "error",
           text:
             result.message ||
             "Purchase failed. Please try again.",
         });
-
-        return;
       }
-
-      // ========================================
-      // TRANSACTION INFORMATION
-      // ========================================
-
-      const transaction = result.transaction;
-
-      const newBalance = Number(
-        result.walletBalance || 0
-      );
-
-      /*
-       * Wallet was already debited by the
-       * purchase amount.
-       *
-       * Therefore:
-       *
-       * Previous balance =
-       * New balance + Amount paid
-       */
-
-      const previousBalance =
-        newBalance + purchaseAmount;
-
-      const customerName =
-        (user as any)?.name ||
-        (user as any)?.fullName ||
-        (user as any)?.username ||
-        (user as any)?.email ||
-        "AbuPay Customer";
-
-      const reference =
-        transaction?.reference ||
-        `ABP-${Date.now()}`;
-
-      const transactionDate =
-        transaction?.createdAt
-          ? new Date(
-              transaction.createdAt
-            ).toLocaleString()
-          : new Date().toLocaleString();
-
-      // ========================================
-      // CREATE RECEIPT
-      // ========================================
-
-      setReceipt({
-        reference,
-        date: transactionDate,
-        customerName,
-        phone: purchasePhone,
-        network: purchaseNetwork,
-        amount: purchaseAmount,
-        previousBalance,
-        newBalance,
-        status:
-          transaction?.status ||
-          "SUCCESS",
-      });
-
-      setMessage({
-        type: "success",
-        text: "Airtime purchase successful.",
-      });
-
-      // Clear form
-
-      setPhone("");
-      setAmount("");
     } catch (error: any) {
-      console.error(
-        "Airtime purchase error:",
-        error
-      );
-
       setMessage({
         type: "error",
         text:
@@ -211,957 +167,754 @@ export default function AirtimePage() {
     }
   };
 
-  // ==========================================
-  // SAVE RECEIPT AS PDF
-  // ==========================================
+  const formatMoney = (value: number) =>
+    `₦${Number(value || 0).toLocaleString("en-NG")}`;
 
-  const saveReceipt = async () => {
-    if (!receipt) {
-      return;
-    }
+  const downloadPdf = async (tx: ReceiptData) => {
+    const doc = new jsPDF();
+
+    const logoUrl =
+      `${window.location.origin}/images/abupay-logo.png`;
 
     try {
-      setSavingPdf(true);
+      const imageResponse = await fetch(logoUrl);
+      const imageBlob = await imageResponse.blob();
 
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
+      const reader = new FileReader();
 
-      const pageWidth =
-        pdf.internal.pageSize.getWidth();
+      reader.onloadend = () => {
+        const logoData = reader.result as string;
 
-      const pageHeight =
-        pdf.internal.pageSize.getHeight();
-
-      const leftMargin = 25;
-      const rightMargin = 25;
-
-      const contentWidth =
-        pageWidth -
-        leftMargin -
-        rightMargin;
-
-      let y = 20;
-
-      // ========================================
-      // LOGO
-      // ========================================
-
-      const logo = new Image();
-
-      logo.src =
-        "/images/abupay-logo.png";
-
-      await new Promise<void>((resolve) => {
-        logo.onload = () => resolve();
-        logo.onerror = () => resolve();
-      });
-
-      if (
-        logo.complete &&
-        logo.naturalWidth > 0
-      ) {
-        const logoWidth = 38;
-
-        const logoHeight =
-          (logo.naturalHeight /
-            logo.naturalWidth) *
-          logoWidth;
-
-        pdf.addImage(
-          logo,
-          "PNG",
-          (pageWidth -
-            logoWidth) /
-            2,
-          y,
-          logoWidth,
-          logoHeight
-        );
-
-        y += logoHeight + 8;
-      } else {
-        y += 5;
-      }
-
-      // ========================================
-      // ABUPAY
-      // ========================================
-
-      pdf.setFont(
-        "helvetica",
-        "bold"
-      );
-
-      pdf.setFontSize(23);
-
-      pdf.setTextColor(
-        20,
-        20,
-        20
-      );
-
-      pdf.text(
-        "AbuPay",
-        pageWidth / 2,
-        y,
-        {
-          align: "center",
-        }
-      );
-
-      y += 8;
-
-      // ========================================
-      // RECEIPT TITLE
-      // ========================================
-
-      pdf.setFont(
-        "helvetica",
-        "normal"
-      );
-
-      pdf.setFontSize(10);
-
-      pdf.setTextColor(
-        100,
-        100,
-        100
-      );
-
-      pdf.text(
-        "TRANSACTION RECEIPT",
-        pageWidth / 2,
-        y,
-        {
-          align: "center",
-        }
-      );
-
-      y += 12;
-
-      // ========================================
-      // SUCCESS BOX
-      // ========================================
-
-      pdf.setFillColor(
-        236,
-        253,
-        245
-      );
-
-      pdf.roundedRect(
-        leftMargin,
-        y,
-        contentWidth,
-        14,
-        3,
-        3,
-        "F"
-      );
-
-      pdf.setFont(
-        "helvetica",
-        "bold"
-      );
-
-      pdf.setFontSize(10);
-
-      pdf.setTextColor(
-        5,
-        150,
-        105
-      );
-
-      pdf.text(
-        "TRANSACTION SUCCESSFUL",
-        pageWidth / 2,
-        y + 9,
-        {
-          align: "center",
-        }
-      );
-
-      y += 24;
-
-      // ========================================
-      // RECEIPT ROW
-      // ========================================
-
-      const addRow = (
-        label: string,
-        value: string,
-        bold = false
-      ) => {
-        pdf.setFont(
-          "helvetica",
-          "normal"
-        );
-
-        pdf.setFontSize(10);
-
-        pdf.setTextColor(
-          110,
-          110,
-          110
-        );
-
-        pdf.text(
-          label,
-          leftMargin,
-          y
-        );
-
-        pdf.setFont(
-          "helvetica",
-          bold
-            ? "bold"
-            : "normal"
-        );
-
-        pdf.setTextColor(
-          30,
-          30,
-          30
-        );
-
-        pdf.text(
-          value,
-          pageWidth -
-            rightMargin,
-          y,
-          {
-            align: "right",
-          }
-        );
-
-        y += 10;
+        createPdf(doc, tx, logoData);
       };
 
-      // ========================================
-      // TRANSACTION DETAILS
-      // ========================================
+      reader.readAsDataURL(imageBlob);
+    } catch {
+      createPdf(doc, tx);
+    }
+  };
 
-      addRow(
-        "Receipt Number",
-        receipt.reference
-      );
+  const createPdf = (
+    doc: jsPDF,
+    tx: ReceiptData,
+    logoData?: string
+  ) => {
+    /**
+     * HEADER
+     */
+    doc.setFillColor(16, 185, 129);
+    doc.rect(0, 0, 210, 42, "F");
 
-      addRow(
-        "Date & Time",
-        receipt.date
-      );
+    if (logoData) {
+      try {
+        doc.addImage(
+          logoData,
+          "PNG",
+          18,
+          7,
+          28,
+          28
+        );
+      } catch {
+        // Continue without logo if image conversion fails
+      }
+    }
 
-      addRow(
-        "Customer",
-        receipt.customerName
-      );
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.text("AbuPay", 52, 19);
 
-      addRow(
-        "Phone",
-        receipt.phone
-      );
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text("Airtime Purchase Receipt", 52, 29);
 
-      addRow(
-        "Service",
-        `${receipt.network.toUpperCase()} Airtime`
-      );
+    /**
+     * SUCCESS
+     */
+    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      "Airtime Purchase Successful",
+      20,
+      60
+    );
 
-      addRow(
-        "Payment Reference",
-        receipt.reference
-      );
+    /**
+     * AMOUNT
+     */
+    doc.setFontSize(11);
+    doc.setTextColor(110, 110, 110);
+    doc.text("Amount Paid", 20, 73);
 
-      // ========================================
-      // DIVIDER
-      // ========================================
+    doc.setFontSize(25);
+    doc.setTextColor(16, 185, 129);
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      formatMoney(tx.amount),
+      20,
+      85
+    );
 
-      y += 4;
+    /**
+     * STATUS
+     */
+    doc.setFontSize(10);
+    doc.setTextColor(16, 120, 90);
+    doc.text("SUCCESS", 165, 85);
 
-      pdf.setDrawColor(
-        190,
-        190,
-        190
-      );
+    /**
+     * BALANCE SUMMARY
+     */
+    doc.setFillColor(245, 250, 248);
+    doc.roundedRect(
+      20,
+      96,
+      170,
+      38,
+      4,
+      4,
+      "F"
+    );
 
-      pdf.setLineDashPattern(
-        [2, 2],
-        0
-      );
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text(
+      "BALANCE BEFORE",
+      30,
+      108
+    );
 
-      pdf.line(
-        leftMargin,
-        y,
-        pageWidth -
-          rightMargin,
-        y
-      );
+    doc.text(
+      "AMOUNT PAID",
+      88,
+      108
+    );
 
-      pdf.setLineDashPattern(
-        [],
-        0
-      );
+    doc.text(
+      "BALANCE AFTER",
+      145,
+      108
+    );
 
-      y += 13;
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 30, 30);
 
-      // ========================================
-      // WALLET DETAILS
-      // ========================================
+    doc.text(
+      formatMoney(tx.balanceBefore),
+      30,
+      121
+    );
 
-      addRow(
-        "Previous Wallet Balance",
-        `₦${receipt.previousBalance.toLocaleString()}`
-      );
+    doc.text(
+      formatMoney(tx.amount),
+      88,
+      121
+    );
 
-      addRow(
-        "Amount Paid",
-        `₦${receipt.amount.toLocaleString()}`,
-        true
-      );
+    doc.text(
+      formatMoney(tx.balanceAfter),
+      145,
+      121
+    );
 
-      addRow(
-        "New Wallet Balance",
-        `₦${receipt.newBalance.toLocaleString()}`,
-        true
-      );
+    /**
+     * TRANSACTION DETAILS
+     */
+    const rows = [
+      ["Description", tx.description],
+      ["Network", tx.network.toUpperCase()],
+      ["Phone Number", tx.phone],
+      ["Reference", tx.reference],
+      ["Date", tx.date],
+      ["Status", tx.status],
+    ];
 
-      // ========================================
-      // FOOTER DIVIDER
-      // ========================================
+    let y = 150;
+
+    doc.setFontSize(10);
+
+    rows.forEach(([label, value]) => {
+      doc.setTextColor(120, 120, 120);
+      doc.setFont("helvetica", "normal");
+      doc.text(label, 20, y);
+
+      doc.setTextColor(35, 35, 35);
+      doc.setFont("helvetica", "bold");
+      doc.text(String(value), 70, y);
 
       y += 10;
+    });
 
-      pdf.setDrawColor(
-        230,
-        230,
-        230
-      );
+    /**
+     * FOOTER
+     */
+    doc.setDrawColor(225, 225, 225);
+    doc.line(20, 220, 190, 220);
 
-      pdf.line(
-        leftMargin,
-        y,
-        pageWidth -
-          rightMargin,
-        y
-      );
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    doc.setFont("helvetica", "normal");
 
-      y += 16;
+    doc.text(
+      "Thank you for using AbuPay.",
+      20,
+      232
+    );
 
-      // ========================================
-      // THANK YOU
-      // ========================================
+    doc.text(
+      "Powered by Abu Niematullah Ventures",
+      20,
+      241
+    );
 
-      pdf.setFont(
-        "helvetica",
-        "bold"
-      );
+    doc.text(
+      "Fast • Secure • Reliable",
+      20,
+      250
+    );
 
-      pdf.setFontSize(11);
-
-      pdf.setTextColor(
-        40,
-        40,
-        40
-      );
-
-      pdf.text(
-        "Thank you for using AbuPay",
-        pageWidth / 2,
-        y,
-        {
-          align: "center",
-        }
-      );
-
-      y += 8;
-
-      // ========================================
-      // POWERED BY
-      // ========================================
-
-      pdf.setFont(
-        "helvetica",
-        "normal"
-      );
-
-      pdf.setFontSize(8);
-
-      pdf.setTextColor(
-        150,
-        150,
-        150
-      );
-
-      pdf.text(
-        "Powered by Abu Niematullah Ventures",
-        pageWidth / 2,
-        y,
-        {
-          align: "center",
-        }
-      );
-
-      // ========================================
-      // SAVE FILE
-      // ========================================
-
-      pdf.save(
-        `AbuPay-Receipt-${receipt.reference}.pdf`
-      );
-    } catch (error) {
-      console.error(
-        "PDF generation failed:",
-        error
-      );
-
-      setMessage({
-        type: "error",
-        text:
-          "Unable to save receipt. Please try again.",
-      });
-    } finally {
-      setSavingPdf(false);
-    }
+    doc.save(
+      `AbuPay-Airtime-${tx.reference}.pdf`
+    );
   };
 
-  // ==========================================
-  // SHARE RECEIPT
-  // ==========================================
+  const shareReceipt = async (tx: ReceiptData) => {
+    const text = `AbuPay Airtime Receipt
 
-  const shareReceipt = async () => {
-    if (!receipt) {
-      return;
-    }
+Airtime Purchase Successful
 
-    const shareText = `
-AbuPay Transaction Receipt
+Amount Paid: ${formatMoney(tx.amount)}
 
-Receipt Number:
-${receipt.reference}
+Network: ${tx.network.toUpperCase()}
+Phone Number: ${tx.phone}
 
-Date & Time:
-${receipt.date}
+Balance Before: ${formatMoney(
+      tx.balanceBefore
+    )}
+Amount Paid: ${formatMoney(tx.amount)}
+Balance After: ${formatMoney(
+      tx.balanceAfter
+    )}
 
-Customer:
-${receipt.customerName}
+Reference: ${tx.reference}
+Date: ${tx.date}
+Status: ${tx.status}
 
-Phone:
-${receipt.phone}
+Powered by Abu Niematullah Ventures`;
 
-Service:
-${receipt.network.toUpperCase()} Airtime
-
-Amount Paid:
-₦${receipt.amount.toLocaleString()}
-
-Previous Wallet Balance:
-₦${receipt.previousBalance.toLocaleString()}
-
-New Wallet Balance:
-₦${receipt.newBalance.toLocaleString()}
-
-Status:
-${
-  receipt.status === "SUCCESS"
-    ? "SUCCESSFUL"
-    : receipt.status
-}
-
-Payment Reference:
-${receipt.reference}
-
-Thank you for using AbuPay.
-
-Powered by Abu Niematullah Ventures
-    `.trim();
-
-    try {
-      // ========================================
-      // NATIVE SHARE
-      // ========================================
-
-      if (
-        typeof navigator !==
-          "undefined" &&
-        navigator.share
-      ) {
+    if (navigator.share) {
+      try {
         await navigator.share({
-          title:
-            "AbuPay Transaction Receipt",
-          text: shareText,
+          title: "AbuPay Airtime Receipt",
+          text,
         });
 
         return;
+      } catch {
+        // fallback
       }
-
-      // ========================================
-      // FALLBACK COPY
-      // ========================================
-
-      if (
-        navigator.clipboard
-      ) {
-        await navigator.clipboard.writeText(
-          shareText
-        );
-
-        setMessage({
-          type: "success",
-          text:
-            "Receipt copied. You can paste it into WhatsApp or another app.",
-        });
-
-        return;
-      }
-
-      setMessage({
-        type: "error",
-        text:
-          "Sharing is not supported on this browser.",
-      });
-    } catch (error) {
-      console.log(
-        "Share cancelled:",
-        error
-      );
     }
-  };
 
-  // ==========================================
-  // CLOSE RECEIPT
-  // ==========================================
-
-  const closeReceipt = () => {
-    setReceipt(null);
-    setMessage(null);
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(
+        text
+      )}`,
+      "_blank"
+    );
   };
 
   return (
     <DashboardLayout>
-      <div className="mx-auto max-w-2xl space-y-8">
+      <div className="mx-auto w-full max-w-5xl space-y-6">
+        {/* PAGE HEADER */}
+        <div className="rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 p-6 text-white shadow-sm sm:p-8">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+              <Smartphone size={28} />
+            </div>
 
-        {/* ====================================
-            PAGE HEADER
-        ===================================== */}
+            <div>
+              <h1 className="text-2xl font-bold sm:text-3xl">
+                Buy Airtime
+              </h1>
 
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Buy Airtime
-          </h1>
-
-          <p className="mt-1 text-gray-500">
-            Instant airtime top-up for all
-            networks
-          </p>
+              <p className="mt-1 text-sm text-emerald-50 sm:text-base">
+                Recharge any Nigerian network instantly.
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* ====================================
-            PURCHASE CARD
-        ===================================== */}
+        {/* MAIN CARD */}
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          {/* FORM */}
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            {/* PROVIDER */}
+            <div className="border-b p-5 sm:p-6">
+              <p className="mb-3 text-sm font-semibold text-gray-800">
+                Select Package
+              </p>
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm md:p-8">
+              <div className="grid grid-cols-2 gap-3">
+                {PROVIDERS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() =>
+                      setProvider(item.id)
+                    }
+                    className={`rounded-xl border p-3 text-left transition ${
+                      provider === item.id
+                        ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200"
+                        : "border-gray-200 hover:border-emerald-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="text-sm font-semibold text-gray-900">
+                      {item.label}
+                    </div>
 
-          {/* NETWORK */}
+                    {item.description && (
+                      <div className="mt-1 text-xs text-gray-500">
+                        {item.description}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-          <div className="mb-6">
+            {/* NETWORK */}
+            <div className="border-b p-5 sm:p-6">
+              <p className="mb-3 text-sm font-semibold text-gray-800">
+                Select Network
+              </p>
 
-            <label className="mb-3 block text-sm font-medium text-gray-700">
-              Select Network
-            </label>
-
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-
-              {networks.map(
-                (net) => (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {networks.map((net) => (
                   <button
                     key={net.id}
                     type="button"
                     onClick={() =>
-                      setNetwork(
-                        net.id
-                      )
+                      setNetwork(net.id)
                     }
-                    className={`rounded-xl py-4 text-sm font-semibold transition ${
-                      network ===
-                      net.id
-                        ? `${net.color} ${net.text} ring-2 ring-offset-2 ring-emerald-500`
-                        : "border bg-gray-50 hover:bg-gray-100"
+                    className={`relative rounded-xl border p-3 transition ${
+                      network === net.id
+                        ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200"
+                        : "border-gray-200 hover:bg-gray-50"
                     }`}
                   >
-                    {net.name}
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold ${net.color} ${net.text}`}
+                      >
+                        {net.name
+                          .slice(0, 3)
+                          .toUpperCase()}
+                      </div>
+
+                      <span className="text-sm font-semibold text-gray-900">
+                        {net.name}
+                      </span>
+                    </div>
+
+                    {network === net.id && (
+                      <div className="absolute right-2 top-2 rounded-full bg-emerald-600 p-1 text-white">
+                        <Check size={12} />
+                      </div>
+                    )}
                   </button>
-                )
-              )}
-
-            </div>
-          </div>
-
-          {/* PHONE */}
-
-          <div className="mb-6">
-
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Phone Number
-            </label>
-
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) =>
-                setPhone(
-                  e.target.value.replace(
-                    /\D/g,
-                    ""
-                  )
-                )
-              }
-              placeholder="08012345678"
-              maxLength={11}
-              className="w-full rounded-xl border px-4 py-3.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-            />
-
-          </div>
-
-          {/* AMOUNT */}
-
-          <div className="mb-6">
-
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Select Airtime Amount
-            </label>
-
-            <select
-              value={amount}
-              onChange={(e) =>
-                setAmount(
-                  e.target.value
-                )
-              }
-              className="w-full rounded-xl border bg-white px-4 py-3.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-            >
-
-              <option value="">
-                Select amount
-              </option>
-
-              {quickAmounts.map(
-                (value) => (
-                  <option
-                    key={value}
-                    value={value}
-                  >
-                    ₦
-                    {value.toLocaleString()}
-                  </option>
-                )
-              )}
-
-            </select>
-
-          </div>
-
-          {/* BUY BUTTON */}
-
-          <button
-            type="button"
-            onClick={
-              handlePurchase
-            }
-            disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-
-            {loading ? (
-              <>
-                <Loader2
-                  size={18}
-                  className="animate-spin"
-                />
-
-                Processing...
-              </>
-            ) : (
-              <>
-                <Smartphone
-                  size={18}
-                />
-
-                Buy Airtime
-              </>
-            )}
-
-          </button>
-
-          {/* MESSAGE */}
-
-          {message &&
-            !receipt && (
-              <div
-                className={`mt-4 rounded-xl px-4 py-3 text-center text-sm font-medium ${
-                  message.type ===
-                  "success"
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-red-50 text-red-600"
-                }`}
-              >
-                {message.text}
+                ))}
               </div>
-            )}
+            </div>
 
-        </div>
+            {/* PHONE + AMOUNT */}
+            <div className="space-y-6 p-5 sm:p-6">
+              {/* PHONE */}
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-gray-700">
+                  Phone Number
+                </label>
 
-        {/* ====================================
-            RECEIPT MODAL
-        ===================================== */}
-
-        {receipt && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
-
-            <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
-
-              {/* =================================
-                  RECEIPT
-              ================================== */}
-
-              <div
-                id="abupay-receipt"
-                className="overflow-hidden rounded-t-2xl bg-white"
-              >
-
-                {/* LOGO */}
-
-                <div className="border-b px-6 py-7 text-center">
-
-                  <img
-                    src="/images/abupay-logo.png"
-                    alt="AbuPay"
-                    className="mx-auto mb-3 h-16 w-auto object-contain"
+                <div className="relative">
+                  <Phone
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
                   />
 
-                  <h2 className="text-2xl font-bold tracking-tight text-gray-900">
-                    AbuPay
-                  </h2>
-
-                  <p className="mt-1 text-sm font-medium uppercase tracking-widest text-gray-500">
-                    Transaction Receipt
-                  </p>
-
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    value={phone}
+                    onChange={(e) =>
+                      setPhone(
+                        e.target.value.replace(
+                          /\D/g,
+                          ""
+                        )
+                      )
+                    }
+                    placeholder="08012345678"
+                    maxLength={11}
+                    className="w-full rounded-xl border border-gray-200 py-3.5 pl-11 pr-4 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  />
                 </div>
+              </div>
 
-                {/* SUCCESS */}
+              {/* QUICK AMOUNT */}
+              <div>
+                <label className="mb-3 block text-sm font-semibold text-gray-700">
+                  Quick Amount
+                </label>
 
-                <div className="flex items-center justify-center gap-2 border-b bg-emerald-50 px-6 py-4">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                  {quickAmounts.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() =>
+                        setAmount(String(value))
+                      }
+                      className={`rounded-xl border py-3 text-sm font-semibold transition ${
+                        amount === String(value)
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                          : "border-gray-200 hover:border-emerald-300 hover:bg-emerald-50"
+                      }`}
+                    >
+                      ₦
+                      {value.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                  <CheckCircle
-                    size={20}
-                    className="text-emerald-600"
-                  />
+              {/* CUSTOM AMOUNT */}
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-gray-700">
+                  Enter Amount
+                </label>
 
-                  <span className="font-bold text-emerald-700">
-                    TRANSACTION
-                    SUCCESSFUL
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-medium text-gray-500">
+                    ₦
                   </span>
 
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    value={amount}
+                    onChange={(e) =>
+                      setAmount(e.target.value)
+                    }
+                    placeholder="Enter amount"
+                    className="w-full rounded-xl border border-gray-200 py-3.5 pl-9 pr-4 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  />
                 </div>
-
-                {/* DETAILS */}
-
-                <div className="space-y-4 px-6 py-6">
-
-                  <ReceiptRow
-                    label="Receipt Number"
-                    value={
-                      receipt.reference
-                    }
-                  />
-
-                  <ReceiptRow
-                    label="Date & Time"
-                    value={
-                      receipt.date
-                    }
-                  />
-
-                  <ReceiptRow
-                    label="Customer"
-                    value={
-                      receipt.customerName
-                    }
-                  />
-
-                  <ReceiptRow
-                    label="Phone"
-                    value={
-                      receipt.phone
-                    }
-                  />
-
-                  <ReceiptRow
-                    label="Service"
-                    value={`${receipt.network.toUpperCase()} Airtime`}
-                  />
-
-                  <ReceiptRow
-                    label="Payment Reference"
-                    value={
-                      receipt.reference
-                    }
-                  />
-
-                  <div className="my-5 border-t border-dashed" />
-
-                  <ReceiptRow
-                    label="Previous Wallet Balance"
-                    value={`₦${receipt.previousBalance.toLocaleString()}`}
-                  />
-
-                  <ReceiptRow
-                    label="Amount Paid"
-                    value={`₦${receipt.amount.toLocaleString()}`}
-                    bold
-                  />
-
-                  <ReceiptRow
-                    label="New Wallet Balance"
-                    value={`₦${receipt.newBalance.toLocaleString()}`}
-                    bold
-                  />
-
-                </div>
-
-                {/* FOOTER */}
-
-                <div className="border-t px-6 py-6 text-center">
-
-                  <p className="font-medium text-gray-800">
-                    Thank you for using
-                    AbuPay
-                  </p>
-
-                  <p className="mt-2 text-xs text-gray-400">
-                    Powered by Abu
-                    Niematullah Ventures
-                  </p>
-
-                </div>
-
               </div>
 
-              {/* =================================
-                  BUTTONS
-              ================================== */}
+              {/* PURCHASE BUTTON */}
+              <button
+                type="button"
+                onClick={handlePurchase}
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-4 font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? (
+                  <>
+                    <Loader2
+                      className="animate-spin"
+                      size={19}
+                    />
+                    Processing purchase...
+                  </>
+                ) : (
+                  <>
+                    <Smartphone size={19} />
+                    Buy Airtime
+                  </>
+                )}
+              </button>
 
-              <div className="flex gap-3 rounded-b-2xl border-t bg-gray-50 p-5">
-
-                {/* SAVE PDF */}
-
-                <button
-                  type="button"
-                  onClick={
-                    saveReceipt
-                  }
-                  disabled={
-                    savingPdf
-                  }
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              {/* MESSAGE */}
+              {message && (
+                <div
+                  className={`rounded-xl px-4 py-3 text-center text-sm font-medium ${
+                    message.type === "success"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-red-50 text-red-600"
+                  }`}
                 >
+                  {message.text}
+                </div>
+              )}
+            </div>
+          </div>
 
-                  {savingPdf ? (
-                    <>
-                      <Loader2
-                        size={18}
-                        className="animate-spin"
-                      />
-
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Download
-                        size={18}
-                      />
-
-                      Save PDF
-                    </>
-                  )}
-
-                </button>
-
-                {/* SHARE */}
-
-                <button
-                  type="button"
-                  onClick={
-                    shareReceipt
-                  }
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 font-semibold text-gray-700 transition hover:bg-gray-100"
-                >
-
-                  <Share2
-                    size={18}
-                  />
-
-                  Share
-
-                </button>
-
-                {/* CLOSE */}
-
-                <button
-                  type="button"
-                  onClick={
-                    closeReceipt
-                  }
-                  className="rounded-xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-600 transition hover:bg-gray-100"
-                  aria-label="Close receipt"
-                >
-                  <X size={18} />
-                </button>
-
+          {/* SIDE INFORMATION */}
+          <div className="hidden space-y-4 lg:block">
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                <Wallet size={21} />
               </div>
 
+              <h3 className="font-semibold text-gray-900">
+                Instant Airtime
+              </h3>
+
+              <p className="mt-2 text-sm leading-6 text-gray-500">
+                Buy airtime securely and receive your
+                recharge instantly.
+              </p>
             </div>
 
-          </div>
-        )}
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <h3 className="font-semibold text-gray-900">
+                Available Networks
+              </h3>
 
+              <div className="mt-4 space-y-3">
+                {networks.map((net) => (
+                  <div
+                    key={net.id}
+                    className="flex items-center gap-3"
+                  >
+                    <div
+                      className={`h-3 w-3 rounded-full ${net.color}`}
+                    />
+
+                    <span className="text-sm text-gray-600">
+                      {net.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* RECEIPT MODAL */}
+      {receipt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-3 sm:p-6">
+          <div className="my-auto w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+            {/* RECEIPT HEADER */}
+            <div className="relative bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-6 text-white">
+              <button
+                type="button"
+                onClick={() => setReceipt(null)}
+                className="absolute right-4 top-4 rounded-full bg-white/10 p-2 hover:bg-white/20"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex justify-center">
+                <Image
+                  src="/images/abupay-logo.png"
+                  alt="AbuPay"
+                  width={72}
+                  height={72}
+                  className="rounded-2xl bg-white p-1 shadow-lg"
+                />
+              </div>
+
+              <div className="mt-4 text-center">
+                <h2 className="text-xl font-bold">
+                  Airtime Purchase Successful
+                </h2>
+
+                <p className="mt-1 text-sm text-emerald-50">
+                  Your airtime has been processed
+                </p>
+              </div>
+            </div>
+
+            {/* RECEIPT BODY */}
+            <div className="space-y-5 px-5 py-6">
+              {/* AMOUNT */}
+              <div className="text-center">
+                <p className="text-xs font-medium uppercase tracking-wider text-gray-400">
+                  Amount Paid
+                </p>
+
+                <p className="mt-1 text-4xl font-extrabold tracking-tight text-gray-900">
+                  {formatMoney(receipt.amount)}
+                </p>
+
+                <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                  <CheckCircle2 size={14} />
+                  SUCCESS
+                </span>
+              </div>
+
+              {/* NETWORK / PHONE */}
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-center">
+                <p className="text-base font-bold text-gray-900">
+                  {receipt.network.toUpperCase()}{" "}
+                  <span className="text-gray-300">
+                    •
+                  </span>{" "}
+                  {receipt.phone}
+                </p>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Airtime recharge
+                </p>
+              </div>
+
+              {/* BALANCE SUMMARY */}
+              <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-gray-100">
+                <div className="p-3 text-center">
+                  <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                    <ArrowDownCircle size={16} />
+                  </div>
+
+                  <p className="text-[10px] font-medium uppercase text-gray-400">
+                    Before
+                  </p>
+
+                  <p className="mt-1 text-sm font-bold text-gray-900">
+                    {formatMoney(
+                      receipt.balanceBefore
+                    )}
+                  </p>
+                </div>
+
+                <div className="border-x border-gray-100 bg-emerald-50/50 p-3 text-center">
+                  <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                    <Smartphone size={16} />
+                  </div>
+
+                  <p className="text-[10px] font-medium uppercase text-gray-400">
+                    Paid
+                  </p>
+
+                  <p className="mt-1 text-sm font-bold text-emerald-700">
+                    {formatMoney(
+                      receipt.amount
+                    )}
+                  </p>
+                </div>
+
+                <div className="p-3 text-center">
+                  <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-purple-50 text-purple-600">
+                    <ArrowUpCircle size={16} />
+                  </div>
+
+                  <p className="text-[10px] font-medium uppercase text-gray-400">
+                    After
+                  </p>
+
+                  <p className="mt-1 text-sm font-bold text-gray-900">
+                    {formatMoney(
+                      receipt.balanceAfter
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* DETAILS */}
+              <div className="space-y-3 rounded-2xl bg-gray-50 p-4 text-sm">
+                <ReceiptRow
+                  label="Description"
+                  value={receipt.description}
+                />
+
+                <ReceiptRow
+                  label="Network"
+                  value={receipt.network.toUpperCase()}
+                />
+
+                <ReceiptRow
+                  label="Phone Number"
+                  value={receipt.phone}
+                />
+
+                <ReceiptRow
+                  label="Reference"
+                  value={receipt.reference}
+                />
+
+                <ReceiptRow
+                  label="Date"
+                  value={receipt.date}
+                />
+
+                <ReceiptRow
+                  label="Status"
+                  value="SUCCESS"
+                  success
+                />
+              </div>
+
+              <div className="text-center">
+                <p className="text-xs text-gray-400">
+                  Powered by Abu Niematullah Ventures
+                </p>
+
+                <p className="mt-1 text-[11px] text-gray-300">
+                  Fast • Secure • Reliable
+                </p>
+              </div>
+            </div>
+
+            {/* ACTIONS */}
+            <div className="grid grid-cols-2 gap-3 border-t border-gray-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={() =>
+                  downloadPdf(receipt)
+                }
+                className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
+                <Download size={16} />
+                PDF
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  shareReceipt(receipt)
+                }
+                className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              >
+                <Share2 size={16} />
+                Share
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
 
-// ============================================
-// RECEIPT ROW
-// ============================================
-
 function ReceiptRow({
   label,
   value,
-  bold = false,
+  success = false,
 }: {
   label: string;
   value: string;
-  bold?: boolean;
+  success?: boolean;
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
-
-      <span className="text-sm text-gray-500">
+      <span className="shrink-0 text-gray-500">
         {label}
       </span>
 
       <span
-        className={`max-w-[60%] break-words text-right text-sm ${
-          bold
-            ? "font-bold text-gray-900"
-            : "font-medium text-gray-800"
+        className={`max-w-[65%] text-right font-semibold ${
+          success
+            ? "text-emerald-600"
+            : "break-words text-gray-900"
         }`}
       >
         {value}
       </span>
-
     </div>
   );
 }

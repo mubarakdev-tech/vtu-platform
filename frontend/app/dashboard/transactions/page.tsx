@@ -1,367 +1,479 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import {
   History,
+  Loader2,
   Search,
+  CheckCircle,
+  XCircle,
+  Clock,
+  X,
+  Smartphone,
+  Wifi,
+  Wallet,
   ArrowDownLeft,
   ArrowUpRight,
-  Filter,
-  ChevronLeft,
-  ChevronRight,
-  RefreshCw,
+  Download,
+  Share2,
 } from "lucide-react";
-import { format } from "date-fns";
-import toast from "react-hot-toast";
+import api from "@/lib/api";
+import { jsPDF } from "jspdf";
+import { getProviderLabel } from "@/lib/providers";
 
-import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import Button from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { getTransactions } from "@/services/transaction";
-import { Transaction } from "@/types/transaction";
-import { cn } from "@/lib/utils";
+interface Transaction {
+  _id: string;
+  type: "CREDIT" | "DEBIT";
+  category: string;
+  amount: number;
+  status: "SUCCESS" | "FAILED" | "PENDING";
+  description: string;
+  createdAt: string;
+  metadata?: any;
+}
 
-const STATUS_OPTIONS = ["ALL", "SUCCESS", "PENDING", "FAILED"] as const;
-const CATEGORY_OPTIONS = [
-  "ALL",
-  "AIRTIME",
-  "DATA",
-  "WALLET_FUNDING",
-  "ELECTRICITY",
-  "CABLE",
-  "REFUND",
-  "TRANSFER",
-] as const;
-
-const statusStyles: Record<string, string> = {
-  SUCCESS: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  PENDING: "bg-amber-50 text-amber-700 border-amber-200",
-  FAILED: "bg-red-50 text-red-700 border-red-200",
-};
-
-const categoryLabels: Record<string, string> = {
-  AIRTIME: "Airtime",
-  DATA: "Data",
-  WALLET_FUNDING: "Wallet Funding",
-  ELECTRICITY: "Electricity",
-  CABLE: "Cable TV",
-  REFUND: "Refund",
-  TRANSFER: "Transfer",
-};
+const filters = ["ALL", "SUCCESS", "FAILED", "PENDING"];
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
-
-  const [status, setStatus] = useState<string>("ALL");
-  const [category, setCategory] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
+  const [selected, setSelected] = useState<Transaction | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchTransactions = async () => {
     try {
       setLoading(true);
+      const { data } = await api.get("/transactions");
 
-      const data = await getTransactions({
-        page,
-        limit: 15,
-        status: status === "ALL" ? undefined : status,
-        category: category === "ALL" ? undefined : category,
-        search: search || undefined,
-      });
+      const list =
+        data?.data ||
+        data?.transactions ||
+        (Array.isArray(data) ? data : []);
 
-      setTransactions(data.transactions || []);
-      setTotalPages(data.totalPages || 1);
-      setTotal(data.total || 0);
-    } catch (err: any) {
-      toast.error(
-        err?.response?.data?.message || "Failed to load transactions"
-      );
+      setTransactions(list);
+    } catch (error) {
+      console.error("Failed to load transactions:", error);
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
-  }, [page, status, category, search]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPage(1);
-    setSearch(searchInput.trim());
   };
 
-  const clearFilters = () => {
-    setStatus("ALL");
-    setCategory("ALL");
-    setSearch("");
-    setSearchInput("");
-    setPage(1);
+  useEffect(() => {
+    fetchTransactions();
+  }, []);
+
+  const filtered = transactions.filter((tx) => {
+    const matchStatus =
+      statusFilter === "ALL" || tx.status === statusFilter;
+
+    const text = `${tx.description} ${tx.category} ${tx.amount}`.toLowerCase();
+    const matchSearch = text.includes(search.toLowerCase());
+
+    return matchStatus && matchSearch;
+  });
+
+  const getIcon = (category: string, type: string) => {
+    const cat = (category || "").toUpperCase();
+
+    if (cat.includes("AIRTIME")) return <Smartphone size={18} />;
+    if (cat.includes("DATA")) return <Wifi size={18} />;
+    if (cat.includes("WALLET") || type === "CREDIT")
+      return <Wallet size={18} />;
+    if (type === "CREDIT") return <ArrowDownLeft size={18} />;
+    return <ArrowUpRight size={18} />;
+  };
+
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case "SUCCESS":
+        return "bg-emerald-50 text-emerald-700";
+      case "FAILED":
+        return "bg-red-50 text-red-600";
+      default:
+        return "bg-amber-50 text-amber-700";
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "SUCCESS":
+        return <CheckCircle size={14} />;
+      case "FAILED":
+        return <XCircle size={14} />;
+      default:
+        return <Clock size={14} />;
+    }
+  };
+
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleString("en-NG", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const getReference = (tx: Transaction) => {
+    return (
+      tx.metadata?.reference ||
+      tx.metadata?.request_id ||
+      tx.metadata?.providerResponse?.request_id ||
+      tx._id
+    );
+  };
+
+  const getProviderName = (tx: Transaction) => {
+    const provider = tx.metadata?.provider;
+    return provider ? getProviderLabel(provider) : "—";
+  };
+
+  const downloadPdf = (tx: Transaction) => {
+    const doc = new jsPDF();
+    const ref = getReference(tx);
+
+    // Header
+    doc.setFillColor(5, 150, 105);
+    doc.rect(0, 0, 210, 35, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.text("AbuPay", 20, 18);
+    doc.setFontSize(11);
+    doc.text("Transaction Receipt", 20, 28);
+
+    // Amount
+    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(12);
+    doc.text("Amount", 20, 50);
+    doc.setFontSize(22);
+    doc.setTextColor(5, 150, 105);
+    doc.text(
+      `${tx.type === "CREDIT" ? "+" : "-"}NGN ${Number(tx.amount || 0).toLocaleString()}`,
+      20,
+      62
+    );
+
+    // Details
+    doc.setTextColor(80, 80, 80);
+    doc.setFontSize(11);
+
+    const rows = [
+      ["Status", tx.status],
+      ["Description", tx.description || tx.category],
+      ["Type", tx.type],
+      ["Category", tx.category],
+      ["Provider", getProviderName(tx)],
+      ["Phone", tx.metadata?.phone || "—"],
+      ["Network", (tx.metadata?.network || "—").toString().toUpperCase()],
+      ["Reference", String(ref)],
+      ["Date", formatDate(tx.createdAt)],
+    ];
+
+    let y = 80;
+    rows.forEach(([label, value]) => {
+      doc.setTextColor(120, 120, 120);
+      doc.text(String(label), 20, y);
+      doc.setTextColor(30, 30, 30);
+      doc.text(String(value), 70, y);
+      y += 10;
+    });
+
+    // Footer
+    doc.setDrawColor(220, 220, 220);
+    doc.line(20, 180, 190, 180);
+    doc.setFontSize(10);
+    doc.setTextColor(120, 120, 120);
+    doc.text("Powered by Abu Niematullah Ventures", 20, 190);
+    doc.text("support@abupay.com", 20, 198);
+
+    doc.save(`AbuPay-Receipt-${ref}.pdf`);
+  };
+
+  const shareReceipt = async (tx: Transaction) => {
+    const ref = getReference(tx);
+    const text = `AbuPay Receipt
+
+Amount: ₦${Number(tx.amount || 0).toLocaleString()}
+Status: ${tx.status}
+Description: ${tx.description || tx.category}
+Type: ${tx.type}
+Category: ${tx.category}
+Provider: ${getProviderName(tx)}
+Phone: ${tx.metadata?.phone || "—"}
+Network: ${(tx.metadata?.network || "—").toString().toUpperCase()}
+Reference: ${ref}
+Date: ${formatDate(tx.createdAt)}
+
+Powered by Abu Niematullah Ventures`;
+
+    // Native share (mobile)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "AbuPay Receipt",
+          text,
+        });
+        return;
+      } catch {
+        // user cancelled or share failed → fallback
+      }
+    }
+
+    // WhatsApp fallback
+    const wa = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(wa, "_blank");
   };
 
   return (
     <DashboardLayout>
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="flex items-center gap-2 text-3xl font-bold text-gray-900">
-              <History className="text-emerald-600" size={28} />
-              Transactions
-            </h1>
-            <p className="mt-1 text-gray-500">
-              View and filter all your transaction history
-            </p>
-          </div>
-
-          <Button
-            variant="outline"
-            onClick={() => fetchData()}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-            Refresh
-          </Button>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Transactions</h1>
+          <p className="mt-1 text-gray-500">
+            History of your airtime, data and wallet activities
+          </p>
         </div>
 
         {/* Filters */}
-        <Card className="border-0 shadow-md">
-          <CardContent className="p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-              {/* Search */}
-              <form onSubmit={handleSearch} className="flex-1">
-                <label className="mb-1.5 block text-sm font-medium text-gray-600">
-                  Search
-                </label>
-                <div className="relative">
-                  <Search
-                    size={16}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <Input
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    placeholder="Search by reference or description..."
-                    className="h-11 pl-10"
-                  />
-                </div>
-              </form>
-
-              {/* Status */}
-              <div className="w-full lg:w-44">
-                <label className="mb-1.5 block text-sm font-medium text-gray-600">
-                  Status
-                </label>
-                <select
-                  value={status}
-                  onChange={(e) => {
-                    setStatus(e.target.value);
-                    setPage(1);
-                  }}
-                  className="h-11 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-emerald-500"
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s === "ALL" ? "All Status" : s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Category */}
-              <div className="w-full lg:w-48">
-                <label className="mb-1.5 block text-sm font-medium text-gray-600">
-                  Category
-                </label>
-                <select
-                  value={category}
-                  onChange={(e) => {
-                    setCategory(e.target.value);
-                    setPage(1);
-                  }}
-                  className="h-11 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-emerald-500"
-                >
-                  {CATEGORY_OPTIONS.map((c) => (
-                    <option key={c} value={c}>
-                      {c === "ALL" ? "All Categories" : categoryLabels[c] || c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={clearFilters}
-                className="h-11"
-              >
-                <Filter size={16} className="mr-2" />
-                Clear
-              </Button>
+        <div className="rounded-2xl border bg-white p-4 shadow-sm md:p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="relative w-full md:max-w-sm">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                size={16}
+              />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search transactions..."
+                className="w-full rounded-xl border py-2.5 pl-10 pr-4 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              />
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Table */}
-        <Card className="border-0 shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-lg">
-              {total} Transaction{total !== 1 ? "s" : ""}
-            </CardTitle>
-          </CardHeader>
+            <div className="flex flex-wrap gap-2">
+              {filters.map((item) => (
+                <button
+                  key={item}
+                  onClick={() => setStatusFilter(item)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    statusFilter === item
+                      ? "bg-emerald-600 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
-          <CardContent className="p-0">
-            {loading ? (
-              <div className="flex h-64 items-center justify-center">
-                <div className="text-center">
-                  <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
-                  <p className="mt-4 text-gray-500">Loading transactions...</p>
-                </div>
-              </div>
-            ) : transactions.length === 0 ? (
-              <div className="flex h-64 flex-col items-center justify-center text-gray-500">
-                <History size={40} className="mb-3 opacity-40" />
-                <p className="font-medium">No transactions found</p>
-                <p className="text-sm">Try adjusting your filters</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50/80">
-                      <TableHead className="pl-6">Type</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Reference</TableHead>
-                      <TableHead className="pr-6">Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-
-                  <TableBody>
-                    {transactions.map((tx) => (
-                      <TableRow
-                        key={tx._id}
-                        className="hover:bg-slate-50/50 transition"
-                      >
-                        <TableCell className="pl-6">
-                          <div className="flex items-center gap-2">
-                            {tx.type === "CREDIT" ? (
-                              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                                <ArrowDownLeft size={16} />
-                              </span>
-                            ) : (
-                              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-500">
-                                <ArrowUpRight size={16} />
-                              </span>
-                            )}
-                            <span className="text-sm font-medium capitalize">
-                              {tx.type.toLowerCase()}
-                            </span>
-                          </div>
-                        </TableCell>
-
-                        <TableCell>
-                          <span className="text-sm font-medium text-gray-700">
-                            {categoryLabels[tx.category] || tx.category}
-                          </span>
-                          {tx.description && (
-                            <p className="mt-0.5 max-w-[180px] truncate text-xs text-gray-400">
-                              {tx.description}
-                            </p>
-                          )}
-                        </TableCell>
-
-                        <TableCell>
-                          <span
-                            className={cn(
-                              "font-semibold",
-                              tx.type === "CREDIT"
-                                ? "text-emerald-600"
-                                : "text-gray-900"
-                            )}
-                          >
-                            {tx.type === "CREDIT" ? "+" : "-"}₦
-                            {tx.amount.toLocaleString()}
-                          </span>
-                        </TableCell>
-
-                        <TableCell>
-                          <span
-                            className={cn(
-                              "inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                              statusStyles[tx.status] || statusStyles.PENDING
-                            )}
-                          >
-                            {tx.status}
-                          </span>
-                        </TableCell>
-
-                        <TableCell>
-                          <code className="rounded bg-slate-100 px-2 py-0.5 text-xs text-gray-600">
-                            {tx.reference}
-                          </code>
-                        </TableCell>
-
-                        <TableCell className="pr-6 text-sm text-gray-500">
-                          {tx.createdAt
-                            ? format(new Date(tx.createdAt), "dd MMM yyyy, HH:mm")
-                            : "—"}\n                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t px-6 py-4">
-                <p className="text-sm text-gray-500">
-                  Page {page} of {totalPages}
-                </p>
-
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    disabled={page <= 1 || loading}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    className="h-9 px-3"
+        {/* List */}
+        <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="animate-spin text-emerald-600" size={28} />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="py-16 text-center">
+              <History className="mx-auto text-gray-300" size={42} />
+              <p className="mt-3 font-medium text-gray-500">
+                No transactions found
+              </p>
+              <p className="mt-1 text-sm text-gray-400">
+                Your airtime, data and funding history will appear here
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {filtered.map((tx) => (
+                <button
+                  key={tx._id}
+                  onClick={() => setSelected(tx)}
+                  className="flex w-full items-center gap-4 px-4 py-4 text-left transition hover:bg-gray-50 md:px-6"
+                >
+                  <div
+                    className={`rounded-xl p-3 ${
+                      tx.type === "CREDIT"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-blue-100 text-blue-700"
+                    }`}
                   >
-                    <ChevronLeft size={16} />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={page >= totalPages || loading}
-                    onClick={() => setPage((p) => p + 1)}
-                    className="h-9 px-3"
-                  >
-                    <ChevronRight size={16} />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    {getIcon(tx.category, tx.type)}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-gray-900">
+                      {tx.description || tx.category}
+                    </p>
+                    <p className="mt-0.5 text-xs text-gray-400">
+                      {formatDate(tx.createdAt)}
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <p
+                      className={`font-semibold ${
+                        tx.type === "CREDIT"
+                          ? "text-emerald-600"
+                          : "text-gray-900"
+                      }`}
+                    >
+                      {tx.type === "CREDIT" ? "+" : "-"}₦
+                      {Number(tx.amount || 0).toLocaleString()}
+                    </p>
+                    <span
+                      className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getStatusStyle(
+                        tx.status
+                      )}`}
+                    >
+                      {getStatusIcon(tx.status)}
+                      {tx.status}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Receipt Modal */}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Transaction Receipt
+              </h3>
+              <button
+                onClick={() => setSelected(null)}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-5 py-6">
+              <div className="text-center">
+                <div
+                  className={`mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full ${
+                    selected.status === "SUCCESS"
+                      ? "bg-emerald-100 text-emerald-600"
+                      : selected.status === "FAILED"
+                      ? "bg-red-100 text-red-600"
+                      : "bg-amber-100 text-amber-600"
+                  }`}
+                >
+                  {getStatusIcon(selected.status)}
+                </div>
+                <p className="text-sm text-gray-500">Amount</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  ₦{Number(selected.amount || 0).toLocaleString()}
+                </p>
+                <span
+                  className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
+                    selected.status
+                  )}`}
+                >
+                  {selected.status}
+                </span>
+              </div>
+
+              <div className="space-y-3 rounded-xl bg-gray-50 p-4 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">Description</span>
+                  <span className="text-right font-medium text-gray-900">
+                    {selected.description || selected.category}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">Type</span>
+                  <span className="font-medium text-gray-900">
+                    {selected.type}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">Category</span>
+                  <span className="font-medium text-gray-900">
+                    {selected.category}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">Provider</span>
+                  <span className="font-medium text-gray-900">
+                    {getProviderName(selected)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">Date</span>
+                  <span className="text-right font-medium text-gray-900">
+                    {formatDate(selected.createdAt)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">Reference</span>
+                  <span className="max-w-[180px] truncate text-right font-medium text-gray-900">
+                    {getReference(selected)}
+                  </span>
+                </div>
+
+                {selected.metadata?.phone && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-500">Phone</span>
+                    <span className="font-medium text-gray-900">
+                      {selected.metadata.phone}
+                    </span>
+                  </div>
+                )}
+
+                {selected.metadata?.network && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-500">Network</span>
+                    <span className="font-medium uppercase text-gray-900">
+                      {selected.metadata.network}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-center text-xs text-gray-400">
+                Powered by Abu Niematullah Ventures
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 border-t px-5 py-4">
+              <button
+                onClick={() => downloadPdf(selected)}
+                className="flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
+                <Download size={16} />
+                PDF
+              </button>
+
+              <button
+                onClick={() => shareReceipt(selected)}
+                className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              >
+                <Share2 size={16} />
+                Share
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

@@ -21,7 +21,7 @@ export default function AuthLayout({
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center">
           <Image
-            src="/image/abupay-logo.png"
+            src="/images/abupay-logo.png"
             alt="AbuPay Logo"
             width={120}
             height={120}

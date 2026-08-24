@@ -10,9 +10,8 @@ export type DataType =
   | "GIFTING"
   | "AWOOF";
 
-export interface IDataPlan extends Document {
+export interface IProviderPlan extends Document {
   provider: Types.ObjectId;
-  providerPlan: Types.ObjectId;
 
   network: string;
   dataType: DataType;
@@ -20,42 +19,23 @@ export interface IDataPlan extends Document {
   name: string;
   validity?: string;
 
-  /**
-   * Price displayed to the customer.
-   */
-  amount: number;
+  providerPlanCode: string;
+
+  providerCost: number;
 
   active: boolean;
 
-  sortOrder: number;
+  metadata?: Record<string, any>;
 }
 
-const DataPlanSchema =
-  new Schema<IDataPlan>(
+const ProviderPlanSchema =
+  new Schema<IProviderPlan>(
     {
-      /**
-       * AbuPay provider channel.
-       *
-       * Example:
-       * AbuPay Direct → VTpass
-       * AbuPay Value → Bigisub
-       * AbuPay Plus → VTU.com.ng
-       */
       provider: {
         type: Schema.Types.ObjectId,
         ref: "Provider",
         required: true,
         index: true,
-      },
-
-      /**
-       * Exact provider product behind this
-       * AbuPay plan.
-       */
-      providerPlan: {
-        type: Schema.Types.ObjectId,
-        ref: "ProviderPlan",
-        required: true,
       },
 
       network: {
@@ -78,6 +58,12 @@ const DataPlanSchema =
         index: true,
       },
 
+      /**
+       * Human-readable provider plan name.
+       *
+       * Example:
+       * MTN 1GB - 30 Days
+       */
       name: {
         type: String,
         required: true,
@@ -90,9 +76,21 @@ const DataPlanSchema =
       },
 
       /**
-       * What the customer pays.
+       * The actual code required by the provider API.
+       *
+       * VTpass example:
+       * mtn-1gb-30days
        */
-      amount: {
+      providerPlanCode: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      /**
+       * What AbuPay actually pays the provider.
+       */
+      providerCost: {
         type: Number,
         required: true,
         min: 0,
@@ -103,13 +101,9 @@ const DataPlanSchema =
         default: true,
       },
 
-      /**
-       * Controls the order in which plans
-       * appear in the customer catalogue.
-       */
-      sortOrder: {
-        type: Number,
-        default: 0,
+      metadata: {
+        type: Schema.Types.Mixed,
+        default: {},
       },
     },
     {
@@ -117,15 +111,19 @@ const DataPlanSchema =
     }
   );
 
-DataPlanSchema.index({
-  provider: 1,
-  network: 1,
-  dataType: 1,
-  active: 1,
-  sortOrder: 1,
-});
+ProviderPlanSchema.index(
+  {
+    provider: 1,
+    network: 1,
+    dataType: 1,
+    providerPlanCode: 1,
+  },
+  {
+    unique: true,
+  }
+);
 
-export default mongoose.model<IDataPlan>(
-  "DataPlan",
-  DataPlanSchema
+export default mongoose.model<IProviderPlan>(
+  "ProviderPlan",
+  ProviderPlanSchema
 );
