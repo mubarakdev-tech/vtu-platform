@@ -43,6 +43,9 @@ app.use(
 // Admin application:
 // http://localhost:3001
 //
+// Production frontend:
+// FRONTEND_URL from environment variables
+//
 // Backend:
 // http://localhost:5000
 //
@@ -51,7 +54,8 @@ app.use(
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
-];
+  process.env.FRONTEND_URL,
+].filter(Boolean) as string[];
 
 app.use(
   cors({
@@ -64,14 +68,8 @@ app.use(
         return;
       }
 
-      // Allow customer frontend.
-      if (origin === "http://localhost:3000") {
-        callback(null, true);
-        return;
-      }
-
-      // Allow admin frontend.
-      if (origin === "http://localhost:3001") {
+      // Allow registered frontend origins.
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
         return;
       }
