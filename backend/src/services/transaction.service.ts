@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "crypto";
 import { ClientSession } from "mongoose";
 import Transaction from "../models/transaction.model";
 
@@ -24,11 +24,9 @@ interface CreateTransactionParams {
 
   metadata?: Record<string, any>;
 
-  // Financial tracking
   balanceBefore?: number;
   balanceAfter?: number;
 
-  // Payment gateway tracking
   gateway?: "PAYSTACK" | "OTHER";
   gatewayReference?: string;
 
@@ -60,7 +58,7 @@ export const createTransaction = async ({
     throw new Error("Transaction amount must be greater than zero");
   }
 
-  const reference = `${category}-${uuidv4()
+  const reference = `${category}-${randomUUID()
     .replace(/-/g, "")
     .toUpperCase()}`;
 
@@ -88,20 +86,17 @@ export const createTransaction = async ({
         status,
         reference,
         description,
-
         balanceBefore,
         balanceAfter,
-
         gateway,
         gatewayReference,
-
         metadata,
       },
     ],
     session ? { session } : {}
   );
 
-  console.log("✅ Transaction saved successfully");
+  console.log("Transaction saved successfully");
 
   return transaction;
 };
