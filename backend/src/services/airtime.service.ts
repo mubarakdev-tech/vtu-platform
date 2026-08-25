@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import AppError from "../utils/apperror";
+import AppError from "../utils/AppError";
 import { getProvider } from "../providers";
 import { debitWallet, creditWallet } from "./wallet.service";
 import { createTransaction } from "./transaction.service";

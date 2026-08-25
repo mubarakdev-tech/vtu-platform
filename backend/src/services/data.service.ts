@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import AppError from "../utils/AppError";
 import { getProvider } from "../providers";
 import { debitWallet, creditWallet } from "./wallet.service";
+import { createTransaction } from "./transaction.service";
 
 type BuyDataInput = {
   userId: string;
@@ -20,6 +21,10 @@ export const buyData = async ({
   amount,
   provider = "vtpass",
 }: BuyDataInput) => {
+  // ==========================================
+  // VALIDATION
+  // ==========================================
+
   if (!userId) {
     throw new AppError("Unauthorized", 401);
   }
@@ -43,16 +48,34 @@ export const buyData = async ({
     throw new AppError("Invalid amount", 400);
   }
 
+  // ==========================================
+  // NORMALIZE PROVIDER
+  // ==========================================
+
   const providerName = String(provider || "vtpass")
     .toLowerCase()
     .trim();
 
+  /*
+   * IMPORTANT:
+   *
+   * This allows either of your configured providers
+   * to handle the purchase.
+   *
+   * Provider name is kept internally only.
+   * It is NOT displayed to customers.
+   */
+
   const selectedProvider = getProvider(providerName);
 
-  if (
-    !selectedProvider ||
-    typeof selectedProvider.buyData !== "function"
-  ) {
+  if (!selectedProvider) {
+    throw new AppError(
+      `Provider "${providerName}" is not available`,
+      400
+    );
+  }
+
+  if (typeof selectedProvider.buyData !== "function") {
     throw new AppError(
       "Selected provider does not support data purchase",
       400
@@ -61,177 +84,317 @@ export const buyData = async ({
 
   const session = await mongoose.startSession();
 
-  session.startTransaction();
-
-  let debited = false;
-
-  let balanceBefore = 0;
-  let balanceAfter = 0;
-
   try {
-    /*
-     * DEBIT WALLET
-     *
-     * debitWallet returns:
-     * - balanceBefore
-     * - balanceAfter
-     */
-    const walletDebit = await debitWallet({
-      userId,
-      amount: value,
-      session,
-    });
+    let response: any = null;
 
-    debited = true;
+    await session.withTransaction(async () => {
+      // ==========================================
+      // 1. DEBIT WALLET
+      // ==========================================
 
-    balanceBefore = walletDebit.balanceBefore;
-    balanceAfter = walletDebit.balanceAfter;
-
-    console.log("========== DATA WALLET DEBIT ==========");
-    console.log("Balance Before:", balanceBefore);
-    console.log("Amount Paid   :", value);
-    console.log("Balance After :", balanceAfter);
-    console.log("=======================================");
-
-    /*
-     * CALL PROVIDER
-     */
-    const providerResult = await selectedProvider.buyData({
-      network: network.toLowerCase(),
-      phone: phone.trim(),
-      plan,
-      amount: value,
-    });
-
-    console.log(
-      "DATA PROVIDER RESULT:",
-      JSON.stringify(providerResult, null, 2)
-    );
-
-    /*
-     * PROVIDER FAILED
-     *
-     * Refund the customer's wallet.
-     */
-    if (!providerResult?.success) {
-      const refund = await creditWallet({
+      const walletResult = await debitWallet({
         userId,
         amount: value,
         session,
       });
 
-      console.log("========== DATA REFUND ==========");
-      console.log("Refund Amount :", value);
-      console.log("Balance After :", refund.balanceAfter);
-      console.log("=================================");
+      console.log("\n======================================");
+      console.log("DATA PURCHASE STARTED");
+      console.log("User ID:", userId);
+      console.log("Network:", network);
+      console.log("Phone:", phone);
+      console.log("Plan:", plan);
+      console.log("Amount:", value);
 
-      await session.commitTransaction();
-      session.endSession();
+      // Provider is logged internally only.
+      console.log("Provider:", providerName);
 
-      return {
-        success: false,
-        message:
-          providerResult?.message ||
-          "Data purchase failed",
+      console.log(
+        "Balance Before:",
+        walletResult.balanceBefore
+      );
 
-        provider: providerName,
+      console.log(
+        "Balance After:",
+        walletResult.balanceAfter
+      );
 
-        providerResponse:
-          providerResult?.data || providerResult,
+      console.log("======================================\n");
 
-        walletBalance: refund.balanceAfter,
+      // ==========================================
+      // 2. CALL SELECTED PROVIDER
+      // ==========================================
 
-        balanceBefore,
-        amountPaid: value,
-        balanceAfter: refund.balanceAfter,
-      };
-    }
+      const providerResult =
+        await selectedProvider.buyData({
+          network: network.toLowerCase(),
+          phone: phone.trim(),
+          plan,
+          amount: value,
+        });
 
-    /*
-     * PURCHASE SUCCESSFUL
-     */
-    await session.commitTransaction();
-    session.endSession();
+      console.log(
+        "========== DATA PROVIDER RESPONSE =========="
+      );
 
-    console.log("========== DATA PURCHASE SUCCESS ==========");
-    console.log("Balance Before:", balanceBefore);
-    console.log("Amount Paid   :", value);
-    console.log("Balance After :", balanceAfter);
-    console.log("===========================================");
+      console.log(
+        JSON.stringify(providerResult, null, 2)
+      );
 
-    return {
-      success: true,
+      console.log(
+        "============================================"
+      );
 
-      message:
-        providerResult?.message ||
-        "Data purchase successful",
+      // ==========================================
+      // 3. PROVIDER FAILED
+      // ==========================================
 
-      provider: providerName,
+      if (!providerResult?.success) {
+        console.log(
+          "Data provider failed. Refunding wallet..."
+        );
 
-      providerResponse:
-        providerResult?.data || providerResult,
+        // ----------------------------------------
+        // REFUND WALLET
+        // ----------------------------------------
 
-      /*
-       * IMPORTANT:
-       * These values are used by the frontend
-       * receipt.
-       */
-      walletBalance: balanceAfter,
-
-      balanceBefore,
-      amountPaid: value,
-      balanceAfter,
-    };
-  } catch (error: any) {
-    console.error(
-      "BUY DATA SERVICE ERROR:",
-      error?.message || error
-    );
-
-    /*
-     * Unexpected error.
-     *
-     * If wallet was debited, refund it.
-     */
-    try {
-      if (debited) {
-        const refund = await creditWallet({
+        const refundResult = await creditWallet({
           userId,
           amount: value,
           session,
         });
 
-        console.log("========== DATA ERROR REFUND ==========");
-        console.log("Refund Amount :", value);
-        console.log("Balance After :", refund.balanceAfter);
-        console.log("=======================================");
+        console.log(
+          "Wallet refunded successfully."
+        );
+
+        console.log(
+          "Refund Balance:",
+          refundResult.balanceAfter
+        );
+
+        // ----------------------------------------
+        // RECORD FAILED TRANSACTION
+        // ----------------------------------------
+
+        await createTransaction({
+          userId,
+
+          type: "CREDIT",
+
+          category: "DATA",
+
+          amount: value,
+
+          status: "FAILED",
+
+          description:
+            `${network.toUpperCase()} Data Refund`,
+
+          metadata: {
+            network,
+            phone,
+            plan,
+
+            /*
+             * INTERNAL ONLY.
+             *
+             * Useful for admin/accounting.
+             * Do not display this on customer UI.
+             */
+            provider: providerName,
+
+            providerResponse: providerResult,
+
+            balanceBefore:
+              walletResult.balanceAfter,
+
+            balanceAfter:
+              refundResult.balanceAfter,
+          },
+
+          session,
+        });
+
+        // ----------------------------------------
+        // RETURN FAILURE
+        // ----------------------------------------
+
+        response = {
+          success: false,
+
+          message:
+            providerResult?.message ||
+            "Data purchase failed",
+
+          balanceBefore:
+            walletResult.balanceBefore,
+
+          amountPaid: value,
+
+          balanceAfter:
+            refundResult.balanceAfter,
+
+          walletBalance:
+            refundResult.balanceAfter,
+
+          providerResponse:
+            providerResult?.data ||
+            providerResult,
+        };
+
+        return;
       }
 
-      await session.commitTransaction();
-    } catch (rollbackError: any) {
-      console.error(
-        "Data buy rollback error:",
-        rollbackError?.message || rollbackError
+      // ==========================================
+      // 4. PROVIDER SUCCESS
+      // ==========================================
+
+      console.log(
+        "Data provider purchase successful."
       );
 
-      try {
-        if (session.inTransaction()) {
-          await session.abortTransaction();
-        }
-      } catch {
-        // Ignore transaction cleanup error
-      }
+      // ==========================================
+      // 5. SAVE SUCCESSFUL TRANSACTION
+      // ==========================================
+
+      const transaction = await createTransaction({
+        userId,
+
+        type: "DEBIT",
+
+        category: "DATA",
+
+        amount: value,
+
+        status: "SUCCESS",
+
+        description:
+          `${network.toUpperCase()} Data Purchase`,
+
+        metadata: {
+          network,
+          phone,
+          plan,
+
+          /*
+           * INTERNAL ONLY.
+           *
+           * This lets you know which provider
+           * processed the transaction.
+           *
+           * It should NOT be displayed to customers.
+           */
+          provider: providerName,
+
+          providerResponse: providerResult,
+
+          balanceBefore:
+            walletResult.balanceBefore,
+
+          balanceAfter:
+            walletResult.balanceAfter,
+        },
+
+        session,
+      });
+
+      console.log(
+        "Data transaction saved:",
+        transaction?._id
+      );
+
+      // ==========================================
+      // 6. RETURN SUCCESS
+      // ==========================================
+
+      response = {
+        success: true,
+
+        message:
+          providerResult?.message ||
+          "Data purchase successful",
+
+        // Wallet information
+        balanceBefore:
+          walletResult.balanceBefore,
+
+        amountPaid: value,
+
+        balanceAfter:
+          walletResult.balanceAfter,
+
+        walletBalance:
+          walletResult.balanceAfter,
+
+        // Transaction
+        transaction,
+
+        /*
+         * Provider response is returned for
+         * internal/frontend processing.
+         *
+         * We DO NOT return providerName separately.
+         */
+        providerResponse:
+          providerResult?.data ||
+          providerResult,
+      };
+    });
+
+    // ==========================================
+    // SAFETY CHECK
+    // ==========================================
+
+    if (!response) {
+      throw new AppError(
+        "Data purchase failed",
+        500
+      );
     }
 
-    session.endSession();
+    return response;
+  } catch (error: any) {
+    console.error(
+      "======================================"
+    );
+
+    console.error(
+      "BUY DATA SERVICE ERROR:"
+    );
+
+    console.error(
+      error?.message || error
+    );
+
+    console.error(
+      "======================================"
+    );
+
+    /*
+     * withTransaction() automatically handles
+     * transaction rollback when an error is thrown.
+     *
+     * Therefore we DO NOT manually credit the
+     * wallet here.
+     *
+     * This prevents double refunds.
+     */
 
     if (error instanceof AppError) {
       throw error;
     }
 
     throw new AppError(
-      error?.message || "Data purchase failed",
+      error?.message ||
+        "Data purchase failed",
       500
+    );
+  } finally {
+    await session.endSession();
+
+    console.log(
+      "========== DATA PURCHASE ENDED ==========\n"
     );
   }
 };

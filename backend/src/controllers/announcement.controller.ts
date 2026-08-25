@@ -131,41 +131,40 @@ export const getAnnouncements = async (
 //
 // =====================================================
 
-export const getAllAnnouncements =
-  async (
-    req: Request,
-    res: Response
-  ) => {
-    try {
-      const announcements =
-        await Announcement.find()
-          .populate(
-            "createdBy",
-            "name email role"
-          )
-          .sort({
-            createdAt: -1,
-          });
+export const getAllAnnouncements = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const announcements =
+      await Announcement.find()
+        .populate(
+          "createdBy",
+          "name email role"
+        )
+        .sort({
+          createdAt: -1,
+        });
 
-      return res.status(200).json({
-        success: true,
-        message:
-          "All announcements fetched successfully",
-        announcements,
-      });
-    } catch (error) {
-      console.error(
-        "GET ALL ANNOUNCEMENTS ERROR:",
-        error
-      );
+    return res.status(200).json({
+      success: true,
+      message:
+        "All announcements fetched successfully",
+      announcements,
+    });
+  } catch (error) {
+    console.error(
+      "GET ALL ANNOUNCEMENTS ERROR:",
+      error
+    );
 
-      return res.status(500).json({
-        success: false,
-        message:
-          "Unable to fetch announcements.",
-      });
-    }
-  };
+    return res.status(500).json({
+      success: false,
+      message:
+        "Unable to fetch announcements.",
+    });
+  }
+};
 
 // =====================================================
 // CREATE ANNOUNCEMENT
@@ -175,210 +174,198 @@ export const getAllAnnouncements =
 //
 // Admin only.
 //
-// Body:
-// {
-//   "title": "Welcome to AbuPay",
-//   "message": "Welcome to AbuPay!",
-//   "type": "INFO",
-//   "isActive": true,
-//   "startDate": null,
-//   "endDate": null
-// }
-//
 // =====================================================
 
-export const createAnnouncement =
-  async (
-    req: Request,
-    res: Response
-  ) => {
-    try {
-      const {
-        title,
-        message,
-        type,
-        isActive,
-        startDate,
-        endDate,
-      } = req.body;
+export const createAnnouncement = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const {
+      title,
+      message,
+      type,
+      isActive,
+      startDate,
+      endDate,
+    } = req.body;
 
-      // -----------------------------------------------
-      // VALIDATE TITLE
-      // -----------------------------------------------
+    // -----------------------------------------------
+    // VALIDATE TITLE
+    // -----------------------------------------------
+
+    if (
+      !title ||
+      typeof title !== "string" ||
+      !title.trim()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Announcement title is required.",
+      });
+    }
+
+    // -----------------------------------------------
+    // VALIDATE MESSAGE
+    // -----------------------------------------------
+
+    if (
+      !message ||
+      typeof message !== "string" ||
+      !message.trim()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Announcement message is required.",
+      });
+    }
+
+    // -----------------------------------------------
+    // VALIDATE TYPE
+    // -----------------------------------------------
+
+    const allowedTypes = [
+      "INFO",
+      "SUCCESS",
+      "WARNING",
+      "URGENT",
+    ];
+
+    const announcementType =
+      type || "INFO";
+
+    if (
+      !allowedTypes.includes(
+        announcementType
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid announcement type.",
+      });
+    }
+
+    // -----------------------------------------------
+    // VALIDATE DATES
+    // -----------------------------------------------
+
+    let parsedStartDate:
+      | Date
+      | null = null;
+
+    let parsedEndDate:
+      | Date
+      | null = null;
+
+    if (startDate) {
+      parsedStartDate =
+        new Date(startDate);
 
       if (
-        !title ||
-        typeof title !== "string" ||
-        !title.trim()
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Announcement title is required.",
-        });
-      }
-
-      // -----------------------------------------------
-      // VALIDATE MESSAGE
-      // -----------------------------------------------
-
-      if (
-        !message ||
-        typeof message !== "string" ||
-        !message.trim()
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Announcement message is required.",
-        });
-      }
-
-      // -----------------------------------------------
-      // VALIDATE TYPE
-      // -----------------------------------------------
-
-      const allowedTypes = [
-        "INFO",
-        "SUCCESS",
-        "WARNING",
-        "URGENT",
-      ];
-
-      const announcementType =
-        type || "INFO";
-
-      if (
-        !allowedTypes.includes(
-          announcementType
+        Number.isNaN(
+          parsedStartDate.getTime()
         )
       ) {
         return res.status(400).json({
           success: false,
           message:
-            "Invalid announcement type.",
+            "Invalid start date.",
         });
       }
+    }
 
-      // -----------------------------------------------
-      // VALIDATE DATES
-      // -----------------------------------------------
-
-      let parsedStartDate:
-        | Date
-        | null = null;
-
-      let parsedEndDate:
-        | Date
-        | null = null;
-
-      if (startDate) {
-        parsedStartDate =
-          new Date(startDate);
-
-        if (
-          Number.isNaN(
-            parsedStartDate.getTime()
-          )
-        ) {
-          return res.status(400).json({
-            success: false,
-            message:
-              "Invalid start date.",
-          });
-        }
-      }
-
-      if (endDate) {
-        parsedEndDate =
-          new Date(endDate);
-
-        if (
-          Number.isNaN(
-            parsedEndDate.getTime()
-          )
-        ) {
-          return res.status(400).json({
-            success: false,
-            message:
-              "Invalid end date.",
-          });
-        }
-      }
+    if (endDate) {
+      parsedEndDate =
+        new Date(endDate);
 
       if (
-        parsedStartDate &&
-        parsedEndDate &&
-        parsedEndDate < parsedStartDate
+        Number.isNaN(
+          parsedEndDate.getTime()
+        )
       ) {
         return res.status(400).json({
           success: false,
           message:
-            "End date cannot be earlier than start date.",
+            "Invalid end date.",
         });
       }
+    }
 
-      // -----------------------------------------------
-      // GET ADMIN USER
-      // -----------------------------------------------
-
-      const userId =
-        (req as any).user?._id ||
-        (req as any).user?.id ||
-        null;
-
-      // -----------------------------------------------
-      // CREATE ANNOUNCEMENT
-      // -----------------------------------------------
-
-      const announcement =
-        await Announcement.create({
-          title: title.trim(),
-
-          message: message.trim(),
-
-          type: announcementType,
-
-          isActive:
-            typeof isActive ===
-            "boolean"
-              ? isActive
-              : true,
-
-          startDate:
-            parsedStartDate,
-
-          endDate:
-            parsedEndDate,
-
-          createdBy:
-            userId &&
-            mongoose.Types.ObjectId.isValid(
-              userId
-            )
-              ? userId
-              : null,
-        });
-
-      return res.status(201).json({
-        success: true,
-        message:
-          "Announcement created successfully",
-        announcement,
-      });
-    } catch (error) {
-      console.error(
-        "CREATE ANNOUNCEMENT ERROR:",
-        error
-      );
-
-      return res.status(500).json({
+    if (
+      parsedStartDate &&
+      parsedEndDate &&
+      parsedEndDate < parsedStartDate
+    ) {
+      return res.status(400).json({
         success: false,
         message:
-          "Unable to create announcement.",
+          "End date cannot be earlier than start date.",
       });
     }
-  };
+
+    // -----------------------------------------------
+    // GET ADMIN USER
+    // -----------------------------------------------
+
+    const userId =
+      (req as any).user?._id ||
+      (req as any).user?.id ||
+      null;
+
+    // -----------------------------------------------
+    // CREATE ANNOUNCEMENT
+    // -----------------------------------------------
+
+    const announcement =
+      await Announcement.create({
+        title: title.trim(),
+
+        message: message.trim(),
+
+        type: announcementType,
+
+        isActive:
+          typeof isActive === "boolean"
+            ? isActive
+            : true,
+
+        startDate:
+          parsedStartDate,
+
+        endDate:
+          parsedEndDate,
+
+        createdBy:
+          userId &&
+          mongoose.Types.ObjectId.isValid(
+            userId
+          )
+            ? userId
+            : null,
+      });
+
+    return res.status(201).json({
+      success: true,
+      message:
+        "Announcement created successfully",
+      announcement,
+    });
+  } catch (error) {
+    console.error(
+      "CREATE ANNOUNCEMENT ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Unable to create announcement.",
+    });
+  }
+};
 
 // =====================================================
 // GET SINGLE ANNOUNCEMENT
@@ -390,60 +377,60 @@ export const createAnnouncement =
 //
 // =====================================================
 
-export const getAnnouncementById =
-  async (
-    req: Request,
-    res: Response
-  ) => {
-    try {
-      const { id } = req.params;
+export const getAnnouncementById = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    // FIX: Express can type params as string | string[]
+    const id = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
 
-      if (
-        !mongoose.Types.ObjectId.isValid(
-          id
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid announcement ID.",
-        });
-      }
-
-      const announcement =
-        await Announcement.findById(id)
-          .populate(
-            "createdBy",
-            "name email role"
-          );
-
-      if (!announcement) {
-        return res.status(404).json({
-          success: false,
-          message:
-            "Announcement not found.",
-        });
-      }
-
-      return res.status(200).json({
-        success: true,
-        message:
-          "Announcement fetched successfully",
-        announcement,
-      });
-    } catch (error) {
-      console.error(
-        "GET ANNOUNCEMENT ERROR:",
-        error
-      );
-
-      return res.status(500).json({
+    if (
+      !id ||
+      !mongoose.Types.ObjectId.isValid(id)
+    ) {
+      return res.status(400).json({
         success: false,
         message:
-          "Unable to fetch announcement.",
+          "Invalid announcement ID.",
       });
     }
-  };
+
+    const announcement =
+      await Announcement.findById(id).populate(
+        "createdBy",
+        "name email role"
+      );
+
+    if (!announcement) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Announcement not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Announcement fetched successfully",
+      announcement,
+    });
+  } catch (error) {
+    console.error(
+      "GET ANNOUNCEMENT ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Unable to fetch announcement.",
+    });
+  }
+};
 
 // =====================================================
 // UPDATE ANNOUNCEMENT
@@ -455,255 +442,234 @@ export const getAnnouncementById =
 //
 // =====================================================
 
-export const updateAnnouncement =
-  async (
-    req: Request,
-    res: Response
-  ) => {
-    try {
-      const { id } = req.params;
+export const updateAnnouncement = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    // FIX: Express can type params as string | string[]
+    const id = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
 
+    if (
+      !id ||
+      !mongoose.Types.ObjectId.isValid(id)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid announcement ID.",
+      });
+    }
+
+    const announcement =
+      await Announcement.findById(id);
+
+    if (!announcement) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Announcement not found.",
+      });
+    }
+
+    const {
+      title,
+      message,
+      type,
+      isActive,
+      startDate,
+      endDate,
+    } = req.body;
+
+    // -----------------------------------------------
+    // TITLE
+    // -----------------------------------------------
+
+    if (title !== undefined) {
       if (
-        !mongoose.Types.ObjectId.isValid(
-          id
-        )
+        typeof title !== "string" ||
+        !title.trim()
       ) {
         return res.status(400).json({
           success: false,
           message:
-            "Invalid announcement ID.",
+            "Invalid announcement title.",
         });
       }
 
-      const announcement =
-        await Announcement.findById(id);
+      announcement.title =
+        title.trim();
+    }
 
-      if (!announcement) {
-        return res.status(404).json({
+    // -----------------------------------------------
+    // MESSAGE
+    // -----------------------------------------------
+
+    if (message !== undefined) {
+      if (
+        typeof message !== "string" ||
+        !message.trim()
+      ) {
+        return res.status(400).json({
           success: false,
           message:
-            "Announcement not found.",
+            "Invalid announcement message.",
         });
       }
 
-      const {
-        title,
-        message,
-        type,
-        isActive,
-        startDate,
-        endDate,
-      } = req.body;
+      announcement.message =
+        message.trim();
+    }
 
-      // -----------------------------------------------
-      // TITLE
-      // -----------------------------------------------
+    // -----------------------------------------------
+    // TYPE
+    // -----------------------------------------------
+
+    if (type !== undefined) {
+      const allowedTypes = [
+        "INFO",
+        "SUCCESS",
+        "WARNING",
+        "URGENT",
+      ];
 
       if (
-        title !== undefined
+        !allowedTypes.includes(type)
       ) {
-        if (
-          typeof title !== "string" ||
-          !title.trim()
-        ) {
-          return res.status(400).json({
-            success: false,
-            message:
-              "Invalid announcement title.",
-          });
-        }
-
-        announcement.title =
-          title.trim();
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid announcement type.",
+        });
       }
 
-      // -----------------------------------------------
-      // MESSAGE
-      // -----------------------------------------------
+      announcement.type = type;
+    }
 
+    // -----------------------------------------------
+    // ACTIVE STATUS
+    // -----------------------------------------------
+
+    if (isActive !== undefined) {
       if (
-        message !== undefined
+        typeof isActive !== "boolean"
       ) {
-        if (
-          typeof message !==
-            "string" ||
-          !message.trim()
-        ) {
-          return res.status(400).json({
-            success: false,
-            message:
-              "Invalid announcement message.",
-          });
-        }
-
-        announcement.message =
-          message.trim();
+        return res.status(400).json({
+          success: false,
+          message:
+            "isActive must be true or false.",
+        });
       }
 
-      // -----------------------------------------------
-      // TYPE
-      // -----------------------------------------------
+      announcement.isActive =
+        isActive;
+    }
 
+    // -----------------------------------------------
+    // START DATE
+    // -----------------------------------------------
+
+    if (startDate !== undefined) {
       if (
-        type !== undefined
+        startDate === null ||
+        startDate === ""
       ) {
-        const allowedTypes = [
-          "INFO",
-          "SUCCESS",
-          "WARNING",
-          "URGENT",
-        ];
+        announcement.startDate = null;
+      } else {
+        const date =
+          new Date(startDate);
 
         if (
-          !allowedTypes.includes(
-            type
+          Number.isNaN(
+            date.getTime()
           )
         ) {
           return res.status(400).json({
             success: false,
             message:
-              "Invalid announcement type.",
+              "Invalid start date.",
           });
         }
 
-        announcement.type =
-          type;
+        announcement.startDate =
+          date;
       }
+    }
 
-      // -----------------------------------------------
-      // ACTIVE STATUS
-      // -----------------------------------------------
+    // -----------------------------------------------
+    // END DATE
+    // -----------------------------------------------
 
+    if (endDate !== undefined) {
       if (
-        isActive !== undefined
+        endDate === null ||
+        endDate === ""
       ) {
+        announcement.endDate = null;
+      } else {
+        const date =
+          new Date(endDate);
+
         if (
-          typeof isActive !==
-          "boolean"
+          Number.isNaN(
+            date.getTime()
+          )
         ) {
           return res.status(400).json({
             success: false,
             message:
-              "isActive must be true or false.",
+              "Invalid end date.",
           });
         }
 
-        announcement.isActive =
-          isActive;
+        announcement.endDate = date;
       }
+    }
 
-      // -----------------------------------------------
-      // START DATE
-      // -----------------------------------------------
+    // -----------------------------------------------
+    // DATE VALIDATION
+    // -----------------------------------------------
 
-      if (
-        startDate !== undefined
-      ) {
-        if (
-          startDate ===
-          null ||
-          startDate === ""
-        ) {
-          announcement.startDate =
-            null;
-        } else {
-          const date =
-            new Date(startDate);
-
-          if (
-            Number.isNaN(
-              date.getTime()
-            )
-          ) {
-            return res.status(400).json({
-              success: false,
-              message:
-                "Invalid start date.",
-            });
-          }
-
-          announcement.startDate =
-            date;
-        }
-      }
-
-      // -----------------------------------------------
-      // END DATE
-      // -----------------------------------------------
-
-      if (
-        endDate !== undefined
-      ) {
-        if (
-          endDate ===
-          null ||
-          endDate === ""
-        ) {
-          announcement.endDate =
-            null;
-        } else {
-          const date =
-            new Date(endDate);
-
-          if (
-            Number.isNaN(
-              date.getTime()
-            )
-          ) {
-            return res.status(400).json({
-              success: false,
-              message:
-                "Invalid end date.",
-            });
-          }
-
-          announcement.endDate =
-            date;
-        }
-      }
-
-      // -----------------------------------------------
-      // DATE VALIDATION
-      // -----------------------------------------------
-
-      if (
-        announcement.startDate &&
-        announcement.endDate &&
-        announcement.endDate <
-          announcement.startDate
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "End date cannot be earlier than start date.",
-        });
-      }
-
-      // -----------------------------------------------
-      // SAVE
-      // -----------------------------------------------
-
-      await announcement.save();
-
-      return res.status(200).json({
-        success: true,
-        message:
-          "Announcement updated successfully",
-        announcement,
-      });
-    } catch (error) {
-      console.error(
-        "UPDATE ANNOUNCEMENT ERROR:",
-        error
-      );
-
-      return res.status(500).json({
+    if (
+      announcement.startDate &&
+      announcement.endDate &&
+      announcement.endDate <
+        announcement.startDate
+    ) {
+      return res.status(400).json({
         success: false,
         message:
-          "Unable to update announcement.",
+          "End date cannot be earlier than start date.",
       });
     }
-  };
+
+    // -----------------------------------------------
+    // SAVE
+    // -----------------------------------------------
+
+    await announcement.save();
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Announcement updated successfully",
+      announcement,
+    });
+  } catch (error) {
+    console.error(
+      "UPDATE ANNOUNCEMENT ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Unable to update announcement.",
+    });
+  }
+};
 
 // =====================================================
 // DELETE ANNOUNCEMENT
@@ -715,57 +681,58 @@ export const updateAnnouncement =
 //
 // =====================================================
 
-export const deleteAnnouncement =
-  async (
-    req: Request,
-    res: Response
-  ) => {
-    try {
-      const { id } = req.params;
+export const deleteAnnouncement = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    // FIX: Express can type params as string | string[]
+    const id = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
 
-      if (
-        !mongoose.Types.ObjectId.isValid(
-          id
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid announcement ID.",
-        });
-      }
-
-      const announcement =
-        await Announcement.findByIdAndDelete(
-          id
-        );
-
-      if (!announcement) {
-        return res.status(404).json({
-          success: false,
-          message:
-            "Announcement not found.",
-        });
-      }
-
-      return res.status(200).json({
-        success: true,
-        message:
-          "Announcement deleted successfully",
-      });
-    } catch (error) {
-      console.error(
-        "DELETE ANNOUNCEMENT ERROR:",
-        error
-      );
-
-      return res.status(500).json({
+    if (
+      !id ||
+      !mongoose.Types.ObjectId.isValid(id)
+    ) {
+      return res.status(400).json({
         success: false,
         message:
-          "Unable to delete announcement.",
+          "Invalid announcement ID.",
       });
     }
-  };
+
+    const announcement =
+      await Announcement.findByIdAndDelete(
+        id
+      );
+
+    if (!announcement) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Announcement not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Announcement deleted successfully",
+    });
+  } catch (error) {
+    console.error(
+      "DELETE ANNOUNCEMENT ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Unable to delete announcement.",
+    });
+  }
+};
 
 // =====================================================
 // TOGGLE ANNOUNCEMENT STATUS
@@ -788,15 +755,16 @@ export const toggleAnnouncementStatus =
     res: Response
   ) => {
     try {
-      const { id } = req.params;
+      // FIX: Express can type params as string | string[]
+      const id = Array.isArray(req.params.id)
+        ? req.params.id[0]
+        : req.params.id;
 
-      const { isActive } =
-        req.body;
+      const { isActive } = req.body;
 
       if (
-        !mongoose.Types.ObjectId.isValid(
-          id
-        )
+        !id ||
+        !mongoose.Types.ObjectId.isValid(id)
       ) {
         return res.status(400).json({
           success: false,
@@ -806,8 +774,7 @@ export const toggleAnnouncementStatus =
       }
 
       if (
-        typeof isActive !==
-        "boolean"
+        typeof isActive !== "boolean"
       ) {
         return res.status(400).json({
           success: false,

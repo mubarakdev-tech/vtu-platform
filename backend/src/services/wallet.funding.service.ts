@@ -4,7 +4,7 @@ import {
   createTransaction,
   findTransactionByGatewayReference,
 } from "./transaction.service";
-import AppError from "../utils/apperror";
+import AppError from "../utils/AppError";
 
 interface ProcessWalletFundingParams {
   userId: string;

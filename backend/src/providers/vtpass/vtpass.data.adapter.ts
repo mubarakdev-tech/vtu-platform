@@ -56,15 +56,17 @@ export const vtpassDataAdapter: DataProvider = {
         response.message,
 
       requestId:
-        response.request_id,
+        "request_id" in response
+          ? response.request_id
+          : undefined,
 
       data:
         response.data,
 
       /*
-       * For now we don't invent the provider
-       * cost. The ProviderPlan catalogue will
-       * supply the actual cost.
+       * We do not invent the provider cost.
+       * ProviderPlan catalogue will supply
+       * the actual cost.
        */
       providerCost:
         undefined,

@@ -1,11 +1,17 @@
-import { Request, Response, NextFunction } from "express";
+import {
+  Response,
+  NextFunction,
+} from "express";
+
 import { getWallet } from "../services/wallet.service";
 import paystack from "../config/paystack";
-import AppError from "../utils/apperror";
+import AppError from "../utils/AppError";
 import { processWalletFunding } from "../services/wallet.funding.service";
 import {
   calculatePaystackCustomerFee,
 } from "../services/paystack-fee.service";
+
+import { AuthRequest } from "../middleware/auth.middleware";
 
 /**
  * ==========================================
@@ -13,7 +19,7 @@ import {
  * ==========================================
  */
 export const getMyWallet = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
@@ -47,7 +53,7 @@ export const getMyWallet = async (
  * the customer pays.
  */
 export const calculateFundingFee = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
@@ -63,8 +69,7 @@ export const calculateFundingFee = async (
       );
     }
 
-    const rawAmount =
-      req.query.amount;
+    const rawAmount = req.query.amount;
 
     const fundingAmount =
       Number(rawAmount);
@@ -191,7 +196,7 @@ export const calculateFundingFee = async (
  * ==========================================
  */
 export const initializeFunding = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
@@ -502,7 +507,7 @@ export const initializeFunding = async (
  * ==========================================
  */
 export const verifyFunding = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {

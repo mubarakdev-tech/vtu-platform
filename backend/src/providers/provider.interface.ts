@@ -31,7 +31,6 @@ export type ProviderTransactionStatus =
   | "UNCERTAIN";
 
 export interface ProviderResponse {
-
   success: boolean;
 
   message: string;
@@ -54,7 +53,8 @@ export interface ProviderResponse {
 }
 
 export interface VTUProvider {
-
+  // IMPORTANT:
+  // Every registered provider must have a key.
   key: string;
 
   displayName?: string;

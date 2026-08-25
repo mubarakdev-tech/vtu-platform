@@ -1,9 +1,10 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import { purchaseAirtime } from "../services/airtime.service";
-import AppError from "../utils/apperror";
+import AppError from "../utils/AppError";
+import { AuthRequest } from "../middleware/auth.middleware";
 
 export const buyAirtime = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
@@ -16,7 +17,12 @@ export const buyAirtime = async (
     }
 
     if (!network || !phone || !amount) {
-      return next(new AppError("Network, phone and amount are required", 400));
+      return next(
+        new AppError(
+          "Network, phone and amount are required",
+          400
+        )
+      );
     }
 
     const result = await purchaseAirtime({

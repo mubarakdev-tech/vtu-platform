@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import FinancialLedger from "../models/financialLedger.model";
-import AppError from "../utils/apperror";
+import AppError from "../utils/AppError";
 
 /**
  * ==========================================

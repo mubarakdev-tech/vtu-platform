@@ -1,5 +1,5 @@
 import Provider from "../models/provider.model";
-import AppError from "../utils/apperror";
+import AppError from "../utils/AppError";
 
 import {
   AirtimePurchaseRequest,

@@ -1,38 +1,30 @@
-import axios from "axios";
-
-const API =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5000/api";
+import api from "@/lib/api";
 
 /**
  * Get current wallet
+ *
+ * Authentication is handled automatically
+ * through the HttpOnly authentication cookie.
  */
-export const getWallet = async (token: string) => {
-  const res = await axios.get(`${API}/wallet`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+export const getWallet = async () => {
+  const res = await api.get("/wallet");
 
   return res.data;
 };
 
 /**
  * Initialize Paystack wallet funding
+ *
+ * Authentication is handled automatically
+ * through the HttpOnly authentication cookie.
  */
 export const initializeFunding = async (
-  token: string,
   amount: number
 ) => {
-  const res = await axios.post(
-    `${API}/wallet/fund/initialize`,
+  const res = await api.post(
+    "/wallet/fund/initialize",
     {
       amount,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
     }
   );
 
@@ -41,20 +33,17 @@ export const initializeFunding = async (
 
 /**
  * Verify Paystack wallet funding
+ *
+ * Authentication is handled automatically
+ * through the HttpOnly authentication cookie.
  */
 export const verifyFunding = async (
-  token: string,
   reference: string
 ) => {
-  const res = await axios.post(
-    `${API}/wallet/fund/verify`,
+  const res = await api.post(
+    "/wallet/fund/verify",
     {
       reference,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
     }
   );
 
