@@ -30,11 +30,30 @@ const createToken = (id: string) => {
 // ==========================================
 // COOKIE OPTIONS
 // ==========================================
+//
+// Local development:
+//   secure: false
+//   sameSite: "lax"
+//
+// Production / Render:
+//   secure: true
+//   sameSite: "none"
+//
+// This allows the authentication cookie to work
+// between the frontend and deployed Render backend.
+// ==========================================
 
 const cookieOptions = {
   httpOnly: true,
-  secure: false,
-  sameSite: "lax" as const,
+
+  secure:
+    process.env.NODE_ENV === "production",
+
+  sameSite:
+    process.env.NODE_ENV === "production"
+      ? ("none" as const)
+      : ("lax" as const),
+
   maxAge:
     7 * 24 * 60 * 60 * 1000,
 };
@@ -454,6 +473,10 @@ export const adminLogin = async (
       });
     }
 
+    // ========================================
+    // ADMIN ROLE CHECK
+    // ========================================
+
     if (
       user.role !== "admin" &&
       user.role !== "super_admin"
@@ -464,6 +487,10 @@ export const adminLogin = async (
           "Access denied. Admin privileges required.",
       });
     }
+
+    // ========================================
+    // PASSWORD CHECK
+    // ========================================
 
     const isMatch =
       await bcrypt.compare(
@@ -479,15 +506,27 @@ export const adminLogin = async (
       });
     }
 
+    // ========================================
+    // CREATE ADMIN TOKEN
+    // ========================================
+
     const token = createToken(
       user._id.toString()
     );
+
+    // ========================================
+    // SET AUTHENTICATION COOKIE
+    // ========================================
 
     res.cookie(
       "token",
       token,
       cookieOptions
     );
+
+    // ========================================
+    // RESPONSE
+    // ========================================
 
     return res.status(200).json({
       success: true,
@@ -583,12 +622,19 @@ export const logout = (
 ) => {
   res.clearCookie("token", {
     httpOnly: true,
-    secure: false,
-    sameSite: "lax",
+
+    secure:
+      process.env.NODE_ENV === "production",
+
+    sameSite:
+      process.env.NODE_ENV === "production"
+        ? ("none" as const)
+        : ("lax" as const),
   });
 
   return res.status(200).json({
     success: true,
+
     message:
       "Logged out successfully",
   });
@@ -713,6 +759,7 @@ export const forgotPassword =
 
       return res.status(200).json({
         success: true,
+
         message:
           "Password reset email sent successfully",
       });
@@ -810,6 +857,7 @@ export const resetPassword =
 
       return res.status(200).json({
         success: true,
+
         message:
           "Password reset successfully",
       });
@@ -923,6 +971,7 @@ export const changePassword =
 
       return res.status(200).json({
         success: true,
+
         message:
           "Password changed successfully.",
       });
