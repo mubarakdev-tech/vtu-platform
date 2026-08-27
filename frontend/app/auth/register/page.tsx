@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import MainLayout from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 
@@ -12,21 +12,14 @@ const API_URL =
 
 export default function RegisterPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const referralFromUrl =
-    searchParams.get("ref") || "";
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [password, setPassword] =
-    useState("");
+  const [password, setPassword] = useState("");
 
   const [referralCode, setReferralCode] =
-    useState(
-      referralFromUrl.toUpperCase()
-    );
+    useState("");
 
   const [loading, setLoading] =
     useState(false);
@@ -36,6 +29,23 @@ export default function RegisterPage() {
 
   const [success, setSuccess] =
     useState("");
+
+  // Read referral code from the registration URL.
+  // Example: /auth/register?ref=ABC123
+  useEffect(() => {
+    const params = new URLSearchParams(
+      window.location.search
+    );
+
+    const referralFromUrl =
+      params.get("ref") || "";
+
+    if (referralFromUrl) {
+      setReferralCode(
+        referralFromUrl.toUpperCase()
+      );
+    }
+  }, []);
 
   const handleRegister = async (
     e: React.FormEvent
@@ -69,41 +79,39 @@ export default function RegisterPage() {
     try {
       setLoading(true);
 
-      const response =
-        await fetch(
-          `${API_URL}/auth/register`,
-          {
-            method: "POST",
+      const response = await fetch(
+        `${API_URL}/auth/register`,
+        {
+          method: "POST",
 
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
 
-            credentials: "include",
+          credentials: "include",
 
-            body: JSON.stringify({
-              name: name.trim(),
+          body: JSON.stringify({
+            name: name.trim(),
 
-              email:
-                email
-                  .trim()
-                  .toLowerCase(),
+            email:
+              email
+                .trim()
+                .toLowerCase(),
 
-              phone:
-                phone.trim(),
+            phone: phone.trim(),
 
-              password,
+            password,
 
-              referralCode:
-                referralCode.trim()
-                  ? referralCode
-                      .trim()
-                      .toUpperCase()
-                  : undefined,
-            }),
-          }
-        );
+            referralCode:
+              referralCode.trim()
+                ? referralCode
+                    .trim()
+                    .toUpperCase()
+                : undefined,
+          }),
+        }
+      );
 
       const result =
         await response.json();
@@ -123,10 +131,7 @@ export default function RegisterPage() {
       );
 
       setTimeout(() => {
-        router.push(
-          "/dashboard"
-        );
-
+        router.push("/dashboard");
         router.refresh();
       }, 800);
     } catch (err: any) {
@@ -200,9 +205,7 @@ export default function RegisterPage() {
                 placeholder="Enter your full name"
                 value={name}
                 onChange={(e) =>
-                  setName(
-                    e.target.value
-                  )
+                  setName(e.target.value)
                 }
                 disabled={loading}
                 className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
@@ -221,9 +224,7 @@ export default function RegisterPage() {
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) =>
-                  setEmail(
-                    e.target.value
-                  )
+                  setEmail(e.target.value)
                 }
                 disabled={loading}
                 className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
@@ -242,9 +243,7 @@ export default function RegisterPage() {
                 placeholder="Enter your phone number"
                 value={phone}
                 onChange={(e) =>
-                  setPhone(
-                    e.target.value
-                  )
+                  setPhone(e.target.value)
                 }
                 disabled={loading}
                 className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
@@ -263,9 +262,7 @@ export default function RegisterPage() {
                 placeholder="Create a password"
                 value={password}
                 onChange={(e) =>
-                  setPassword(
-                    e.target.value
-                  )
+                  setPassword(e.target.value)
                 }
                 disabled={loading}
                 className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
@@ -277,6 +274,7 @@ export default function RegisterPage() {
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
                 Referral Code
+
                 <span className="ml-1 font-normal text-gray-400">
                   (Optional)
                 </span>

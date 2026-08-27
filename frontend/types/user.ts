@@ -7,5 +7,6 @@ export interface User {
   isVerified?: boolean;
   profilePicture?: string | null;
   walletBalance?: number;
+  referralCount?: number;
   createdAt?: string;
 }

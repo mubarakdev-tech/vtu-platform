@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import MainLayout from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 
@@ -12,68 +12,49 @@ const API_URL =
 
 export default function RegisterPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-
-  // Get referral code from:
-  // /auth/register?ref=ABU12345678
-  const referralFromUrl =
-    searchParams.get("ref") || "";
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [referralCode, setReferralCode] =
-    useState(referralFromUrl.toUpperCase());
 
-  const [loading, setLoading] =
-    useState(false);
+  const [referralCode, setReferralCode] = useState("");
 
-  const [error, setError] =
-    useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const [success, setSuccess] =
-    useState("");
+  // Read referral code from URL without useSearchParams().
+  // This avoids the Next.js production build Suspense error.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const referralFromUrl = params.get("ref");
+
+    if (referralFromUrl) {
+      setReferralCode(referralFromUrl.toUpperCase());
+    }
+  }, []);
 
   const handleRegister = async (
-    e: React.FormEvent
+    e: React.FormEvent<HTMLFormElement>
   ) => {
     e.preventDefault();
 
     setError("");
     setSuccess("");
 
-    // ==========================================
-    // BASIC VALIDATION
-    // ==========================================
-
-    if (
-      !name ||
-      !email ||
-      !phone ||
-      !password
-    ) {
-      setError(
-        "Please fill in all required fields."
-      );
-
+    if (!name || !email || !phone || !password) {
+      setError("Please fill in all required fields.");
       return;
     }
 
     if (password.length < 6) {
-      setError(
-        "Password must be at least 6 characters."
-      );
-
+      setError("Password must be at least 6 characters.");
       return;
     }
 
     try {
       setLoading(true);
-
-      // ==========================================
-      // REGISTER USER
-      // ==========================================
 
       const response = await fetch(
         `${API_URL}/auth/register`,
@@ -81,8 +62,7 @@ export default function RegisterPage() {
           method: "POST",
 
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
 
           credentials: "include",
@@ -90,60 +70,43 @@ export default function RegisterPage() {
           body: JSON.stringify({
             name: name.trim(),
 
-            email:
-              email.trim().toLowerCase(),
+            email: email.trim().toLowerCase(),
 
             phone: phone.trim(),
 
             password,
 
-            // Send referral code if provided
-            referralCode:
-              referralCode.trim()
-                ? referralCode
-                    .trim()
-                    .toUpperCase()
-                : undefined,
+            referralCode: referralCode.trim()
+              ? referralCode.trim().toUpperCase()
+              : undefined,
           }),
         }
       );
 
-      const result =
-        await response.json();
+      const result = await response.json();
 
       if (!response.ok || !result.success) {
         throw new Error(
-          result.message ||
-            "Registration failed."
+          result.message || "Registration failed."
         );
       }
-
-      // ==========================================
-      // SUCCESS
-      // ==========================================
 
       setSuccess(
         "Account created successfully. Welcome to AbuPay!"
       );
 
-      // ==========================================
-      // GO TO DASHBOARD
-      // ==========================================
-
       setTimeout(() => {
         router.push("/dashboard");
         router.refresh();
       }, 800);
-    } catch (err: any) {
-      console.error(
-        "Registration error:",
-        err
-      );
+    } catch (err: unknown) {
+      console.error("Registration error:", err);
 
-      setError(
-        err.message ||
-          "Unable to create account."
-      );
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Unable to create account.");
+      }
     } finally {
       setLoading(false);
     }
@@ -154,12 +117,9 @@ export default function RegisterPage() {
       <div className="flex items-center justify-center px-4 py-20">
         <div className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-lg">
 
-          {/* ==========================================
-              TITLE
-          ========================================== */}
+          {/* HEADER */}
 
           <div className="mb-6 text-center">
-
             <h1 className="text-2xl font-bold text-gray-900">
               Create your AbuPay account
             </h1>
@@ -168,12 +128,9 @@ export default function RegisterPage() {
               Join AbuPay and enjoy fast and
               convenient digital payments.
             </p>
-
           </div>
 
-          {/* ==========================================
-              ERROR
-          ========================================== */}
+          {/* ERROR */}
 
           {error && (
             <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -181,9 +138,7 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* ==========================================
-              SUCCESS
-          ========================================== */}
+          {/* SUCCESS */}
 
           {success && (
             <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
@@ -191,9 +146,7 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* ==========================================
-              FORM
-          ========================================== */}
+          {/* FORM */}
 
           <form
             onSubmit={handleRegister}
@@ -214,8 +167,8 @@ export default function RegisterPage() {
                 onChange={(e) =>
                   setName(e.target.value)
                 }
-                className="w-full rounded-lg border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 disabled={loading}
+                className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
 
@@ -233,8 +186,8 @@ export default function RegisterPage() {
                 onChange={(e) =>
                   setEmail(e.target.value)
                 }
-                className="w-full rounded-lg border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 disabled={loading}
+                className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
 
@@ -252,8 +205,8 @@ export default function RegisterPage() {
                 onChange={(e) =>
                   setPhone(e.target.value)
                 }
-                className="w-full rounded-lg border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 disabled={loading}
+                className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
 
@@ -271,16 +224,17 @@ export default function RegisterPage() {
                 onChange={(e) =>
                   setPassword(e.target.value)
                 }
-                className="w-full rounded-lg border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 disabled={loading}
+                className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
 
-            {/* REFERRAL */}
+            {/* REFERRAL CODE */}
 
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
                 Referral Code
+
                 <span className="ml-1 font-normal text-gray-400">
                   (Optional)
                 </span>
@@ -295,22 +249,22 @@ export default function RegisterPage() {
                     e.target.value.toUpperCase()
                   )
                 }
-                className="w-full rounded-lg border px-3 py-2.5 uppercase outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 disabled={loading}
+                className="w-full rounded-lg border px-3 py-2.5 uppercase outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
 
               <p className="mt-1 text-xs text-gray-500">
-                If someone referred you, enter
-                their referral code here.
+                If someone referred you,
+                enter their referral code.
               </p>
             </div>
 
-            {/* SUBMIT */}
+            {/* BUTTON */}
 
             <Button
               type="submit"
-              className="w-full"
               disabled={loading}
+              className="w-full"
             >
               {loading
                 ? "Creating Account..."
@@ -319,12 +273,9 @@ export default function RegisterPage() {
 
           </form>
 
-          {/* ==========================================
-              LOGIN
-          ========================================== */}
+          {/* LOGIN */}
 
           <p className="mt-6 text-center text-sm text-gray-600">
-
             Already have an account?{" "}
 
             <Link
@@ -333,7 +284,6 @@ export default function RegisterPage() {
             >
               Login
             </Link>
-
           </p>
 
         </div>

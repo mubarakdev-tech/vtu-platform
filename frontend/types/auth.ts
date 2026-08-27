@@ -2,10 +2,11 @@ export interface User {
   id: string;
   name: string;
   email: string;
-}
-
-export interface LoginResponse {
-  message: string;
-  token: string;
-  user: User;
+  phone?: string | null;
+  role?: string;
+  isVerified?: boolean;
+  profilePicture?: string | null;
+  walletBalance?: number;
+  referralCount?: number;
+  createdAt?: string;
 }
