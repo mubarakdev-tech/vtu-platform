@@ -1,18 +1,42 @@
-import Hero from "@/components/sections/Hero";
-import Features from "@/components/sections/Features";
-import Services from "@/components/sections/Services";
-import CallToAction from "@/components/sections/CallToAction";
+import Navbar from "@/components/landing/Navbar";
+import Hero from "@/components/landing/Hero";
+import TrustedBrands from "@/components/landing/TrustedBrands";
+import Services from "@/components/landing/Services";
+import WhyChooseUs from "@/components/landing/WhyChooseUs";
+import Stats from "@/components/landing/Stats";
+import Testimonials from "@/components/landing/Testimonials";
+import FAQ from "@/components/landing/FAQ";
+import Footer from "@/components/landing/Footer";
 
-export default function HomePage() {
+export default function Home() {
   return (
-    <main>
+    <>
+      {/* Navigation */}
+      <Navbar />
+
+      {/* Hero Section */}
       <Hero />
 
+      {/* Trusted Brands */}
+      <TrustedBrands />
+
+      {/* Services */}
       <Services />
 
-      <Features />
+      {/* Why Choose AbuPay */}
+      <WhyChooseUs />
 
-      <CallToAction />
-    </main>
+      {/* Statistics */}
+      <Stats />
+
+      {/* Customer Reviews */}
+      <Testimonials />
+
+      {/* Frequently Asked Questions */}
+      <FAQ />
+
+      {/* Footer */}
+      <Footer />
+    </>
   );
 }
