@@ -668,6 +668,10 @@ export const forgotPassword =
         });
       }
 
+      // ========================================
+      // GENERATE RESET TOKEN
+      // ========================================
+
       const resetToken =
         crypto
           .randomBytes(32)
@@ -684,8 +688,28 @@ export const forgotPassword =
 
       await user.save();
 
+      // ========================================
+      // PASSWORD RESET LINK
+      // ========================================
+      //
+      // Production:
+      // FRONTEND_URL=https://abupay.vercel.app
+      //
+      // Local development:
+      // If FRONTEND_URL is not set, it falls
+      // back to localhost:3000.
+      // ========================================
+
+      const frontendUrl =
+        process.env.FRONTEND_URL ||
+        "http://localhost:3000";
+
       const resetLink =
-        `http://localhost:3000/reset-password/${resetToken}`;
+        `${frontendUrl}/reset-password/${resetToken}`;
+
+      // ========================================
+      // SEND RESET EMAIL
+      // ========================================
 
       await transporter.sendMail({
         from:
