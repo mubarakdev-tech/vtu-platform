@@ -43,14 +43,11 @@ export default function LoginPage() {
       );
 
       router.push("/dashboard");
-
     } catch (error: any) {
-
       toast.error(
         error?.response?.data?.message ||
-        "Login failed. Please try again."
+          "Login failed. Please try again."
       );
-
     }
   };
 
@@ -95,7 +92,7 @@ export default function LoginPage() {
             </label>
 
             <Link
-              href="#"
+              href="/forgot-password"
               className="text-blue-600 hover:underline"
             >
               Forgot password?
