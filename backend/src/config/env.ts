@@ -31,13 +31,13 @@ console.log(
 );
 
 console.log(
-  "EMAIL_USER loaded:",
-  !!process.env.EMAIL_USER
+  "RESEND_API_KEY loaded:",
+  !!process.env.RESEND_API_KEY
 );
 
 console.log(
-  "EMAIL_PASSWORD loaded:",
-  !!process.env.EMAIL_PASSWORD
+  "EMAIL_FROM loaded:",
+  !!process.env.EMAIL_FROM
 );
 
 console.log(
@@ -128,12 +128,12 @@ const env = cleanEnv(process.env, {
   CLOUDINARY_API_SECRET: str(),
 
   // ==========================================
-  // EMAIL
+  // EMAIL - RESEND
   // ==========================================
 
-  EMAIL_USER: str(),
+  RESEND_API_KEY: str(),
 
-  EMAIL_PASSWORD: str(),
+  EMAIL_FROM: str(),
 });
 
 export default env;

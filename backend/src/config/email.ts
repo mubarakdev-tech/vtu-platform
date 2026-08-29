@@ -1,29 +1,28 @@
-import nodemailer from "nodemailer";
-
+import { Resend } from "resend";
 import env from "./env";
 
-console.log("EMAIL USER:", env.EMAIL_USER);
+// ==========================================
+// RESEND EMAIL CONFIGURATION
+// ==========================================
 
-console.log("PASSWORD LENGTH:", env.EMAIL_PASSWORD.length);
-
+console.log("=================================");
+console.log("RESEND EMAIL CONFIGURATION");
 console.log(
-  "PASSWORD FIRST/LAST:",
-  env.EMAIL_PASSWORD[0],
-  env.EMAIL_PASSWORD[env.EMAIL_PASSWORD.length - 1]
+  "RESEND API KEY LOADED:",
+  !!env.RESEND_API_KEY
+);
+console.log("=================================");
+
+// ==========================================
+// CREATE RESEND CLIENT
+// ==========================================
+
+const resend = new Resend(
+  env.RESEND_API_KEY
 );
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
+// ==========================================
+// DEFAULT EXPORT
+// ==========================================
 
-  // Force IPv4.
-  family: 4,
-
-  auth: {
-    user: env.EMAIL_USER,
-    pass: env.EMAIL_PASSWORD,
-  },
-} as any);
-
-export default transporter;
+export default resend;

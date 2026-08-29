@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import transporter from "../config/email";
+import env from "../config/env";
 import { AuthRequest } from "../middleware/auth.middleware";
 
 // ==========================================
@@ -653,12 +654,30 @@ export const forgotPassword =
       const { email } =
         req.body;
 
+      // ========================================
+      // VALIDATE EMAIL
+      // ========================================
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Email address is required.",
+        });
+      }
+
+      const cleanEmail =
+        String(email)
+          .toLowerCase()
+          .trim();
+
+      // ========================================
+      // FIND USER
+      // ========================================
+
       const user =
         await User.findOne({
-          email:
-            email
-              ?.toLowerCase()
-              .trim(),
+          email: cleanEmail,
         });
 
       if (!user) {
@@ -708,19 +727,19 @@ export const forgotPassword =
         `${frontendUrl}/reset-password/${resetToken}`;
 
       // ========================================
-      // SEND RESET EMAIL
+      // SEND RESET EMAIL USING RESEND
       // ========================================
 
-      await transporter.sendMail({
-        from:
-          process.env.EMAIL_USER,
+      const emailResult =
+        await transporter.emails.send({
+          from: env.EMAIL_FROM,
 
-        to: user.email,
+          to: user.email,
 
-        subject:
-          "AbuPay Password Reset",
+          subject:
+            "AbuPay Password Reset",
 
-        html: `
+          html: `
           <div style="
             font-family: Arial, sans-serif;
             max-width: 600px;
@@ -779,7 +798,29 @@ export const forgotPassword =
 
           </div>
         `,
-      });
+        });
+
+      // ========================================
+      // CHECK RESEND RESPONSE
+      // ========================================
+
+      if (emailResult.error) {
+        console.error(
+          "Resend email error:",
+          emailResult.error
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            "Unable to send password reset email.",
+        });
+      }
+
+      console.log(
+        "Password reset email sent:",
+        emailResult.data?.id
+      );
 
       return res.status(200).json({
         success: true,
