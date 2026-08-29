@@ -16,7 +16,7 @@ export default function Navbar() {
           className="flex items-center gap-3"
         >
           <Image
-            src="/image/abupay-logo.png"
+            src="/images/abupay-logo.png"
             alt="AbuPay Logo"
             width={140}
             height={50}
@@ -34,19 +34,31 @@ export default function Navbar() {
 
         <nav className="hidden items-center gap-10 lg:flex">
 
-          <a href="#services" className="font-medium hover:text-emerald-600">
+          <a
+            href="#services"
+            className="font-medium hover:text-emerald-600"
+          >
             Services
           </a>
 
-          <a href="#why" className="font-medium hover:text-emerald-600">
+          <a
+            href="#why"
+            className="font-medium hover:text-emerald-600"
+          >
             Why Us
           </a>
 
-          <a href="#reviews" className="font-medium hover:text-emerald-600">
+          <a
+            href="#reviews"
+            className="font-medium hover:text-emerald-600"
+          >
             Reviews
           </a>
 
-          <a href="#faq" className="font-medium hover:text-emerald-600">
+          <a
+            href="#faq"
+            className="font-medium hover:text-emerald-600"
+          >
             FAQ
           </a>
 
