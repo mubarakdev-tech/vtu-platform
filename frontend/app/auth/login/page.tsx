@@ -12,13 +12,12 @@ import {
   Mail,
   ShieldCheck,
 } from "lucide-react";
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5000/api";
+import { useAuthContext } from "@/context/AuthContext";
 
 export default function LoginPage() {
   const router = useRouter();
+
+  const { login } = useAuthContext();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,6 +33,10 @@ export default function LoginPage() {
 
   const [success, setSuccess] =
     useState("");
+
+  // ==========================================
+  // LOGIN
+  // ==========================================
 
   const handleLogin = async (
     e: FormEvent<HTMLFormElement>
@@ -56,54 +59,26 @@ export default function LoginPage() {
     try {
       setLoading(true);
 
-      const response = await fetch(
-        `${API_URL}/auth/login`,
-        {
-          method: "POST",
+      // ======================================
+      // LOGIN THROUGH AUTH CONTEXT
+      // ======================================
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          // IMPORTANT:
-          // The backend stores the JWT
-          // inside the "token" cookie.
-          credentials: "include",
-
-          body: JSON.stringify({
-            email: cleanEmail,
-            password,
-          }),
-        }
-      );
-
-      const result =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !result.success
-      ) {
-        throw new Error(
-          result.message ||
-            "Invalid email or password."
+      const loggedInUser =
+        await login(
+          cleanEmail,
+          password
         );
-      }
 
       setSuccess(
         `Welcome back, ${
-          result.user?.name || "to AbuPay"
+          loggedInUser?.name || "to AbuPay"
         }!`
       );
 
-      /*
-       * The backend has already set the
-       * authentication cookie.
-       *
-       * Give the browser a moment to store
-       * it before moving to the dashboard.
-       */
+      // ======================================
+      // GO TO DASHBOARD
+      // ======================================
+
       setTimeout(() => {
         router.push("/dashboard");
         router.refresh();
@@ -115,7 +90,8 @@ export default function LoginPage() {
       );
 
       setError(
-        err?.message ||
+        err?.response?.data?.message ||
+          err?.message ||
           "Unable to login. Please try again."
       );
     } finally {
@@ -296,6 +272,7 @@ export default function LoginPage() {
 
               <p className="text-sm text-slate-500">
                 Don't have an AbuPay account?{" "}
+
                 <Link
                   href="/auth/register"
                   className="font-semibold text-emerald-600 transition hover:text-emerald-700 hover:underline"

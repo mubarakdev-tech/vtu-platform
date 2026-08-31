@@ -15,28 +15,45 @@ import { User } from "@/types/user";
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<User>;
+  login: (
+    email: string,
+    password: string
+  ) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext =
+  createContext<AuthContextType | undefined>(
+    undefined
+  );
 
 export function AuthProvider({
   children,
 }: {
   children: ReactNode;
 }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] =
+    useState<User | null>(null);
 
-  // Prevent multiple initial session checks
-  const hasCheckedSession = useRef(false);
-  const isCheckingSession = useRef(false);
+  const [loading, setLoading] =
+    useState(true);
 
-  // Load current user
-  const refreshUser = async () => {
-    // Prevent duplicate requests
+  // ==========================================
+  // PREVENT MULTIPLE INITIAL SESSION CHECKS
+  // ==========================================
+
+  const hasCheckedSession =
+    useRef(false);
+
+  const isCheckingSession =
+    useRef(false);
+
+  // ==========================================
+  // LOAD CURRENT USER
+  // ==========================================
+
+  const refreshUser = async (): Promise<void> => {
     if (isCheckingSession.current) {
       return;
     }
@@ -44,11 +61,20 @@ export function AuthProvider({
     isCheckingSession.current = true;
 
     try {
-      const { data } = await api.get("/auth/me");
+      const { data } =
+        await api.get("/auth/me");
 
-      setUser(data.user || data);
-    } catch (error) {
-      console.log("Session check failed:", error);
+      setUser(
+        data?.user || data || null
+      );
+    } catch (error: any) {
+      console.log(
+        "Session check failed:",
+        error?.response?.data ||
+          error?.message ||
+          error
+      );
+
       setUser(null);
     } finally {
       isCheckingSession.current = false;
@@ -56,7 +82,10 @@ export function AuthProvider({
     }
   };
 
-  // Check session once when AuthProvider starts
+  // ==========================================
+  // CHECK SESSION ON STARTUP
+  // ==========================================
+
   useEffect(() => {
     if (hasCheckedSession.current) {
       return;
@@ -67,29 +96,73 @@ export function AuthProvider({
     refreshUser();
   }, []);
 
-  // Login
+  // ==========================================
+  // LOGIN
+  // ==========================================
+
   const login = async (
     email: string,
     password: string
   ): Promise<User> => {
-    const { data } = await api.post("/auth/login", {
-      email,
-      password,
-    });
+    const { data } =
+      await api.post("/auth/login", {
+        email,
+        password,
+      });
 
-    setUser(data.user);
+    // ========================================
+    // SAVE JWT TOKEN
+    // ========================================
 
-    return data.user;
+    if (
+      typeof window !== "undefined" &&
+      data?.token
+    ) {
+      localStorage.setItem(
+        "token",
+        data.token
+      );
+    }
+
+    // ========================================
+    // SAVE USER
+    // ========================================
+
+    const loggedInUser =
+      data?.user || null;
+
+    setUser(loggedInUser);
+
+    return loggedInUser;
   };
 
-  // Logout
-  const logout = async () => {
+  // ==========================================
+  // LOGOUT
+  // ==========================================
+
+  const logout = async (): Promise<void> => {
     try {
       await api.post("/auth/logout");
+    } catch (error) {
+      console.error(
+        "Logout request failed:",
+        error
+      );
     } finally {
+      // Remove locally stored JWT
+      if (
+        typeof window !== "undefined"
+      ) {
+        localStorage.removeItem("token");
+      }
+
       setUser(null);
     }
   };
+
+  // ==========================================
+  // PROVIDER
+  // ==========================================
 
   return (
     <AuthContext.Provider
@@ -106,8 +179,13 @@ export function AuthProvider({
   );
 }
 
+// ==========================================
+// AUTH HOOK
+// ==========================================
+
 export function useAuthContext() {
-  const context = useContext(AuthContext);
+  const context =
+    useContext(AuthContext);
 
   if (!context) {
     throw new Error(
