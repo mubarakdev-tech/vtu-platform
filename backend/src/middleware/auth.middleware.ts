@@ -17,17 +17,54 @@ export const protect = async (
 ) => {
   try {
     // ==========================================
-    // GET TOKEN FROM HTTP-ONLY COOKIE
+    // GET AUTHENTICATION TOKEN
+    // ==========================================
+    //
+    // Priority:
+    // 1. Authorization header
+    // 2. HTTP-only cookie
+    //
+    // The Authorization header is now the primary
+    // authentication method for production.
+    //
+    // The cookie remains as a fallback so existing
+    // authentication is not unnecessarily broken.
     // ==========================================
 
-    const token = req.cookies?.token;
+    let token: string | undefined;
+
+    const authHeader = req.headers.authorization;
+
+    if (
+      authHeader &&
+      authHeader.startsWith("Bearer ")
+    ) {
+      token = authHeader
+        .substring(7)
+        .trim();
+    }
+
+    // ==========================================
+    // COOKIE FALLBACK
+    // ==========================================
 
     if (!token) {
-      console.log("AUTH ERROR: No token cookie found");
+      token = req.cookies?.token;
+    }
+
+    // ==========================================
+    // NO TOKEN
+    // ==========================================
+
+    if (!token) {
+      console.log(
+        "AUTH ERROR: No token found in Authorization header or cookie"
+      );
 
       return res.status(401).json({
         success: false,
-        message: "Not authorized. Please login.",
+        message:
+          "Not authorized. Please login.",
       });
     }
 
@@ -36,16 +73,19 @@ export const protect = async (
     // ==========================================
 
     if (!process.env.JWT_SECRET) {
-      console.error("AUTH ERROR: JWT_SECRET is missing");
+      console.error(
+        "AUTH ERROR: JWT_SECRET is missing"
+      );
 
       return res.status(500).json({
         success: false,
-        message: "Authentication configuration error",
+        message:
+          "Authentication configuration error",
       });
     }
 
     // ==========================================
-    // VERIFY TOKEN
+    // VERIFY JWT
     // ==========================================
 
     const decoded = jwt.verify(
@@ -54,11 +94,14 @@ export const protect = async (
     ) as JwtPayload;
 
     if (!decoded?.id) {
-      console.log("AUTH ERROR: Invalid token payload");
+      console.log(
+        "AUTH ERROR: Invalid token payload"
+      );
 
       return res.status(401).json({
         success: false,
-        message: "Invalid authentication token.",
+        message:
+          "Invalid authentication token.",
       });
     }
 
