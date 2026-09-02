@@ -13,6 +13,19 @@ export default function Header({
   const { user } = useAuth();
   const { balance, loading } = useWallet();
 
+  const displayName =
+    (user as any)?.firstName ||
+    (user as any)?.name ||
+    "User";
+
+  const initial = String(displayName).charAt(0).toUpperCase() || "U";
+
+  const avatarUrl =
+    (user as any)?.avatar ||
+    (user as any)?.profilePicture ||
+    (user as any)?.image ||
+    null;
+
   return (
     <header className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur-md">
       <div className="flex h-14 items-center justify-between gap-2 px-3 sm:h-16 sm:gap-4 sm:px-4 md:h-20 md:px-6">
@@ -48,9 +61,9 @@ export default function Header({
             className="flex items-center gap-2 rounded-xl bg-emerald-50 px-2.5 py-1.5 transition hover:bg-emerald-100 sm:px-3 sm:py-2 md:px-4"
           >
             <div className="rounded-lg bg-emerald-600 p-1.5 text-white">
-              <Wallet size={14} className="sm:h-4 sm:w-4" />
+              <Wallet size={14} />
             </div>
-            <div className="hidden xs:block sm:block">
+            <div className="hidden sm:block">
               <p className="text-[10px] text-gray-500 sm:text-[11px]">
                 Wallet
               </p>
@@ -67,7 +80,7 @@ export default function Header({
             href="/dashboard/notifications"
             className="relative rounded-full p-2 transition hover:bg-gray-100 sm:p-2.5"
           >
-            <Bell size={18} className="text-gray-600 sm:h-5 sm:w-5" />
+            <Bell size={18} className="text-gray-600" />
             <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
           </Link>
 
@@ -76,21 +89,21 @@ export default function Header({
             href="/dashboard/profile"
             className="flex items-center gap-2 rounded-xl border border-gray-200 px-1.5 py-1 transition hover:bg-gray-50 sm:px-2.5 sm:py-1.5 md:px-3"
           >
-            {user?.avatar ? (
+            {avatarUrl ? (
               <img
-                src={user.avatar}
+                src={avatarUrl}
                 alt="Profile"
                 className="h-8 w-8 rounded-full object-cover sm:h-9 sm:w-9"
               />
             ) : (
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 sm:h-9 sm:w-9 sm:text-sm">
-                {user?.firstName?.[0] || user?.name?.[0] || "U"}
+                {initial}
               </div>
             )}
 
             <div className="hidden text-left md:block">
               <p className="text-sm font-semibold text-gray-900">
-                {user?.firstName || user?.name || "User"}
+                {displayName}
               </p>
               <p className="text-xs text-gray-500">AbuPay Account</p>
             </div>
