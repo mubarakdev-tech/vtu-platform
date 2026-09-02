@@ -1,83 +1,111 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import { Bell, CheckCircle, AlertCircle, Info, Trash2 } from "lucide-react";
-import { useState } from "react";
+import {
+  Bell,
+  CheckCircle,
+  AlertCircle,
+  Info,
+  Trash2,
+  Loader2,
+} from "lucide-react";
+import api from "@/lib/api";
 
-const sampleNotifications = [
-  {
-    id: 1,
-    type: "success",
-    title: "Wallet Funded Successfully",
-    message: "Your wallet has been credited with ₦5,000.",
-    time: "2 hours ago",
-    read: false,
-  },
-  {
-    id: 2,
-    type: "info",
-    title: "New Feature Available",
-    message: "You can now buy data and airtime faster on AbuPay.",
-    time: "1 day ago",
-    read: true,
-  },
-  {
-    id: 3,
-    type: "warning",
-    title: "Transaction Pending",
-    message: "Your airtime purchase of ₦1,000 is being processed.",
-    time: "2 days ago",
-    read: true,
-  },
-];
+interface Announcement {
+  _id: string;
+  title: string;
+  message: string;
+  type: "INFO" | "SUCCESS" | "WARNING" | "URGENT";
+  createdAt: string;
+}
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState(sampleNotifications);
+  const [notifications, setNotifications] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const markAllAsRead = () => {
-    setNotifications((prev) =>
-      prev.map((n) => ({ ...n, read: true }))
-    );
+  const loadNotifications = async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get("/announcements");
+
+      let list = data?.announcements || data?.data || [];
+
+      const dismissed = JSON.parse(
+        localStorage.getItem("dismissed_announcements") || "[]"
+      );
+
+      list = list.filter(
+        (item: Announcement) => !dismissed.includes(item._id)
+      );
+
+      setNotifications(Array.isArray(list) ? list : []);
+    } catch (error) {
+      console.error("Failed to load notifications:", error);
+      setNotifications([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const deleteNotification = (id: number) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  const deleteNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n._id !== id));
+
+    const dismissed = JSON.parse(
+      localStorage.getItem("dismissed_announcements") || "[]"
+    );
+
+    if (!dismissed.includes(id)) {
+      dismissed.push(id);
+      localStorage.setItem(
+        "dismissed_announcements",
+        JSON.stringify(dismissed)
+      );
+    }
+
+    // Update Header red dot immediately
+    window.dispatchEvent(new Event("notifications-updated"));
   };
 
   const getIcon = (type: string) => {
     switch (type) {
-      case "success":
+      case "SUCCESS":
         return <CheckCircle className="text-emerald-600" size={20} />;
-      case "warning":
+      case "WARNING":
+      case "URGENT":
         return <AlertCircle className="text-amber-500" size={20} />;
       default:
         return <Info className="text-blue-600" size={20} />;
     }
   };
 
+  const formatTime = (date: string) => {
+    return new Date(date).toLocaleString("en-NG", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
-            <p className="mt-1 text-gray-500">
-              Stay updated with your account activities
-            </p>
-          </div>
-
-          <button
-            onClick={markAllAsRead}
-            className="rounded-xl border px-5 py-2.5 text-sm font-medium transition hover:bg-gray-50"
-          >
-            Mark all as read
-          </button>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
+          <p className="mt-1 text-gray-500">
+            Stay updated with important announcements
+          </p>
         </div>
 
-        {/* Notifications List */}
         <div className="space-y-4">
-          {notifications.length === 0 ? (
+          {loading ? (
+            <div className="flex justify-center py-20">
+              <Loader2 className="animate-spin text-emerald-600" size={32} />
+            </div>
+          ) : notifications.length === 0 ? (
             <div className="rounded-2xl border bg-white py-16 text-center shadow-sm">
               <Bell className="mx-auto text-gray-300" size={48} />
               <p className="mt-4 text-lg font-medium text-gray-500">
@@ -90,10 +118,8 @@ export default function NotificationsPage() {
           ) : (
             notifications.map((item) => (
               <div
-                key={item.id}
-                className={`flex items-start gap-4 rounded-2xl border bg-white p-5 shadow-sm transition ${
-                  !item.read ? "border-l-4 border-l-emerald-500" : ""
-                }`}
+                key={item._id}
+                className="flex items-start gap-4 rounded-2xl border border-l-4 border-l-emerald-500 bg-white p-5 shadow-sm"
               >
                 <div className="mt-1 rounded-full bg-gray-50 p-2">
                   {getIcon(item.type)}
@@ -105,14 +131,16 @@ export default function NotificationsPage() {
                       <h3 className="font-semibold text-gray-900">
                         {item.title}
                       </h3>
-                      <p className="mt-1 text-sm text-gray-600">
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-gray-600">
                         {item.message}
                       </p>
-                      <p className="mt-2 text-xs text-gray-400">{item.time}</p>
+                      <p className="mt-2 text-xs text-gray-400">
+                        {formatTime(item.createdAt)}
+                      </p>
                     </div>
 
                     <button
-                      onClick={() => deleteNotification(item.id)}
+                      onClick={() => deleteNotification(item._id)}
                       className="rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
                     >
                       <Trash2 size={16} />

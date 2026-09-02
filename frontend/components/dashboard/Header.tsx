@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Search, Wallet, Menu } from "lucide-react";
 import useAuth from "@/hooks/useAuth";
 import useWallet from "@/hooks/useWallet";
 import Link from "next/link";
+import api from "@/lib/api";
 
 const services = [
   { name: "Buy Airtime", href: "/dashboard/airtime", keywords: ["airtime", "mtn", "glo", "airtel", "9mobile"] },
@@ -30,6 +31,7 @@ export default function Header({
 
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
 
   const displayName =
     (user as any)?.firstName ||
@@ -43,6 +45,51 @@ export default function Header({
     (user as any)?.profilePicture ||
     (user as any)?.image ||
     null;
+
+  // ==========================================
+  // CHECK FOR UNREAD ANNOUNCEMENTS
+  // ==========================================
+  useEffect(() => {
+    const checkUnread = async () => {
+      try {
+        const { data } = await api.get("/announcements");
+        const list = data?.announcements || data?.data || [];
+
+        if (!Array.isArray(list) || list.length === 0) {
+          setHasUnread(false);
+          return;
+        }
+
+        const dismissed = JSON.parse(
+          localStorage.getItem("dismissed_announcements") || "[]"
+        );
+
+        const unreadCount = list.filter(
+          (item: any) => !dismissed.includes(item._id)
+        ).length;
+
+        setHasUnread(unreadCount > 0);
+      } catch (error) {
+        console.error("Failed to check notifications:", error);
+        setHasUnread(false);
+      }
+    };
+
+    if (user) {
+      checkUnread();
+    }
+
+    // Listen for when notifications are deleted
+    const handleUpdate = () => {
+      checkUnread();
+    };
+
+    window.addEventListener("notifications-updated", handleUpdate);
+
+    return () => {
+      window.removeEventListener("notifications-updated", handleUpdate);
+    };
+  }, [user]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -100,7 +147,6 @@ export default function Header({
               }}
               onFocus={() => setOpen(true)}
               onBlur={() => {
-                // small delay so click on result works
                 setTimeout(() => setOpen(false), 150);
               }}
               placeholder="Search services..."
@@ -159,7 +205,9 @@ export default function Header({
             className="relative rounded-full p-2 transition hover:bg-gray-100 sm:p-2.5"
           >
             <Bell size={18} className="text-gray-600" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+            {hasUnread && (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+            )}
           </Link>
 
           {/* Profile */}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import Footer from "./Footer";
+import AnnouncementPopup from "./AnnouncementPopup";
 
 export default function DashboardLayout({
   children,
@@ -43,6 +44,9 @@ export default function DashboardLayout({
           <Footer />
         </div>
       </div>
+
+      {/* Announcement popup */}
+      <AnnouncementPopup />
     </div>
   );
 }
