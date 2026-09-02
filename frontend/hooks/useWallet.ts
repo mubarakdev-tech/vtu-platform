@@ -9,11 +9,22 @@ export default function useWallet() {
 
   const loadWallet = async () => {
     try {
+      setLoading(true);
+
       const response = await getWallet();
 
-      setBalance(Number(response.balance ?? 0));
+      // Support both response shapes
+      const realBalance = Number(
+        response?.data?.balance ??
+          response?.balance ??
+          response?.data?.data?.balance ??
+          0
+      );
+
+      setBalance(Number.isFinite(realBalance) ? realBalance : 0);
     } catch (error) {
       console.error("Wallet error:", error);
+      setBalance(0);
     } finally {
       setLoading(false);
     }

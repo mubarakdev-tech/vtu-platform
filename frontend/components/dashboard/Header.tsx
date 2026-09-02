@@ -1,17 +1,35 @@
 "use client";
 
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Bell, Search, Wallet, Menu } from "lucide-react";
 import useAuth from "@/hooks/useAuth";
 import useWallet from "@/hooks/useWallet";
 import Link from "next/link";
+
+const services = [
+  { name: "Buy Airtime", href: "/dashboard/airtime", keywords: ["airtime", "mtn", "glo", "airtel", "9mobile"] },
+  { name: "Buy Data", href: "/dashboard/data", keywords: ["data", "internet", "bundle"] },
+  { name: "Wallet", href: "/dashboard/wallet", keywords: ["wallet", "fund", "balance", "paystack"] },
+  { name: "Transactions", href: "/dashboard/transactions", keywords: ["transactions", "history", "receipt"] },
+  { name: "Referral", href: "/dashboard/referral", keywords: ["referral", "invite", "bonus"] },
+  { name: "Notifications", href: "/dashboard/notifications", keywords: ["notification", "alert"] },
+  { name: "Profile", href: "/dashboard/profile", keywords: ["profile", "account"] },
+  { name: "Settings", href: "/dashboard/settings", keywords: ["settings", "password", "security"] },
+  { name: "Help Center", href: "/dashboard/help", keywords: ["help", "support", "contact"] },
+];
 
 export default function Header({
   onMenuClick,
 }: {
   onMenuClick?: () => void;
 }) {
+  const router = useRouter();
   const { user } = useAuth();
   const { balance, loading } = useWallet();
+
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
 
   const displayName =
     (user as any)?.firstName ||
@@ -26,11 +44,35 @@ export default function Header({
     (user as any)?.image ||
     null;
 
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+
+    return services.filter((item) => {
+      const inName = item.name.toLowerCase().includes(q);
+      const inKeywords = item.keywords.some((k) => k.includes(q));
+      return inName || inKeywords;
+    });
+  }, [query]);
+
+  const goTo = (href: string) => {
+    setQuery("");
+    setOpen(false);
+    router.push(href);
+  };
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (results.length > 0) {
+      goTo(results[0].href);
+    }
+  };
+
   return (
     <header className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur-md">
       <div className="flex h-14 items-center justify-between gap-2 px-3 sm:h-16 sm:gap-4 sm:px-4 md:h-20 md:px-6">
         {/* Left */}
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <div className="relative flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={onMenuClick}
@@ -40,17 +82,53 @@ export default function Header({
             <Menu size={22} />
           </button>
 
-          <div className="relative hidden w-56 md:block lg:w-80 xl:w-96">
+          {/* Search */}
+          <form
+            onSubmit={onSubmit}
+            className="relative w-full max-w-md md:max-w-lg lg:max-w-xl"
+          >
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 sm:left-4"
               size={18}
             />
             <input
               type="text"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setOpen(true);
+              }}
+              onFocus={() => setOpen(true)}
+              onBlur={() => {
+                // small delay so click on result works
+                setTimeout(() => setOpen(false), 150);
+              }}
               placeholder="Search services..."
               className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-10 pr-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 sm:py-2.5 sm:pl-11 sm:pr-4"
             />
-          </div>
+
+            {open && query.trim() && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border bg-white shadow-lg">
+                {results.length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-gray-500">
+                    No service found
+                  </p>
+                ) : (
+                  results.map((item) => (
+                    <button
+                      key={item.href}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => goTo(item.href)}
+                      className="block w-full px-4 py-3 text-left text-sm text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
+                    >
+                      {item.name}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </form>
         </div>
 
         {/* Right */}
