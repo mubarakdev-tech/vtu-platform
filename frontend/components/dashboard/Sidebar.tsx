@@ -1,121 +1,115 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  Wallet,
   Smartphone,
   Wifi,
+  Wallet,
   History,
   User,
   Settings,
-  Gift,
   Bell,
-  LogOut,
+  Gift,
   HelpCircle,
+  LogOut,
+  X,
 } from "lucide-react";
 import useAuth from "@/hooks/useAuth";
-import toast from "react-hot-toast";
 
 const menuItems = [
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { title: "Wallet", href: "/dashboard/wallet", icon: Wallet },
-  { title: "Airtime", href: "/dashboard/airtime", icon: Smartphone },
-  { title: "Data", href: "/dashboard/data", icon: Wifi },
-  { title: "Transactions", href: "/dashboard/transactions", icon: History },
-  { title: "Referral", href: "/dashboard/referral", icon: Gift },
-  { title: "Notifications", href: "/dashboard/notifications", icon: Bell },
-  { title: "Profile", href: "/dashboard/profile", icon: User },
-  { title: "Settings", href: "/dashboard/settings", icon: Settings },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Buy Airtime", href: "/dashboard/airtime", icon: Smartphone },
+  { name: "Buy Data", href: "/dashboard/data", icon: Wifi },
+  { name: "Wallet", href: "/dashboard/wallet", icon: Wallet },
+  { name: "Transactions", href: "/dashboard/transactions", icon: History },
+  { name: "Referral", href: "/dashboard/referral", icon: Gift },
+  { name: "Notifications", href: "/dashboard/notifications", icon: Bell },
+  { name: "Profile", href: "/dashboard/profile", icon: User },
+  { name: "Settings", href: "/dashboard/settings", icon: Settings },
+  { name: "Help Center", href: "/dashboard/help", icon: HelpCircle },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({
+  onNavigate,
+}: {
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
-  const router = useRouter();
   const { logout } = useAuth();
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      toast.success("Logged out successfully");
-      router.push("/login");
-    } catch {
-      toast.error("Failed to logout");
-      router.push("/login");
-    }
-  };
-
   return (
-    <aside className="flex h-screen w-72 flex-col bg-gradient-to-b from-emerald-700 via-emerald-600 to-teal-700 text-white shadow-xl">
+    <aside className="flex h-full min-h-screen w-full flex-col bg-emerald-800 text-white lg:sticky lg:top-0 lg:h-screen lg:w-64">
       {/* Logo */}
-      <div className="border-b border-white/20 p-6">
-        <h1 className="text-3xl font-extrabold">AbuPay</h1>
+      <div className="flex items-center justify-between border-b border-emerald-700 px-5 py-5 sm:px-6 sm:py-6">
+        <Link
+          href="/dashboard"
+          onClick={onNavigate}
+          className="text-xl font-bold tracking-tight sm:text-2xl"
+        >
+          AbuPay
+        </Link>
 
-        <p className="mt-1 text-sm text-emerald-100">
-          Fast • Secure • Reliable
-        </p>
+        {onNavigate && (
+          <button
+            type="button"
+            onClick={onNavigate}
+            className="rounded-lg p-1.5 hover:bg-emerald-700 lg:hidden"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-6">
+      <p className="px-5 pt-2 text-xs text-emerald-200 sm:px-6">
+        VTU Platform
+      </p>
+
+      {/* Menu */}
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href;
+          const isActive =
+            pathname === item.href ||
+            (item.href !== "/dashboard" &&
+              pathname.startsWith(item.href));
 
           return (
             <Link
-              key={item.title}
+              key={item.name}
               href={item.href}
-              className={`group flex items-center gap-4 rounded-xl px-4 py-3 transition-all duration-300 ${
-                active
-                  ? "bg-white text-emerald-700 shadow-lg"
-                  : "hover:bg-white/10"
+              onClick={onNavigate}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                isActive
+                  ? "bg-white text-emerald-800"
+                  : "text-emerald-100 hover:bg-emerald-700"
               }`}
             >
-              <Icon
-                size={20}
-                className="transition group-hover:scale-110"
-              />
-
-              <span className="font-medium">
-                {item.title}
-              </span>
+              <Icon size={18} />
+              {item.name}
             </Link>
           );
         })}
       </nav>
 
-      {/* Bottom */}
-      <div className="border-t border-white/20 p-5">
-
-        {/* Help Center */}
-        <Link
-          href="/dashboard/help"
-          className={`mb-3 flex w-full items-center gap-3 rounded-xl px-4 py-3 transition ${
-            pathname === "/dashboard/help"
-              ? "bg-white text-emerald-700 shadow-lg"
-              : "bg-white/10 hover:bg-white/20"
-          }`}
-        >
-          <HelpCircle size={20} />
-          <span>Help Center</span>
-        </Link>
-
-        {/* Logout */}
+      {/* Logout + Branding */}
+      <div className="border-t border-emerald-700 p-4">
         <button
-          type="button"
-          onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-xl bg-red-500/20 px-4 py-3 transition hover:bg-red-500/30"
+          onClick={() => {
+            onNavigate?.();
+            logout?.();
+          }}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-700"
         >
-          <LogOut size={20} />
+          <LogOut size={18} />
           Logout
         </button>
 
-        <p className="mt-6 text-center text-xs text-emerald-100">
-          AbuPay v1.0.0
+        <p className="mt-4 text-center text-xs text-emerald-200">
+          Powered by Abu Niematullah Ventures
         </p>
-
       </div>
     </aside>
   );
