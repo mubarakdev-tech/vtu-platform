@@ -698,60 +698,60 @@ Powered by Abu Niematullah Ventures`;
 
       {/* RECEIPT MODAL */}
       {receipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-3 sm:p-6">
-          <div className="my-auto w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-3 sm:p-4">
+          <div className="my-auto w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
             {/* RECEIPT HEADER */}
-            <div className="relative bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-6 text-white">
+            <div className="relative bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-4 text-white">
               <button
                 type="button"
                 onClick={() => setReceipt(null)}
-                className="absolute right-4 top-4 rounded-full bg-white/10 p-2 hover:bg-white/20"
+                className="absolute right-3 top-3 rounded-full bg-white/10 p-1.5 hover:bg-white/20"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
 
               <div className="flex justify-center">
                 <Image
                   src="/images/abupay-logo.png"
                   alt="AbuPay"
-                  width={72}
-                  height={72}
-                  className="rounded-2xl bg-white p-1 shadow-lg"
+                  width={56}
+                  height={56}
+                  className="rounded-xl bg-white p-1 shadow-lg"
                 />
               </div>
 
-              <div className="mt-4 text-center">
-                <h2 className="text-xl font-bold">
+              <div className="mt-2.5 text-center">
+                <h2 className="text-lg font-bold">
                   Airtime Purchase Successful
                 </h2>
 
-                <p className="mt-1 text-sm text-emerald-50">
+                <p className="mt-0.5 text-xs text-emerald-50">
                   Your airtime has been processed
                 </p>
               </div>
             </div>
 
             {/* RECEIPT BODY */}
-            <div className="space-y-5 px-5 py-6">
+            <div className="space-y-3.5 px-4 py-4">
               {/* AMOUNT */}
               <div className="text-center">
-                <p className="text-xs font-medium uppercase tracking-wider text-gray-400">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-gray-400">
                   Amount Paid
                 </p>
 
-                <p className="mt-1 text-4xl font-extrabold tracking-tight text-gray-900">
+                <p className="mt-0.5 text-3xl font-extrabold tracking-tight text-gray-900">
                   {formatMoney(receipt.amount)}
                 </p>
 
-                <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
-                  <CheckCircle2 size={14} />
+                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                  <CheckCircle2 size={12} />
                   SUCCESS
                 </span>
               </div>
 
               {/* NETWORK / PHONE */}
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-center">
-                <p className="text-base font-bold text-gray-900">
+              <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-center">
+                <p className="text-sm font-bold text-gray-900">
                   {receipt.network.toUpperCase()}{" "}
                   <span className="text-gray-300">
                     •
@@ -759,55 +759,53 @@ Powered by Abu Niematullah Ventures`;
                   {receipt.phone}
                 </p>
 
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-0.5 text-[11px] text-gray-500">
                   Airtime recharge
                 </p>
               </div>
 
               {/* BALANCE SUMMARY */}
-              <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-gray-100">
-                <div className="p-3 text-center">
-                  <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                    <ArrowDownCircle size={16} />
+              <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-gray-100">
+                <div className="p-2 text-center">
+                  <div className="mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                    <ArrowDownCircle size={14} />
                   </div>
 
-                  <p className="text-[10px] font-medium uppercase text-gray-400">
+                  <p className="text-[9px] font-medium uppercase text-gray-400">
                     Before
                   </p>
 
-                  <p className="mt-1 text-sm font-bold text-gray-900">
+                  <p className="mt-0.5 text-xs font-bold text-gray-900">
                     {formatMoney(
                       receipt.balanceBefore
                     )}
                   </p>
                 </div>
 
-                <div className="border-x border-gray-100 bg-emerald-50/50 p-3 text-center">
-                  <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                    <Smartphone size={16} />
+                <div className="border-x border-gray-100 bg-emerald-50/50 p-2 text-center">
+                  <div className="mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                    <Smartphone size={14} />
                   </div>
 
-                  <p className="text-[10px] font-medium uppercase text-gray-400">
+                  <p className="text-[9px] font-medium uppercase text-gray-400">
                     Paid
                   </p>
 
-                  <p className="mt-1 text-sm font-bold text-emerald-700">
-                    {formatMoney(
-                      receipt.amount
-                    )}
+                  <p className="mt-0.5 text-xs font-bold text-emerald-700">
+                    {formatMoney(receipt.amount)}
                   </p>
                 </div>
 
-                <div className="p-3 text-center">
-                  <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-purple-50 text-purple-600">
-                    <ArrowUpCircle size={16} />
+                <div className="p-2 text-center">
+                  <div className="mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-purple-50 text-purple-600">
+                    <ArrowUpCircle size={14} />
                   </div>
 
-                  <p className="text-[10px] font-medium uppercase text-gray-400">
+                  <p className="text-[9px] font-medium uppercase text-gray-400">
                     After
                   </p>
 
-                  <p className="mt-1 text-sm font-bold text-gray-900">
+                  <p className="mt-0.5 text-xs font-bold text-gray-900">
                     {formatMoney(
                       receipt.balanceAfter
                     )}
@@ -816,7 +814,7 @@ Powered by Abu Niematullah Ventures`;
               </div>
 
               {/* DETAILS */}
-              <div className="space-y-3 rounded-2xl bg-gray-50 p-4 text-sm">
+              <div className="space-y-2 rounded-xl bg-gray-50 p-3 text-xs">
                 <ReceiptRow
                   label="Description"
                   value={receipt.description}
@@ -849,27 +847,28 @@ Powered by Abu Niematullah Ventures`;
                 />
               </div>
 
+              {/* FOOTER */}
               <div className="text-center">
-                <p className="text-xs text-gray-400">
+                <p className="text-[11px] text-gray-400">
                   Powered by Abu Niematullah Ventures
                 </p>
 
-                <p className="mt-1 text-[11px] text-gray-300">
+                <p className="mt-0.5 text-[10px] text-gray-300">
                   Fast • Secure • Reliable
                 </p>
               </div>
             </div>
 
             {/* ACTIONS */}
-            <div className="grid grid-cols-2 gap-3 border-t border-gray-100 px-5 py-4">
+            <div className="grid grid-cols-2 gap-2.5 border-t border-gray-100 px-4 py-3">
               <button
                 type="button"
                 onClick={() =>
                   downloadPdf(receipt)
                 }
-                className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50"
               >
-                <Download size={16} />
+                <Download size={15} />
                 PDF
               </button>
 
@@ -878,9 +877,9 @@ Powered by Abu Niematullah Ventures`;
                 onClick={() =>
                   shareReceipt(receipt)
                 }
-                className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
               >
-                <Share2 size={16} />
+                <Share2 size={15} />
                 Share
               </button>
             </div>

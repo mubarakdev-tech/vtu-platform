@@ -308,7 +308,11 @@ export default function DataPage() {
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(120, 120, 120);
-    doc.text("Your data has been processed successfully.", 20, 60);
+    doc.text(
+      "Your data has been processed successfully.",
+      20,
+      60
+    );
 
     /*
      * Amount
@@ -338,9 +342,18 @@ export default function DataPage() {
     let y = 105;
 
     const rows = [
-      ["Before Balance", `NGN ${tx.balanceBefore.toLocaleString()}`],
-      ["Amount Paid", `NGN ${tx.amount.toLocaleString()}`],
-      ["After Balance", `NGN ${tx.balanceAfter.toLocaleString()}`],
+      [
+        "Before Balance",
+        `NGN ${tx.balanceBefore.toLocaleString()}`,
+      ],
+      [
+        "Amount Paid",
+        `NGN ${tx.amount.toLocaleString()}`,
+      ],
+      [
+        "After Balance",
+        `NGN ${tx.balanceAfter.toLocaleString()}`,
+      ],
       ["Plan", tx.planName],
       ["Network", tx.network.toUpperCase()],
       ["Phone Number", tx.phone],
@@ -696,112 +709,114 @@ Fast • Secure • Reliable`;
 
       {/* RECEIPT MODAL */}
       {receipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-3 sm:p-4">
 
-          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+          <div className="my-auto w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
 
             {/* RECEIPT HEADER */}
-            <div className="flex items-center justify-between border-b px-5 py-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Data Receipt
-              </h3>
+            <div className="relative bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-4 text-white">
 
               <button
                 type="button"
                 onClick={() =>
                   setReceipt(null)
                 }
-                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
+                className="absolute right-3 top-3 rounded-full bg-white/10 p-1.5 hover:bg-white/20"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
-            </div>
-
-            <div className="space-y-5 px-5 py-6">
 
               {/* LOGO */}
               <div className="flex justify-center">
                 <img
                   src="/images/abupay-logo.png"
                   alt="AbuPay"
-                  className="h-12 w-auto object-contain"
+                  className="h-12 w-auto rounded-xl bg-white p-1 object-contain shadow-lg"
                 />
               </div>
 
-              {/* SUCCESS */}
-              <div className="text-center">
-                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                  <CheckCircle size={28} />
-                </div>
-
-                <h2 className="text-xl font-bold text-gray-900">
+              <div className="mt-2.5 text-center">
+                <h2 className="text-lg font-bold">
                   Data Purchase Successful
                 </h2>
 
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-0.5 text-xs text-emerald-50">
                   Your data has been processed
                 </p>
               </div>
+            </div>
+
+            {/* RECEIPT BODY */}
+            <div className="space-y-3.5 px-4 py-4">
 
               {/* AMOUNT */}
               <div className="text-center">
-                <p className="text-sm text-gray-500">
+
+                <p className="text-[11px] font-medium uppercase tracking-wider text-gray-400">
                   Amount Paid
                 </p>
 
-                <p className="mt-1 text-3xl font-bold text-gray-900">
+                <p className="mt-0.5 text-3xl font-extrabold tracking-tight text-gray-900">
                   ₦
                   {receipt.amount.toLocaleString()}
                 </p>
 
-                <span className="mt-2 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                  <CheckCircle size={12} />
                   SUCCESS
                 </span>
               </div>
 
               {/* NETWORK + PHONE */}
-              <div className="rounded-xl bg-gray-50 p-4 text-center">
-                <p className="font-semibold text-gray-900">
-                  {receipt.network.toUpperCase()} •{" "}
+              <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-center">
+
+                <p className="text-sm font-bold text-gray-900">
+                  {receipt.network.toUpperCase()}{" "}
+                  <span className="text-gray-300">
+                    •
+                  </span>{" "}
                   {receipt.phone}
                 </p>
 
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-0.5 text-[11px] text-gray-500">
                   {receipt.planName}
                 </p>
               </div>
 
               {/* BALANCE MOVEMENT */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-gray-100">
 
-                <div className="rounded-xl bg-gray-50 p-3 text-center">
-                  <p className="text-xs text-gray-500">
+                <div className="p-2 text-center">
+
+                  <p className="text-[9px] font-medium uppercase text-gray-400">
                     Before
                   </p>
 
-                  <p className="mt-1 text-sm font-bold text-gray-900">
+                  <p className="mt-0.5 text-xs font-bold text-gray-900">
                     ₦
                     {receipt.balanceBefore.toLocaleString()}
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-emerald-50 p-3 text-center">
-                  <p className="text-xs text-emerald-600">
+                <div className="border-x border-gray-100 bg-emerald-50/50 p-2 text-center">
+
+                  <p className="text-[9px] font-medium uppercase text-gray-400">
                     Paid
                   </p>
 
-                  <p className="mt-1 text-sm font-bold text-emerald-700">
+                  <p className="mt-0.5 text-xs font-bold text-emerald-700">
                     ₦
                     {receipt.amount.toLocaleString()}
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-gray-50 p-3 text-center">
-                  <p className="text-xs text-gray-500">
+                <div className="p-2 text-center">
+
+                  <p className="text-[9px] font-medium uppercase text-gray-400">
                     After
                   </p>
 
-                  <p className="mt-1 text-sm font-bold text-gray-900">
+                  <p className="mt-0.5 text-xs font-bold text-gray-900">
                     ₦
                     {receipt.balanceAfter.toLocaleString()}
                   </p>
@@ -809,70 +824,70 @@ Fast • Secure • Reliable`;
               </div>
 
               {/* DETAILS */}
-              <div className="space-y-3 rounded-xl bg-gray-50 p-4 text-sm">
+              <div className="space-y-2 rounded-xl bg-gray-50 p-3 text-xs">
 
-                <div className="flex justify-between gap-3">
-                  <span className="text-gray-500">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="shrink-0 text-gray-500">
                     Description
                   </span>
 
-                  <span className="text-right font-medium">
+                  <span className="max-w-[65%] text-right font-semibold text-gray-900">
                     {receipt.network.toUpperCase()} Data Purchase
                   </span>
                 </div>
 
-                <div className="flex justify-between gap-3">
-                  <span className="text-gray-500">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="shrink-0 text-gray-500">
                     Plan
                   </span>
 
-                  <span className="max-w-[200px] text-right font-medium">
+                  <span className="max-w-[65%] text-right font-semibold text-gray-900 break-words">
                     {receipt.planName}
                   </span>
                 </div>
 
-                <div className="flex justify-between gap-3">
-                  <span className="text-gray-500">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="shrink-0 text-gray-500">
                     Network
                   </span>
 
-                  <span className="font-medium uppercase">
+                  <span className="font-semibold uppercase text-gray-900">
                     {receipt.network}
                   </span>
                 </div>
 
-                <div className="flex justify-between gap-3">
-                  <span className="text-gray-500">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="shrink-0 text-gray-500">
                     Phone Number
                   </span>
 
-                  <span className="font-medium">
+                  <span className="font-semibold text-gray-900">
                     {receipt.phone}
                   </span>
                 </div>
 
-                <div className="flex justify-between gap-3">
-                  <span className="text-gray-500">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="shrink-0 text-gray-500">
                     Reference
                   </span>
 
-                  <span className="max-w-[180px] truncate text-right font-medium">
+                  <span className="max-w-[65%] break-words text-right font-semibold text-gray-900">
                     {receipt.reference}
                   </span>
                 </div>
 
-                <div className="flex justify-between gap-3">
-                  <span className="text-gray-500">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="shrink-0 text-gray-500">
                     Date
                   </span>
 
-                  <span className="text-right font-medium">
+                  <span className="max-w-[65%] text-right font-semibold text-gray-900">
                     {receipt.date}
                   </span>
                 </div>
 
-                <div className="flex justify-between gap-3">
-                  <span className="text-gray-500">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="shrink-0 text-gray-500">
                     Status
                   </span>
 
@@ -884,27 +899,28 @@ Fast • Secure • Reliable`;
 
               {/* FOOTER */}
               <div className="text-center">
-                <p className="text-xs text-gray-400">
+
+                <p className="text-[11px] text-gray-400">
                   Powered by Abu Niematullah Ventures
                 </p>
 
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="mt-0.5 text-[10px] text-gray-300">
                   Fast • Secure • Reliable
                 </p>
               </div>
             </div>
 
             {/* ACTIONS */}
-            <div className="grid grid-cols-2 gap-3 border-t px-5 py-4">
+            <div className="grid grid-cols-2 gap-2.5 border-t border-gray-100 px-4 py-3">
 
               <button
                 type="button"
                 onClick={() =>
                   downloadPdf(receipt)
                 }
-                className="flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50"
               >
-                <Download size={16} />
+                <Download size={15} />
                 PDF
               </button>
 
@@ -913,9 +929,9 @@ Fast • Secure • Reliable`;
                 onClick={() =>
                   shareReceipt(receipt)
                 }
-                className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
               >
-                <Share2 size={16} />
+                <Share2 size={15} />
                 Share
               </button>
             </div>
