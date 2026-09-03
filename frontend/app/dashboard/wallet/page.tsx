@@ -22,7 +22,7 @@ import {
 
 import CountUp from "react-countup";
 import useAuth from "@/hooks/useAuth";
-import useWallet from "@/hooks/useWallet"; // ← added
+import useWallet from "@/hooks/useWallet";
 import jsPDF from "jspdf";
 
 const quickAmounts = [500, 1000, 2000, 5000, 10000, 20000];
@@ -45,7 +45,7 @@ interface ReceiptData {
 
 export default function WalletPage() {
   const { user } = useAuth();
-  const { balance, loading, refreshWallet } = useWallet(); // ← use shared wallet
+  const { balance, loading, refreshWallet } = useWallet();
 
   const [showBalance, setShowBalance] = useState(true);
   const [amount, setAmount] = useState("");
@@ -247,7 +247,7 @@ export default function WalletPage() {
                 status: transaction?.status || "SUCCESS",
               });
 
-              // ✅ This makes Header update immediately
+              // Update Header balance immediately
               await refreshWallet();
 
               setAmount("");
@@ -414,35 +414,16 @@ export default function WalletPage() {
     const shareText = `
 AbuPay Transaction Receipt
 
-Receipt Number:
-${receipt.reference}
-
-Date & Time:
-${receipt.date}
-
-Customer:
-${receipt.customerName}
-
-Service:
-Wallet Funding
-
-Amount Funded:
-₦${receipt.amount.toLocaleString()}
-
-Previous Wallet Balance:
-₦${receipt.previousBalance.toLocaleString()}
-
-New Wallet Balance:
-₦${receipt.newBalance.toLocaleString()}
-
-Status:
-${receipt.status === "SUCCESS" ? "SUCCESSFUL" : receipt.status}
-
-Payment Reference:
-${receipt.reference}
+Receipt Number: ${receipt.reference}
+Date & Time: ${receipt.date}
+Customer: ${receipt.customerName}
+Service: Wallet Funding
+Amount Funded: ₦${receipt.amount.toLocaleString()}
+Previous Balance: ₦${receipt.previousBalance.toLocaleString()}
+New Balance: ₦${receipt.newBalance.toLocaleString()}
+Status: ${receipt.status === "SUCCESS" ? "SUCCESSFUL" : receipt.status}
 
 Thank you for using AbuPay.
-
 Powered by Abu Niematullah Ventures
     `.trim();
 
@@ -657,88 +638,88 @@ Powered by Abu Niematullah Ventures
           </div>
         </div>
 
-        {/* RECEIPT MODAL */}
+        {/* ====================== SMALLER RECEIPT MODAL ====================== */}
         {receipt && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
-            <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
-              <div className="overflow-hidden rounded-t-2xl bg-white">
-                <div className="border-b px-6 py-7 text-center">
-                  <img
-                    src="/images/abupay-logo.png"
-                    alt="AbuPay"
-                    className="mx-auto mb-3 h-16 w-auto object-contain"
-                  />
-                  <h2 className="text-2xl font-bold tracking-tight text-gray-900">
-                    AbuPay
-                  </h2>
-                  <p className="mt-1 text-sm font-medium uppercase tracking-widest text-gray-500">
-                    Transaction Receipt
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-center gap-2 border-b bg-emerald-50 px-6 py-4">
-                  <CheckCircle size={20} className="text-emerald-600" />
-                  <span className="font-bold text-emerald-700">
-                    TRANSACTION SUCCESSFUL
-                  </span>
-                </div>
-
-                <div className="space-y-4 px-6 py-6">
-                  <ReceiptRow label="Receipt Number" value={receipt.reference} />
-                  <ReceiptRow label="Date & Time" value={receipt.date} />
-                  <ReceiptRow label="Customer" value={receipt.customerName} />
-                  <ReceiptRow label="Service" value="Wallet Funding" />
-                  <ReceiptRow label="Payment Reference" value={receipt.reference} />
-
-                  <div className="my-5 border-t border-dashed" />
-
-                  <ReceiptRow
-                    label="Previous Wallet Balance"
-                    value={`₦${receipt.previousBalance.toLocaleString()}`}
-                  />
-                  <ReceiptRow
-                    label="Amount Funded"
-                    value={`₦${receipt.amount.toLocaleString()}`}
-                    bold
-                  />
-                  <ReceiptRow
-                    label="New Wallet Balance"
-                    value={`₦${receipt.newBalance.toLocaleString()}`}
-                    bold
-                  />
-                  <ReceiptRow
-                    label="Status"
-                    value={
-                      receipt.status === "SUCCESS" ? "SUCCESSFUL" : receipt.status
-                    }
-                  />
-                </div>
-
-                <div className="border-t px- px-6 py-6 text-center">
-                  <p className="font-medium text-gray-800">
-                    Thank you for using AbuPay
-                  </p>
-                  <p className="mt-2 text-xs text-gray-400">
-                    Powered by Abu Niematullah Ventures
-                  </p>
-                </div>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
+              
+              {/* Header */}
+              <div className="border-b px-5 py-4 text-center">
+                <img
+                  src="/images/abupay-logo.png"
+                  alt="AbuPay"
+                  className="mx-auto mb-2 h-12 w-auto object-contain"
+                />
+                <h2 className="text-lg font-bold text-gray-900">AbuPay</h2>
+                <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Transaction Receipt
+                </p>
               </div>
 
-              <div className="flex gap-3 rounded-b-2xl border-t bg-gray-50 p-5">
+              {/* Success Badge */}
+              <div className="flex items-center justify-center gap-2 border-b bg-emerald-50 px-5 py-3">
+                <CheckCircle size={18} className="text-emerald-600" />
+                <span className="text-sm font-bold text-emerald-700">
+                  TRANSACTION SUCCESSFUL
+                </span>
+              </div>
+
+              {/* Details */}
+              <div className="space-y-3 px-5 py-4 text-sm">
+                <ReceiptRow label="Receipt Number" value={receipt.reference} />
+                <ReceiptRow label="Date & Time" value={receipt.date} />
+                <ReceiptRow label="Customer" value={receipt.customerName} />
+                <ReceiptRow label="Service" value="Wallet Funding" />
+                <ReceiptRow label="Payment Reference" value={receipt.reference} />
+
+                <div className="my-3 border-t border-dashed" />
+
+                <ReceiptRow
+                  label="Previous Balance"
+                  value={`₦${receipt.previousBalance.toLocaleString()}`}
+                />
+                <ReceiptRow
+                  label="Amount Funded"
+                  value={`₦${receipt.amount.toLocaleString()}`}
+                  bold
+                />
+                <ReceiptRow
+                  label="New Balance"
+                  value={`₦${receipt.newBalance.toLocaleString()}`}
+                  bold
+                />
+                <ReceiptRow
+                  label="Status"
+                  value={receipt.status === "SUCCESS" ? "SUCCESSFUL" : receipt.status}
+                />
+              </div>
+
+              {/* Footer */}
+              <div className="border-t px-5 py-3 text-center">
+                <p className="text-sm font-medium text-gray-800">
+                  Thank you for using AbuPay
+                </p>
+                <p className="mt-1 text-xs text-gray-400">
+                  Powered by Abu Niematullah Ventures
+                </p>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-2 rounded-b-2xl border-t bg-gray-50 p-4">
                 <button
                   type="button"
                   onClick={saveReceipt}
                   disabled={savingPdf}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                 >
                   {savingPdf ? (
                     <>
-                      <Loader2 size={18} className="animate-spin" />
+                      <Loader2 size={16} className="animate-spin" />
                       Saving...
                     </>
                   ) : (
                     <>
-                      <Download size={18} />
+                      <Download size={16} />
                       Save PDF
                     </>
                   )}
@@ -747,19 +728,19 @@ Powered by Abu Niematullah Ventures
                 <button
                   type="button"
                   onClick={shareReceipt}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 font-semibold text-gray-700 transition hover:bg-gray-100"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
                 >
-                  <Share2 size={18} />
+                  <Share2 size={16} />
                   Share
                 </button>
 
                 <button
                   type="button"
                   onClick={closeReceipt}
-                  className="rounded-xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-600 transition hover:bg-gray-100"
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-600 transition hover:bg-gray-100"
                   aria-label="Close receipt"
                 >
-                  <X size={18} />
+                  <X size={16} />
                 </button>
               </div>
             </div>
@@ -770,6 +751,9 @@ Powered by Abu Niematullah Ventures
   );
 }
 
+// ==========================================
+// RECEIPT ROW COMPONENT
+// ==========================================
 function ReceiptRow({
   label,
   value,
@@ -780,10 +764,10 @@ function ReceiptRow({
   bold?: boolean;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <span className="text-sm text-gray-500">{label}</span>
+    <div className="flex items-start justify-between gap-3">
+      <span className="text-gray-500">{label}</span>
       <span
-        className={`max-w-[60%] break-words text-right text-sm text-gray-900 ${
+        className={`max-w-[60%] break-words text-right text-gray-900 ${
           bold ? "font-bold" : "font-medium"
         }`}
       >
