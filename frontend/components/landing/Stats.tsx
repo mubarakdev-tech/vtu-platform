@@ -5,7 +5,7 @@ const stats = [
   },
   {
     value: "Secure",
-    label: "Transactions Processed",
+    label: "Transactions",
   },
   {
     value: "99.9%",
