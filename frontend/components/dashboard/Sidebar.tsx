@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Smartphone,
@@ -37,7 +37,15 @@ export default function Sidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    onNavigate?.();
+    await logout();
+    router.push("/auth/login");
+    router.refresh();
+  };
 
   return (
     <aside className="flex h-full min-h-screen w-full flex-col bg-emerald-800 text-white lg:sticky lg:top-0 lg:h-screen lg:w-64">
@@ -97,10 +105,7 @@ export default function Sidebar({
       {/* Logout + Branding */}
       <div className="border-t border-emerald-700 p-4">
         <button
-          onClick={() => {
-            onNavigate?.();
-            logout?.();
-          }}
+          onClick={handleLogout}
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-700"
         >
           <LogOut size={18} />
