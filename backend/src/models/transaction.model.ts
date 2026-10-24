@@ -1,3 +1,4 @@
+
 import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface ITransaction extends Document {
@@ -20,15 +21,15 @@ export interface ITransaction extends Document {
   balanceAfter?: number;
 
   gateway?: "PAYSTACK" | "OTHER";
-
   gatewayReference?: string;
+
+  // Unique key for an operation that must not be processed twice.
+  idempotencyKey?: string;
 
   status: "PENDING" | "SUCCESS" | "FAILED";
 
   reference: string;
-
   description?: string;
-
   metadata?: Record<string, any>;
 }
 
@@ -67,13 +68,8 @@ const transactionSchema = new Schema<ITransaction>(
       min: 0,
     },
 
-    balanceBefore: {
-      type: Number,
-    },
-
-    balanceAfter: {
-      type: Number,
-    },
+    balanceBefore: Number,
+    balanceAfter: Number,
 
     gateway: {
       type: String,
@@ -84,6 +80,11 @@ const transactionSchema = new Schema<ITransaction>(
       type: String,
       sparse: true,
       index: true,
+    },
+
+    idempotencyKey: {
+      type: String,
+      trim: true,
     },
 
     status: {
@@ -99,9 +100,7 @@ const transactionSchema = new Schema<ITransaction>(
       index: true,
     },
 
-    description: {
-      type: String,
-    },
+    description: String,
 
     metadata: {
       type: Schema.Types.Mixed,
@@ -113,7 +112,7 @@ const transactionSchema = new Schema<ITransaction>(
   }
 );
 
-// Prevent duplicate successful processing of the same gateway payment
+// Existing gateway-payment protection.
 transactionSchema.index(
   { gateway: 1, gatewayReference: 1 },
   {
@@ -122,7 +121,15 @@ transactionSchema.index(
   }
 );
 
-// Prevent OverwriteModelError during development
+// Prevent duplicate operations that use the same idempotency key.
+transactionSchema.index(
+  { idempotencyKey: 1 },
+  {
+    unique: true,
+    sparse: true,
+  }
+);
+
 const Transaction: Model<ITransaction> =
   (mongoose.models.Transaction as Model<ITransaction>) ||
   mongoose.model<ITransaction>("Transaction", transactionSchema);

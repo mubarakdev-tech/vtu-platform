@@ -1,3 +1,4 @@
+
 import { Request, Response } from "express";
 import User from "../models/user.model";
 import Wallet from "../models/wallet.model";
@@ -366,6 +367,19 @@ export const forgotPassword = async (req: Request, res: Response) => {
       return res.status(404).json({
         success: false,
         message: "User not found",
+      });
+    }
+
+    // Do not create a reset token if email cannot be delivered.
+    if (!transporter || !env.EMAIL_FROM) {
+      console.error(
+        "Password reset email unavailable: Resend is not configured."
+      );
+
+      return res.status(503).json({
+        success: false,
+        message:
+          "Password reset email is temporarily unavailable. Please try again later.",
       });
     }
 

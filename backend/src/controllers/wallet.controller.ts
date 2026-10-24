@@ -1,3 +1,4 @@
+
 import {
   Response,
   NextFunction,
@@ -12,6 +13,7 @@ import {
 } from "../services/paystack-fee.service";
 
 import { AuthRequest } from "../middleware/auth.middleware";
+import FinancialLedger from "../models/financialLedger.model";
 
 /**
  * ==========================================
@@ -70,24 +72,14 @@ export const calculateFundingFee = async (
     }
 
     const rawAmount = req.query.amount;
-
-    const fundingAmount =
-      Number(rawAmount);
+    const fundingAmount = Number(rawAmount);
 
     console.log(
       "================================="
     );
-    console.log(
-      "FUNDING FEE CALCULATION"
-    );
-    console.log(
-      "Requested amount:",
-      fundingAmount
-    );
-    console.log(
-      "User:",
-      userId
-    );
+    console.log("FUNDING FEE CALCULATION");
+    console.log("Requested amount:", fundingAmount);
+    console.log("User:", userId);
     console.log(
       "================================="
     );
@@ -96,9 +88,7 @@ export const calculateFundingFee = async (
      * Validate amount.
      */
     if (
-      !Number.isFinite(
-        fundingAmount
-      ) ||
+      !Number.isFinite(fundingAmount) ||
       fundingAmount <= 0
     ) {
       return next(
@@ -112,11 +102,7 @@ export const calculateFundingFee = async (
     /**
      * Whole Naira only.
      */
-    if (
-      !Number.isInteger(
-        fundingAmount
-      )
-    ) {
+    if (!Number.isInteger(fundingAmount)) {
       return next(
         new AppError(
           "Funding amount must be a whole number",
@@ -128,9 +114,7 @@ export const calculateFundingFee = async (
     /**
      * Minimum funding.
      */
-    if (
-      fundingAmount < 100
-    ) {
+    if (fundingAmount < 100) {
       return next(
         new AppError(
           "Minimum funding amount is ₦100",
@@ -144,20 +128,16 @@ export const calculateFundingFee = async (
      * customer fee.
      */
     const result =
-      calculatePaystackCustomerFee(
-        fundingAmount
-      );
+      calculatePaystackCustomerFee(fundingAmount);
 
     console.log(
       "Funding amount:",
       result.fundingAmount
     );
-
     console.log(
       "Estimated fee:",
       result.estimatedFee
     );
-
     console.log(
       "Estimated total:",
       result.estimatedTotal
@@ -165,23 +145,11 @@ export const calculateFundingFee = async (
 
     return res.status(200).json({
       success: true,
-
       data: {
-        fundingAmount:
-          result.fundingAmount,
-
-        estimatedFee:
-          result.estimatedFee,
-
-        estimatedTotal:
-          result.estimatedTotal,
-
+        fundingAmount: result.fundingAmount,
+        estimatedFee: result.estimatedFee,
+        estimatedTotal: result.estimatedTotal,
         currency: "NGN",
-
-        /**
-         * This tells the frontend
-         * that this is an estimate.
-         */
         isEstimate: true,
       },
     });
@@ -213,31 +181,16 @@ export const initializeFunding = async (
       );
     }
 
-    const rawAmount =
-      req.body.amount;
+    const rawAmount = req.body.amount;
 
     console.log(
       "================================="
     );
-    console.log(
-      "PAYSTACK INITIALIZATION REQUEST"
-    );
-    console.log(
-      "Raw amount:",
-      rawAmount
-    );
-    console.log(
-      "Raw amount type:",
-      typeof rawAmount
-    );
-    console.log(
-      "User:",
-      userId
-    );
-    console.log(
-      "Email:",
-      email
-    );
+    console.log("PAYSTACK INITIALIZATION REQUEST");
+    console.log("Raw amount:", rawAmount);
+    console.log("Raw amount type:", typeof rawAmount);
+    console.log("User:", userId);
+    console.log("Email:", email);
     console.log(
       "================================="
     );
@@ -245,16 +198,13 @@ export const initializeFunding = async (
     /**
      * Convert incoming amount to number.
      */
-    const fundingAmount =
-      Number(rawAmount);
+    const fundingAmount = Number(rawAmount);
 
     /**
      * Validate amount.
      */
     if (
-      !Number.isFinite(
-        fundingAmount
-      ) ||
+      !Number.isFinite(fundingAmount) ||
       fundingAmount <= 0
     ) {
       return next(
@@ -268,11 +218,7 @@ export const initializeFunding = async (
     /**
      * Wallet funding must be whole Naira.
      */
-    if (
-      !Number.isInteger(
-        fundingAmount
-      )
-    ) {
+    if (!Number.isInteger(fundingAmount)) {
       return next(
         new AppError(
           "Funding amount must be a whole number with no decimal places",
@@ -284,9 +230,7 @@ export const initializeFunding = async (
     /**
      * Minimum funding.
      */
-    if (
-      fundingAmount < 100
-    ) {
+    if (fundingAmount < 100) {
       return next(
         new AppError(
           "Minimum funding amount is ₦100",
@@ -298,16 +242,13 @@ export const initializeFunding = async (
     /**
      * Convert Naira to Kobo.
      */
-    const amountInKobo =
-      fundingAmount * 100;
+    const amountInKobo = fundingAmount * 100;
 
     /**
      * Ensure Paystack gets an integer.
      */
     if (
-      !Number.isInteger(
-        amountInKobo
-      ) ||
+      !Number.isInteger(amountInKobo) ||
       amountInKobo <= 0
     ) {
       return next(
@@ -321,26 +262,13 @@ export const initializeFunding = async (
     console.log(
       "================================="
     );
-    console.log(
-      "PAYSTACK AMOUNT CHECK"
-    );
-    console.log(
-      "Funding amount:",
-      fundingAmount
-    );
-    console.log(
-      "Amount in Kobo:",
-      amountInKobo
-    );
-    console.log(
-      "Amount type:",
-      typeof amountInKobo
-    );
+    console.log("PAYSTACK AMOUNT CHECK");
+    console.log("Funding amount:", fundingAmount);
+    console.log("Amount in Kobo:", amountInKobo);
+    console.log("Amount type:", typeof amountInKobo);
     console.log(
       "Is integer:",
-      Number.isInteger(
-        amountInKobo
-      )
+      Number.isInteger(amountInKobo)
     );
     console.log(
       "================================="
@@ -351,74 +279,37 @@ export const initializeFunding = async (
      * INITIALIZE PAYSTACK
      * ========================================
      *
-     * IMPORTANT:
-     *
-     * We continue sending the ORIGINAL
-     * wallet funding amount.
-     *
-     * Paystack dashboard is already configured
+     * Continue sending the original wallet
+     * funding amount. Paystack is configured
      * to pass transaction fees to the customer.
      */
-    const response =
-      await paystack.post(
-        "/transaction/initialize",
-        {
-          email:
-            email.trim(),
-
-          /**
-           * Paystack receives KOBO.
-           *
-           * Example:
-           * ₦1,000 = 100,000 Kobo
-           */
-          amount:
-            amountInKobo,
-
-          currency:
-            "NGN",
-
-          callback_url:
-            `${process.env.FRONTEND_URL}/dashboard/wallet`,
-
-          metadata: {
-            userId:
-              String(userId),
-
-            /**
-             * Original amount that
-             * should enter wallet.
-             */
-            fundingAmount:
-              fundingAmount,
-
-            /**
-             * Original Kobo amount.
-             */
-            fundingAmountKobo:
-              amountInKobo,
-
-            service:
-              "WALLET_FUNDING",
-          },
-        }
-      );
+    const response = await paystack.post(
+      "/transaction/initialize",
+      {
+        email: email.trim(),
+        amount: amountInKobo,
+        currency: "NGN",
+        callback_url:
+          `${process.env.FRONTEND_URL}/dashboard/wallet`,
+        metadata: {
+          userId: String(userId),
+          fundingAmount,
+          fundingAmountKobo: amountInKobo,
+          service: "WALLET_FUNDING",
+        },
+      }
+    );
 
     console.log(
       "================================="
     );
-    console.log(
-      "PAYSTACK INITIALIZE RESPONSE"
-    );
-    console.log(
-      response.data
-    );
+    console.log("PAYSTACK INITIALIZE RESPONSE");
+    console.log(response.data);
     console.log(
       "================================="
     );
 
-    const data =
-      response.data;
+    const data = response.data;
 
     if (
       !data ||
@@ -434,56 +325,28 @@ export const initializeFunding = async (
       );
     }
 
-    /**
-     * Return the exact amount
-     * initialized.
-     */
     return res.status(200).json({
       success: true,
-
-      message:
-        "Payment initialized successfully",
-
+      message: "Payment initialized successfully",
       data: {
         authorization_url:
-          data.data
-            .authorization_url,
-
+          data.data.authorization_url,
         access_code:
-          data.data
-            .access_code,
-
+          data.data.access_code,
         reference:
-          data.data
-            .reference,
-
+          data.data.reference,
         email,
-
-        /**
-         * Naira amount intended
-         * for the wallet.
-         */
-        amount:
-          fundingAmount,
-
-        /**
-         * Kobo amount sent to
-         * Paystack.
-         */
-        amountInKobo:
-          amountInKobo,
+        amount: fundingAmount,
+        amountInKobo,
       },
     });
   } catch (error: any) {
     console.error(
       "================================="
     );
+    console.error("PAYSTACK INITIALIZATION ERROR");
     console.error(
-      "PAYSTACK INITIALIZATION ERROR"
-    );
-    console.error(
-      error?.response?.data ||
-        error
+      error?.response?.data || error
     );
     console.error(
       "================================="
@@ -494,8 +357,7 @@ export const initializeFunding = async (
         error?.response?.data?.message ||
           error?.message ||
           "Payment initialization failed",
-        error?.response?.status ||
-          500
+        error?.response?.status || 500
       )
     );
   }
@@ -511,21 +373,11 @@ export const verifyFunding = async (
   res: Response,
   next: NextFunction
 ) => {
-  /**
-   * Confirm endpoint is reached.
-   */
-  console.log(
-    "🔥 VERIFY FUNDING ENDPOINT HIT"
-  );
-
-  console.log(
-    "VERIFY BODY:",
-    req.body
-  );
+  console.log("🔥 VERIFY FUNDING ENDPOINT HIT");
+  console.log("VERIFY BODY:", req.body);
 
   try {
-    const userId =
-      req.user?.id;
+    const userId = req.user?.id;
 
     if (!userId) {
       return next(
@@ -536,13 +388,11 @@ export const verifyFunding = async (
       );
     }
 
-    const { reference } =
-      req.body;
+    const { reference } = req.body;
 
     if (
       !reference ||
-      typeof reference !==
-        "string"
+      typeof reference !== "string"
     ) {
       return next(
         new AppError(
@@ -552,8 +402,7 @@ export const verifyFunding = async (
       );
     }
 
-    const cleanReference =
-      reference.trim();
+    const cleanReference = reference.trim();
 
     if (!cleanReference) {
       return next(
@@ -567,17 +416,9 @@ export const verifyFunding = async (
     console.log(
       "================================="
     );
-    console.log(
-      "VERIFYING PAYSTACK PAYMENT"
-    );
-    console.log(
-      "Reference:",
-      cleanReference
-    );
-    console.log(
-      "User:",
-      userId
-    );
+    console.log("VERIFYING PAYSTACK PAYMENT");
+    console.log("Reference:", cleanReference);
+    console.log("User:", userId);
     console.log(
       "================================="
     );
@@ -587,32 +428,24 @@ export const verifyFunding = async (
      * VERIFY WITH PAYSTACK
      * ========================================
      */
-    const response =
-      await paystack.get(
-        `/transaction/verify/${encodeURIComponent(
-          cleanReference
-        )}`
-      );
+    const response = await paystack.get(
+      `/transaction/verify/${encodeURIComponent(
+        cleanReference
+      )}`
+    );
 
     console.log(
       "================================="
     );
+    console.log("PAYSTACK VERIFY RESPONSE");
     console.log(
-      "PAYSTACK VERIFY RESPONSE"
-    );
-    console.log(
-      JSON.stringify(
-        response.data,
-        null,
-        2
-      )
+      JSON.stringify(response.data, null, 2)
     );
     console.log(
       "================================="
     );
 
-    const data =
-      response.data;
+    const data = response.data;
 
     if (
       !data ||
@@ -628,18 +461,14 @@ export const verifyFunding = async (
       );
     }
 
-    const transaction =
-      data.data;
+    const transaction = data.data;
 
     /**
      * ========================================
      * PAYMENT STATUS
      * ========================================
      */
-    if (
-      transaction.status !==
-      "success"
-    ) {
+    if (transaction.status !== "success") {
       return next(
         new AppError(
           "Payment was not successful",
@@ -653,10 +482,7 @@ export const verifyFunding = async (
      * REFERENCE
      * ========================================
      */
-    if (
-      transaction.reference !==
-      cleanReference
-    ) {
+    if (transaction.reference !== cleanReference) {
       return next(
         new AppError(
           "Payment reference mismatch",
@@ -670,10 +496,7 @@ export const verifyFunding = async (
      * CURRENCY
      * ========================================
      */
-    if (
-      transaction.currency !==
-      "NGN"
-    ) {
+    if (transaction.currency !== "NGN") {
       return next(
         new AppError(
           "Invalid payment currency",
@@ -687,12 +510,8 @@ export const verifyFunding = async (
      * USER OWNERSHIP
      * ========================================
      */
-    const metadata =
-      transaction.metadata ||
-      {};
-
-    const paidUserId =
-      metadata.userId;
+    const metadata = transaction.metadata || {};
+    const paidUserId = metadata.userId;
 
     if (!paidUserId) {
       return next(
@@ -703,10 +522,7 @@ export const verifyFunding = async (
       );
     }
 
-    if (
-      String(paidUserId) !==
-      String(userId)
-    ) {
+    if (String(paidUserId) !== String(userId)) {
       return next(
         new AppError(
           "Invalid payment ownership",
@@ -720,15 +536,10 @@ export const verifyFunding = async (
      * AMOUNT
      * ========================================
      */
-    const paidAmountKobo =
-      Number(
-        transaction.amount
-      );
+    const paidAmountKobo = Number(transaction.amount);
 
     if (
-      !Number.isInteger(
-        paidAmountKobo
-      ) ||
+      !Number.isInteger(paidAmountKobo) ||
       paidAmountKobo <= 0
     ) {
       return next(
@@ -739,27 +550,20 @@ export const verifyFunding = async (
       );
     }
 
-    const paidAmount =
-      paidAmountKobo / 100;
+    const paidAmount = paidAmountKobo / 100;
 
     /**
-     * Get original wallet funding
-     * amount from metadata.
+     * Get original wallet funding amount
+     * from the Paystack metadata.
      */
     const fundingAmount =
-      Number(
-        metadata.fundingAmount
-      );
+      Number(metadata.fundingAmount);
 
     const fundingAmountKobo =
-      Number(
-        metadata.fundingAmountKobo
-      );
+      Number(metadata.fundingAmountKobo);
 
     if (
-      !Number.isInteger(
-        fundingAmount
-      ) ||
+      !Number.isInteger(fundingAmount) ||
       fundingAmount <= 0
     ) {
       return next(
@@ -771,9 +575,7 @@ export const verifyFunding = async (
     }
 
     if (
-      !Number.isInteger(
-        fundingAmountKobo
-      ) ||
+      !Number.isInteger(fundingAmountKobo) ||
       fundingAmountKobo <= 0
     ) {
       return next(
@@ -787,29 +589,12 @@ export const verifyFunding = async (
     console.log(
       "================================="
     );
-    console.log(
-      "PAYMENT AMOUNT VERIFICATION"
-    );
-    console.log(
-      "Paystack paid amount:",
-      paidAmount
-    );
-    console.log(
-      "Paystack paid Kobo:",
-      paidAmountKobo
-    );
-    console.log(
-      "Wallet funding amount:",
-      fundingAmount
-    );
-    console.log(
-      "Wallet funding Kobo:",
-      fundingAmountKobo
-    );
-    console.log(
-      "Paystack fees:",
-      transaction.fees
-    );
+    console.log("PAYMENT AMOUNT VERIFICATION");
+    console.log("Paystack paid amount:", paidAmount);
+    console.log("Paystack paid Kobo:", paidAmountKobo);
+    console.log("Wallet funding amount:", fundingAmount);
+    console.log("Wallet funding Kobo:", fundingAmountKobo);
+    console.log("Paystack fees:", transaction.fees);
     console.log(
       "Paystack requested amount:",
       transaction.requested_amount
@@ -824,38 +609,24 @@ export const verifyFunding = async (
      * ========================================
      */
     const requestedAmountKobo =
-      Number(
-        transaction.requested_amount
-      );
+      Number(transaction.requested_amount);
 
     const amountToCompare =
-      Number.isInteger(
-        requestedAmountKobo
-      ) &&
+      Number.isInteger(requestedAmountKobo) &&
       requestedAmountKobo > 0
         ? requestedAmountKobo
         : paidAmountKobo;
 
-    if (
-      amountToCompare !==
-      fundingAmountKobo
-    ) {
+    if (amountToCompare !== fundingAmountKobo) {
       console.error(
         "PAYMENT INITIALIZED AMOUNT MISMATCH",
         {
-          reference:
-            cleanReference,
-
+          reference: cleanReference,
           paidAmountKobo,
-
           requestedAmountKobo,
-
           amountToCompare,
-
           fundingAmountKobo,
-
           paidAmount,
-
           fundingAmount,
         }
       );
@@ -873,77 +644,110 @@ export const verifyFunding = async (
      * PROCESS WALLET FUNDING
      * ========================================
      *
-     * IMPORTANT:
-     *
-     * Credit ONLY the original wallet
-     * funding amount.
-     *
-     * Do not credit Paystack's fee.
+     * Credit only the original wallet funding
+     * amount. Never credit the Paystack fee.
      */
-    const result =
-      await processWalletFunding({
-        userId,
+    const result = await processWalletFunding({
+      userId,
+      amount: fundingAmount,
+      gateway: "PAYSTACK",
+      gatewayReference: cleanReference,
+      metadata: {
+        paystackData: transaction,
+        requestedFundingAmount: fundingAmount,
+        paystackPaidAmount: paidAmount,
+        paystackFees: transaction.fees || 0,
+      },
+    });
 
-        amount:
-          fundingAmount,
+    /**
+     * ========================================
+     * RECORD PAYSTACK PROCESSING FEE
+     * ========================================
+     *
+     * Paystack reports transaction.fees in Kobo.
+     * The financial ledger stores amounts in Naira.
+     *
+     * Use a deterministic unique reference and
+     * $setOnInsert to avoid duplicate fee entries
+     * when the payment is verified repeatedly.
+     *
+     * This is an EXPENSE, not service revenue.
+     */
+    const paystackFeeKobo = Number(transaction.fees);
+    const feeReference = `PAYSTACK_FEE:${cleanReference}`;
 
-        gateway:
-          "PAYSTACK",
-
-        gatewayReference:
-          cleanReference,
-
-        metadata: {
-          paystackData:
-            transaction,
-
-          requestedFundingAmount:
-            fundingAmount,
-
-          paystackPaidAmount:
-            paidAmount,
-
-          paystackFees:
-            transaction.fees ||
-            0,
+    if (
+      Number.isSafeInteger(paystackFeeKobo) &&
+      paystackFeeKobo > 0
+    ) {
+      await FinancialLedger.updateOne(
+        {
+          reference: feeReference,
         },
-      });
+        {
+          $setOnInsert: {
+            type: "EXPENSE",
+            category: "PAYSTACK_FEE",
+            amount: paystackFeeKobo / 100,
+            user: String(userId),
+            transaction: result.transaction._id,
+            reference: feeReference,
+            description:
+              `Paystack processing fee for wallet funding ${cleanReference}`,
+            metadata: {
+              gateway: "PAYSTACK",
+              gatewayReference: cleanReference,
+              feeKobo: paystackFeeKobo,
+              currency: "NGN",
+            },
+          },
+        },
+        {
+          upsert: true,
+        }
+      );
+    } else if (
+      transaction.fees !== undefined &&
+      transaction.fees !== null &&
+      transaction.fees !== 0
+    ) {
+      /**
+       * Do not invent a fee if Paystack returns
+       * an unexpected fee value. Log it so it
+       * can be investigated.
+       */
+      console.error(
+        "Paystack fee was not recorded because its value was invalid",
+        {
+          reference: cleanReference,
+          fees: transaction.fees,
+        }
+      );
+    }
 
     /**
      * ========================================
      * DUPLICATE PAYMENT
      * ========================================
+     *
+     * The fee-ledger check above also runs when
+     * wallet funding was already processed.
+     * This allows a retry to repair a missing
+     * fee entry without crediting the wallet again.
      */
-    if (
-      result.alreadyProcessed
-    ) {
+    if (result.alreadyProcessed) {
       return res.status(200).json({
         success: true,
-
-        message:
-          "Payment already processed",
-
+        message: "Payment already processed",
         data: {
-          balance:
-            result.balance,
-
-          walletBalance:
-            result.balance,
-
-          amount:
-            result.transaction.amount,
-
-          reference:
-            cleanReference,
-
-          transactionReference:
-            cleanReference,
-
-          alreadyProcessed:
-            true,
-
-          transaction:
-            result.transaction,
+          balance: result.balance,
+          walletBalance: result.balance,
+          amount: result.transaction.amount,
+          reference: cleanReference,
+          transactionReference: cleanReference,
+          alreadyProcessed: true,
+          transaction: result.transaction,
         },
       });
     }
@@ -955,75 +759,52 @@ export const verifyFunding = async (
      */
     return res.status(200).json({
       success: true,
-
-      message:
-        "Wallet funded successfully",
-
+      message: "Wallet funded successfully",
       data: {
-        balance:
-          result.balance,
-
-        walletBalance:
-          result.balance,
+        balance: result.balance,
+        walletBalance: result.balance,
 
         /**
-         * Amount actually credited
-         * to AbuPay wallet.
+         * Amount actually credited to AbuPay.
          */
-        amount:
-          fundingAmount,
+        amount: fundingAmount,
 
         /**
-         * Amount Paystack reports
-         * for the transaction.
+         * Amount Paystack reports for the transaction.
          */
-        paidAmount:
-          paidAmount,
+        paidAmount,
 
         /**
-         * Paystack fee if returned.
+         * Paystack fee as returned by Paystack.
+         * This value is in Kobo when supplied by
+         * the Paystack transaction verification API.
          */
-        fee:
-          transaction.fees ||
-          0,
+        fee: transaction.fees || 0,
 
-        reference:
-          cleanReference,
-
-        transactionReference:
-          cleanReference,
-
-        alreadyProcessed:
-          false,
-
-        transaction:
-          result.transaction,
+        reference: cleanReference,
+        transactionReference: cleanReference,
+        alreadyProcessed: false,
+        transaction: result.transaction,
       },
     });
   } catch (error: any) {
     console.error(
       "================================="
     );
+    console.error("PAYSTACK VERIFY ERROR");
     console.error(
-      "PAYSTACK VERIFY ERROR"
-    );
-    console.error(
-      error?.response?.data ||
-        error
+      error?.response?.data || error
     );
     console.error(
       "================================="
     );
 
-    if (
-      error?.response?.data
-    ) {
+    if (error?.response?.data) {
       return next(
         new AppError(
           error?.response?.data?.message ||
             "Payment verification failed",
-          error?.response?.status ||
-            400
+          error?.response?.status || 400
         )
       );
     }

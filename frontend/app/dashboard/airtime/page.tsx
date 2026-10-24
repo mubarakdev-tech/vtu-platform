@@ -63,7 +63,7 @@ interface ReceiptData {
 
 export default function AirtimePage() {
   const [provider, setProvider] =
-    useState<ProviderId>("vtpass");
+    useState<ProviderId | "">("");
 
   const [network, setNetwork] = useState("mtn");
   const [phone, setPhone] = useState("");
@@ -79,6 +79,14 @@ export default function AirtimePage() {
     useState<ReceiptData | null>(null);
 
   const handlePurchase = async () => {
+    if (!provider) {
+      setMessage({
+        type: "error",
+        text: "Please select a provider before continuing.",
+      });
+      return;
+    }
+
     if (!phone || phone.length < 11) {
       setMessage({
         type: "error",
@@ -178,13 +186,16 @@ export default function AirtimePage() {
 
     try {
       const imageResponse = await fetch(logoUrl);
-      const imageBlob = await imageResponse.blob();
 
+      if (!imageResponse.ok) {
+        throw new Error("Unable to load receipt logo");
+      }
+
+      const imageBlob = await imageResponse.blob();
       const reader = new FileReader();
 
       reader.onloadend = () => {
         const logoData = reader.result as string;
-
         createPdf(doc, tx, logoData);
       };
 
@@ -216,7 +227,7 @@ export default function AirtimePage() {
           28
         );
       } catch {
-        // Continue without logo if image conversion fails
+        // Continue without logo if image conversion fails.
       }
     }
 
@@ -280,23 +291,9 @@ export default function AirtimePage() {
 
     doc.setFontSize(9);
     doc.setTextColor(100, 100, 100);
-    doc.text(
-      "BALANCE BEFORE",
-      30,
-      108
-    );
-
-    doc.text(
-      "AMOUNT PAID",
-      88,
-      108
-    );
-
-    doc.text(
-      "BALANCE AFTER",
-      145,
-      108
-    );
+    doc.text("BALANCE BEFORE", 30, 108);
+    doc.text("AMOUNT PAID", 88, 108);
+    doc.text("BALANCE AFTER", 145, 108);
 
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
@@ -414,14 +411,12 @@ Powered by Abu Niematullah Ventures`;
 
         return;
       } catch {
-        // fallback
+        // Continue to WhatsApp fallback.
       }
     }
 
     window.open(
-      `https://wa.me/?text=${encodeURIComponent(
-        text
-      )}`,
+      `https://wa.me/?text=${encodeURIComponent(text)}`,
       "_blank"
     );
   };
@@ -463,9 +458,10 @@ Powered by Abu Niematullah Ventures`;
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() =>
-                      setProvider(item.id)
-                    }
+                    onClick={() => {
+                      setProvider(item.id);
+                      setMessage(null);
+                    }}
                     className={`rounded-xl border p-3 text-left transition ${
                       provider === item.id
                         ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200"
@@ -484,6 +480,12 @@ Powered by Abu Niematullah Ventures`;
                   </button>
                 ))}
               </div>
+
+              {!provider && (
+                <p className="mt-3 text-xs text-amber-700">
+                  Select Awoof or Gift to continue with your preferred provider.
+                </p>
+              )}
             </div>
 
             {/* NETWORK */}
@@ -497,9 +499,7 @@ Powered by Abu Niematullah Ventures`;
                   <button
                     key={net.id}
                     type="button"
-                    onClick={() =>
-                      setNetwork(net.id)
-                    }
+                    onClick={() => setNetwork(net.id)}
                     className={`relative rounded-xl border p-3 transition ${
                       network === net.id
                         ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200"
@@ -510,9 +510,7 @@ Powered by Abu Niematullah Ventures`;
                       <div
                         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold ${net.color} ${net.text}`}
                       >
-                        {net.name
-                          .slice(0, 3)
-                          .toUpperCase()}
+                        {net.name.slice(0, 3).toUpperCase()}
                       </div>
 
                       <span className="text-sm font-semibold text-gray-900">
@@ -550,10 +548,7 @@ Powered by Abu Niematullah Ventures`;
                     value={phone}
                     onChange={(e) =>
                       setPhone(
-                        e.target.value.replace(
-                          /\D/g,
-                          ""
-                        )
+                        e.target.value.replace(/\D/g, "")
                       )
                     }
                     placeholder="08012345678"
@@ -574,17 +569,14 @@ Powered by Abu Niematullah Ventures`;
                     <button
                       key={value}
                       type="button"
-                      onClick={() =>
-                        setAmount(String(value))
-                      }
+                      onClick={() => setAmount(String(value))}
                       className={`rounded-xl border py-3 text-sm font-semibold transition ${
                         amount === String(value)
                           ? "border-emerald-500 bg-emerald-50 text-emerald-700"
                           : "border-gray-200 hover:border-emerald-300 hover:bg-emerald-50"
                       }`}
                     >
-                      ₦
-                      {value.toLocaleString()}
+                      ₦{value.toLocaleString()}
                     </button>
                   ))}
                 </div>
@@ -606,9 +598,7 @@ Powered by Abu Niematullah Ventures`;
                     inputMode="numeric"
                     min="1"
                     value={amount}
-                    onChange={(e) =>
-                      setAmount(e.target.value)
-                    }
+                    onChange={(e) => setAmount(e.target.value)}
                     placeholder="Enter amount"
                     className="w-full rounded-xl border border-gray-200 py-3.5 pl-9 pr-4 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                   />
@@ -753,9 +743,7 @@ Powered by Abu Niematullah Ventures`;
               <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-center">
                 <p className="text-sm font-bold text-gray-900">
                   {receipt.network.toUpperCase()}{" "}
-                  <span className="text-gray-300">
-                    •
-                  </span>{" "}
+                  <span className="text-gray-300">•</span>{" "}
                   {receipt.phone}
                 </p>
 
@@ -776,9 +764,7 @@ Powered by Abu Niematullah Ventures`;
                   </p>
 
                   <p className="mt-0.5 text-xs font-bold text-gray-900">
-                    {formatMoney(
-                      receipt.balanceBefore
-                    )}
+                    {formatMoney(receipt.balanceBefore)}
                   </p>
                 </div>
 
@@ -806,9 +792,7 @@ Powered by Abu Niematullah Ventures`;
                   </p>
 
                   <p className="mt-0.5 text-xs font-bold text-gray-900">
-                    {formatMoney(
-                      receipt.balanceAfter
-                    )}
+                    {formatMoney(receipt.balanceAfter)}
                   </p>
                 </div>
               </div>
@@ -863,9 +847,7 @@ Powered by Abu Niematullah Ventures`;
             <div className="grid grid-cols-2 gap-2.5 border-t border-gray-100 px-4 py-3">
               <button
                 type="button"
-                onClick={() =>
-                  downloadPdf(receipt)
-                }
+                onClick={() => downloadPdf(receipt)}
                 className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50"
               >
                 <Download size={15} />
@@ -874,9 +856,7 @@ Powered by Abu Niematullah Ventures`;
 
               <button
                 type="button"
-                onClick={() =>
-                  shareReceipt(receipt)
-                }
+                onClick={() => shareReceipt(receipt)}
                 className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
               >
                 <Share2 size={15} />

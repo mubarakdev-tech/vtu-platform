@@ -1,417 +1,260 @@
-import { Request, Response, NextFunction } from "express";
+﻿import { Request, Response, NextFunction } from "express";
 import FinancialLedger from "../models/financialLedger.model";
 import AppError from "../utils/AppError";
 
-/**
- * ==========================================
- * GET FINANCIAL SUMMARY
- * ==========================================
- *
- * Returns AbuPay's financial overview.
- *
- * IMPORTANT:
- *
- * This endpoint is intended for the
- * administrative side of AbuPay.
- *
- * It should NOT be exposed to normal
- * customers.
- */
 export const getFinancialSummary = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    /**
-     * ========================================
-     * DATE FILTER
-     * ========================================
-     *
-     * Optional:
-     *
-     * ?from=2026-08-01
-     * ?to=2026-08-19
-     *
-     * If no dates are supplied,
-     * all financial records are included.
-     */
+    const from = req.query.from as string | undefined;
+    const to = req.query.to as string | undefined;
 
-    const from =
-      req.query.from as string | undefined;
+    const filter: Record<string, any> = {
+      "metadata.isTest": { $ne: true },
+    };
 
-    const to =
-      req.query.to as string | undefined;
+    const isValidDate = (value: string) =>
+      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+      !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) &&
+      new Date(`${value}T00:00:00.000Z`)
+        .toISOString()
+        .startsWith(value);
 
-    const filter: any = {};
+    if (from && !isValidDate(from)) {
+      return next(new AppError("Invalid from date", 400));
+    }
+
+    if (to && !isValidDate(to)) {
+      return next(new AppError("Invalid to date", 400));
+    }
+
+    if (from && to && from > to) {
+      return next(
+        new AppError("The from date must not be after the to date", 400)
+      );
+    }
 
     if (from || to) {
       filter.createdAt = {};
 
       if (from) {
-        const fromDate =
-          new Date(`${from}T00:00:00.000Z`);
-
-        if (
-          Number.isNaN(
-            fromDate.getTime()
-          )
-        ) {
-          return next(
-            new AppError(
-              "Invalid from date",
-              400
-            )
-          );
-        }
-
-        filter.createdAt.$gte =
-          fromDate;
+        filter.createdAt.$gte = new Date(`${from}T00:00:00.000Z`);
       }
 
       if (to) {
-        const toDate =
-          new Date(`${to}T23:59:59.999Z`);
-
-        if (
-          Number.isNaN(
-            toDate.getTime()
-          )
-        ) {
-          return next(
-            new AppError(
-              "Invalid to date",
-              400
-            )
-          );
-        }
-
-        filter.createdAt.$lte =
-          toDate;
+        filter.createdAt.$lte = new Date(`${to}T23:59:59.999Z`);
       }
     }
 
-    console.log(
-      "======================================"
+    const entries: any[] = await FinancialLedger.find(filter).lean();
+
+    // Successful service sales recorded as revenue.
+    const sales = entries.filter(
+      (entry) =>
+        entry.type === "REVENUE" &&
+        ["AIRTIME_SALE", "DATA_SALE"].includes(entry.category)
     );
 
-    console.log(
-      "FINANCIAL SUMMARY REQUEST"
+    const revenueEntries = entries.filter(
+      (entry) =>
+        entry.type === "REVENUE" &&
+        ["AIRTIME_SALE", "DATA_SALE", "OTHER_REVENUE"].includes(
+          entry.category
+        )
     );
 
-    console.log(
-      "From:",
-      from || "ALL"
+    // All recorded expenses, including Paystack fees.
+    const expenses = entries.filter(
+      (entry) => entry.type === "EXPENSE"
     );
 
-    console.log(
-      "To:",
-      to || "ALL"
+    const providerExpenseEntries = expenses.filter(
+      (entry) => entry.category === "PROVIDER_COST"
     );
 
-    console.log(
-      "======================================"
+    const paystackFeeEntries = expenses.filter(
+      (entry) => entry.category === "PAYSTACK_FEE"
     );
 
-    /**
-     * ========================================
-     * REVENUE
-     * ========================================
-     */
+    const otherExpenseEntries = expenses.filter(
+      (entry) =>
+        !["PROVIDER_COST", "PAYSTACK_FEE"].includes(entry.category)
+    );
 
-    const revenueResult =
-      await FinancialLedger.aggregate([
-        {
-          $match: {
-            ...filter,
-            type: "REVENUE",
-          },
-        },
-        {
-          $group: {
-            _id: null,
+    const sumAmounts = (items: any[]) =>
+      items.reduce(
+        (sum, item) => sum + Number(item.amount || 0),
+        0
+      );
 
-            totalRevenue: {
-              $sum: "$amount",
-            },
+    const airtimeEntries = sales.filter(
+      (entry) => entry.category === "AIRTIME_SALE"
+    );
 
-            revenueCount: {
-              $sum: 1,
-            },
-          },
-        },
-      ]);
+    const dataEntries = sales.filter(
+      (entry) => entry.category === "DATA_SALE"
+    );
 
-    /**
-     * ========================================
-     * EXPENSE
-     * ========================================
-     */
+    // Index provider-cost expense entries by linked sale transaction.
+    const expensesByTransaction = new Map<string, any[]>();
 
-    const expenseResult =
-      await FinancialLedger.aggregate([
-        {
-          $match: {
-            ...filter,
-            type: "EXPENSE",
-          },
-        },
-        {
-          $group: {
-            _id: null,
+    for (const expense of providerExpenseEntries) {
+      if (!expense.transaction) continue;
 
-            totalExpenses: {
-              $sum: "$amount",
-            },
+      const key = String(expense.transaction);
+      const linked = expensesByTransaction.get(key) || [];
 
-            expenseCount: {
-              $sum: 1,
-            },
-          },
-        },
-      ]);
+      linked.push(expense);
+      expensesByTransaction.set(key, linked);
+    }
 
-    /**
-     * ========================================
-     * AIRTIME REVENUE
-     * ========================================
-     */
+    let totalProviderCost = 0;
+    let knownCostSales = 0;
+    let unknownCostSales = 0;
 
-    const airtimeResult =
-      await FinancialLedger.aggregate([
-        {
-          $match: {
-            ...filter,
-            type: "REVENUE",
-            category: "AIRTIME_SALE",
-          },
-        },
-        {
-          $group: {
-            _id: null,
+    const consumedProviderExpenseIds = new Set<string>();
 
-            total: {
-              $sum: "$amount",
-            },
+    for (const sale of sales) {
+      const saleTransactionId = sale.transaction
+        ? String(sale.transaction)
+        : "";
 
-            count: {
-              $sum: 1,
-            },
-          },
-        },
-      ]);
+      const linkedExpenses = saleTransactionId
+        ? expensesByTransaction.get(saleTransactionId) || []
+        : [];
 
-    /**
-     * ========================================
-     * DATA REVENUE
-     * ========================================
-     */
+      const metadata = sale.metadata || {};
 
-    const dataResult =
-      await FinancialLedger.aggregate([
-        {
-          $match: {
-            ...filter,
-            type: "REVENUE",
-            category: "DATA_SALE",
-          },
-        },
-        {
-          $group: {
-            _id: null,
+      const directCostIsKnown =
+        typeof sale.providerCost === "number" &&
+        Number.isFinite(sale.providerCost) &&
+        sale.providerCost >= 0;
 
-            total: {
-              $sum: "$amount",
-            },
+      const metadataCost = Number(metadata.providerCost);
 
-            count: {
-              $sum: 1,
-            },
-          },
-        },
-      ]);
+      const metadataCostIsKnown =
+        metadata.providerCostKnown === true &&
+        Number.isFinite(metadataCost) &&
+        metadataCost >= 0;
 
-    /**
-     * ========================================
-     * PROVIDER COST
-     * ========================================
-     *
-     * This will remain zero until we start
-     * recording actual provider costs.
-     */
+      if (directCostIsKnown || metadataCostIsKnown) {
+        const cost = directCostIsKnown
+          ? sale.providerCost
+          : metadataCost;
 
-    const providerCostResult =
-      await FinancialLedger.aggregate([
-        {
-          $match: {
-            ...filter,
-            category: "PROVIDER_COST",
-          },
-        },
-        {
-          $group: {
-            _id: null,
+        totalProviderCost += cost;
+        knownCostSales += 1;
 
-            total: {
-              $sum: "$amount",
-            },
+        // Avoid counting the same sale cost twice.
+        for (const expense of linkedExpenses) {
+          consumedProviderExpenseIds.add(String(expense._id));
+        }
+      } else if (linkedExpenses.length > 0) {
+        totalProviderCost += sumAmounts(linkedExpenses);
+        knownCostSales += 1;
 
-            count: {
-              $sum: 1,
-            },
-          },
-        },
-      ]);
+        for (const expense of linkedExpenses) {
+          consumedProviderExpenseIds.add(String(expense._id));
+        }
+      } else {
+        // Never assume an unrecorded provider cost is zero.
+        unknownCostSales += 1;
+      }
+    }
 
-    /**
-     * ========================================
-     * PAYSTACK FEES
-     * ========================================
-     */
+    // Include provider-cost entries not already attributed to a sale.
+    const unlinkedProviderExpenses = providerExpenseEntries.filter(
+      (expense) =>
+        !consumedProviderExpenseIds.has(String(expense._id))
+    );
 
-    const paystackFeeResult =
-      await FinancialLedger.aggregate([
-        {
-          $match: {
-            ...filter,
-            category: "PAYSTACK_FEE",
-          },
-        },
-        {
-          $group: {
-            _id: null,
+    totalProviderCost += sumAmounts(unlinkedProviderExpenses);
 
-            total: {
-              $sum: "$amount",
-            },
+    const totalRevenue = sumAmounts(revenueEntries);
+    const otherExpenses = sumAmounts(otherExpenseEntries);
+    const totalPaystackFees = sumAmounts(paystackFeeEntries);
 
-            count: {
-              $sum: 1,
-            },
-          },
-        },
-      ]);
-
-    /**
-     * ========================================
-     * EXTRACT VALUES
-     * ========================================
-     */
-
-    const totalRevenue =
-      revenueResult[0]?.totalRevenue ||
-      0;
-
+    // Includes recorded provider costs, Paystack fees and other expenses.
     const totalExpenses =
-      expenseResult[0]?.totalExpenses ||
-      0;
+      totalProviderCost + otherExpenses + totalPaystackFees;
 
-    const totalProviderCost =
-      providerCostResult[0]?.total ||
-      0;
+    // Arithmetic based only on currently recorded amounts.
+    const recordedFinancialResult = totalRevenue - totalExpenses;
+    const recordedGrossProfit = totalRevenue - totalProviderCost;
 
-    const totalPaystackFees =
-      paystackFeeResult[0]?.total ||
-      0;
+    // A zero-sales period has no missing sale costs to reconcile.
+    const providerCostsComplete = unknownCostSales === 0;
 
-    /**
-     * ========================================
-     * CURRENT GROSS PROFIT
-     * ========================================
-     *
-     * This is a preliminary calculation.
-     *
-     * Once actual provider costs are
-     * recorded, this becomes meaningful.
-     */
+    const profitStatus = providerCostsComplete
+      ? "RECORDED_COSTS_COMPLETE"
+      : "PROVISIONAL";
 
-    const grossProfit =
-      totalRevenue -
-      totalExpenses;
+    // Do not present incomplete calculations as confirmed profit.
+    const financialResult = providerCostsComplete
+      ? recordedFinancialResult
+      : null;
 
-    /**
-     * ========================================
-     * RESPONSE
-     * ========================================
-     */
+    const grossProfit = providerCostsComplete
+      ? recordedGrossProfit
+      : null;
 
     return res.status(200).json({
       success: true,
-
       data: {
         period: {
-          from:
-            from || null,
-
-          to:
-            to || null,
+          from: from || null,
+          to: to || null,
         },
 
         revenue: {
-          total:
-            totalRevenue,
-
-          transactions:
-            revenueResult[0]
-              ?.revenueCount || 0,
+          total: totalRevenue,
+          transactions: revenueEntries.length,
         },
 
         expenses: {
-          total:
-            totalExpenses,
-
-          transactions:
-            expenseResult[0]
-              ?.expenseCount || 0,
+          total: totalExpenses,
+          transactions: expenses.length,
         },
 
+        financialResult,
         grossProfit,
 
-        airtime: {
-          revenue:
-            airtimeResult[0]?.total ||
-            0,
+        // Audit values based only on entries currently recorded.
+        // These are not confirmed profit when provider costs are missing.
+        recordedFinancialResult,
+        recordedGrossProfit,
 
-          transactions:
-            airtimeResult[0]?.count ||
-            0,
+        profitStatus,
+        providerCostsComplete,
+
+        airtime: {
+          revenue: sumAmounts(airtimeEntries),
+          transactions: airtimeEntries.length,
         },
 
         data: {
-          revenue:
-            dataResult[0]?.total ||
-            0,
-
-          transactions:
-            dataResult[0]?.count ||
-            0,
+          revenue: sumAmounts(dataEntries),
+          transactions: dataEntries.length,
         },
 
         providerCosts: {
-          total:
-            totalProviderCost,
-
+          total: totalProviderCost,
           transactions:
-            providerCostResult[0]
-              ?.count || 0,
+            knownCostSales + unlinkedProviderExpenses.length,
+          unknownServiceCosts: unknownCostSales,
         },
 
         paystackFees: {
-          total:
-            totalPaystackFees,
-
-          transactions:
-            paystackFeeResult[0]
-              ?.count || 0,
+          total: totalPaystackFees,
+          transactions: paystackFeeEntries.length,
+          recoveryStatus: "NOT_RECONCILED",
         },
       },
     });
   } catch (error) {
-    console.error(
-      "Get Financial Summary Error:",
-      error
-    );
-
-    next(error);
+    console.error("Get Financial Summary Error:", error);
+    return next(error);
   }
 };

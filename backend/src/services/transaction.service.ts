@@ -1,3 +1,4 @@
+
 import { randomUUID } from "crypto";
 import { ClientSession } from "mongoose";
 import Transaction from "../models/transaction.model";
@@ -30,12 +31,12 @@ interface CreateTransactionParams {
   gateway?: "PAYSTACK" | "OTHER";
   gatewayReference?: string;
 
+  // Optional: existing callers do not need to supply this.
+  idempotencyKey?: string;
+
   session?: ClientSession;
 }
 
-/**
- * Create transaction
- */
 export const createTransaction = async ({
   userId,
   type,
@@ -48,19 +49,38 @@ export const createTransaction = async ({
   balanceAfter,
   gateway,
   gatewayReference,
+  idempotencyKey,
   session,
 }: CreateTransactionParams) => {
   if (!userId) {
     throw new Error("User ID is required");
   }
 
-  if (amount <= 0) {
+  if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("Transaction amount must be greater than zero");
   }
 
   const reference = `${category}-${randomUUID()
     .replace(/-/g, "")
     .toUpperCase()}`;
+
+  const transactionData = {
+    user: userId,
+    type,
+    category,
+    amount,
+    status,
+    reference,
+    description,
+    balanceBefore,
+    balanceAfter,
+    gateway,
+    gatewayReference,
+    ...(idempotencyKey
+      ? { idempotencyKey: idempotencyKey.trim() }
+      : {}),
+    metadata,
+  };
 
   console.log("\n========== CREATE TRANSACTION ==========");
   console.log("User ID          :", userId);
@@ -69,6 +89,7 @@ export const createTransaction = async ({
   console.log("Amount           :", amount);
   console.log("Status           :", status);
   console.log("Reference        :", reference);
+  console.log("Idempotency Key  :", idempotencyKey || "N/A");
   console.log("Gateway          :", gateway || "N/A");
   console.log("Gateway Reference:", gatewayReference || "N/A");
   console.log("Balance Before   :", balanceBefore ?? "N/A");
@@ -77,22 +98,7 @@ export const createTransaction = async ({
   console.log("========================================\n");
 
   const [transaction] = await Transaction.create(
-    [
-      {
-        user: userId,
-        type,
-        category,
-        amount,
-        status,
-        reference,
-        description,
-        balanceBefore,
-        balanceAfter,
-        gateway,
-        gatewayReference,
-        metadata,
-      },
-    ],
+    [transactionData],
     session ? { session } : {}
   );
 
@@ -102,10 +108,19 @@ export const createTransaction = async ({
 };
 
 /**
- * Find transaction by payment gateway reference
- *
- * Used to prevent the same payment from
- * being credited to the wallet more than once.
+ * Find a transaction by its idempotency key.
+ */
+export const findTransactionByIdempotencyKey = async (
+  idempotencyKey: string,
+  session?: ClientSession
+) => {
+  return Transaction.findOne({
+    idempotencyKey: idempotencyKey.trim(),
+  }).session(session || null);
+};
+
+/**
+ * Find a transaction by payment gateway reference.
  */
 export const findTransactionByGatewayReference = async (
   gateway: "PAYSTACK" | "OTHER",

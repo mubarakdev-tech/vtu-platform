@@ -13,7 +13,6 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { getDataPlans, buyData } from "@/services/data";
-import { PROVIDERS, ProviderId } from "@/lib/providers";
 import { jsPDF } from "jspdf";
 
 const networks = [
@@ -62,7 +61,6 @@ interface ReceiptData {
 }
 
 export default function DataPage() {
-  const [provider, setProvider] = useState<ProviderId>("vtpass");
   const [network, setNetwork] = useState("mtn");
 
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -86,7 +84,7 @@ export default function DataPage() {
   useEffect(() => {
     loadPlans();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [network, provider]);
+  }, [network]);
 
   const loadPlans = async () => {
     try {
@@ -95,7 +93,7 @@ export default function DataPage() {
       setMessage(null);
       setPlans([]);
 
-      const result = await getDataPlans(network, provider);
+      const result = await getDataPlans(network);
 
       console.log("DATA PLANS RESPONSE:", result);
 
@@ -196,8 +194,6 @@ export default function DataPage() {
         network,
         phone,
         plan: selectedPlan.variation_code,
-        amount: selectedPlan.amount,
-        provider,
       });
 
       console.log("BUY DATA RESULT:", result);
@@ -466,46 +462,6 @@ Fast • Secure • Reliable`;
 
         {/* PURCHASE CARD */}
         <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-
-          {/* PROVIDER DROPDOWN */}
-          <div className="border-b p-5">
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Select Package
-            </label>
-
-            <div className="relative">
-              <select
-                value={provider}
-                onChange={(e) =>
-                  setProvider(
-                    e.target.value as ProviderId
-                  )
-                }
-                className="w-full appearance-none rounded-xl border bg-white px-4 py-3.5 pr-10 text-sm font-medium text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              >
-                {PROVIDERS.map((item) => (
-                  <option
-                    key={item.id}
-                    value={item.id}
-                  >
-                    {item.label}
-                    {item.description
-                      ? ` — ${item.description}`
-                      : ""}
-                  </option>
-                ))}
-              </select>
-
-              <ChevronDown
-                size={18}
-                className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
-              />
-            </div>
-
-            <p className="mt-2 text-xs text-gray-400">
-              Choose your preferred package source.
-            </p>
-          </div>
 
           {/* NETWORK */}
           <div className="border-b p-5">

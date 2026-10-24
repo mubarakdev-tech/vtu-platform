@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import AppError from "../utils/AppError";
 import { getProvider } from "../providers";
 import { debitWallet, creditWallet } from "./wallet.service";
@@ -48,7 +48,7 @@ export const purchaseAirtime = async ({
         session,
       });
 
-      console.log("✅ Wallet debited successfully");
+      console.log("Γ£à Wallet debited successfully");
       console.log(
         "Balance Before:",
         walletResult.balanceBefore
@@ -95,12 +95,12 @@ export const purchaseAirtime = async ({
       );
 
       // =====================================================
-      // 4. PROVIDER FAILED → REFUND WALLET
+      // 4. PROVIDER FAILED ΓåÆ REFUND WALLET
       // =====================================================
 
       if (!providerResponse.success) {
         console.log(
-          "❌ Provider failed. Refunding wallet..."
+          "Γ¥î Provider failed. Refunding wallet..."
         );
 
         const refundResult = await creditWallet({
@@ -110,7 +110,7 @@ export const purchaseAirtime = async ({
         });
 
         console.log(
-          "✅ Wallet refunded successfully"
+          "Γ£à Wallet refunded successfully"
         );
 
         await createTransaction({
@@ -147,7 +147,7 @@ export const purchaseAirtime = async ({
       // =====================================================
 
       console.log(
-        "✅ Provider airtime purchase successful"
+        "Γ£à Provider airtime purchase successful"
       );
 
       // =====================================================
@@ -178,7 +178,7 @@ export const purchaseAirtime = async ({
         session,
       });
 
-      console.log("✅ Transaction saved");
+      console.log("Γ£à Transaction saved");
 
       // =====================================================
       // 7. RETURN RESULT TO FRONTEND
