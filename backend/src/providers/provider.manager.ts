@@ -11,6 +11,7 @@ import {
 
 import { vtpassProvider } from "./vtpass/vtpass.provider";
 import { bigisubProvider } from "./bigisub/bigisub.provider";
+import { maskawaProvider } from "./maskawa/maskawa.provider";
 
 // ==========================================
 // REGISTERED PROVIDERS
@@ -43,6 +44,7 @@ const providerRegistry: Record<
 > = {
   vtpass: vtpassProvider,
   bigisub: bigisubProvider,
+  maskawa: maskawaProvider,
 };
 
 // ==========================================

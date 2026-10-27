@@ -74,4 +74,11 @@ export interface VTUProvider {
   checkTransactionStatus?(
     requestId: string
   ): Promise<ProviderResponse>;
+
+  getBalance?(): Promise<{
+    success: boolean;
+    balance?: number;
+    message?: string;
+    provider?: string;
+  }>;
 }

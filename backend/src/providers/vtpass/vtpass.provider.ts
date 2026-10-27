@@ -288,6 +288,42 @@ export const buyAirtime = async ({
 // VTPASS PROVIDER
 // =====================================================
 
+// =====================================================
+// GET VTPASS WALLET BALANCE
+// =====================================================
+
+export const getBalance = async () => {
+  try {
+    const response = await vtpassClient.get("/balance");
+    const balance = Number(response.data?.contents?.balance);
+
+    if (!Number.isFinite(balance)) {
+      return {
+        success: false,
+        message: "VTpass returned an invalid wallet balance",
+        provider: "vtpass",
+      };
+    }
+
+    return {
+      success: true,
+      balance,
+      provider: "vtpass",
+    };
+  } catch (error: any) {
+    console.error(
+      "VTPASS BALANCE ERROR:",
+      error?.response?.data || error?.message || error
+    );
+
+    return {
+      success: false,
+      message: "Unable to retrieve VTpass wallet balance",
+      provider: "vtpass",
+    };
+  }
+};
+
 export const vtpassProvider = {
   key: "vtpass",
 
@@ -296,4 +332,6 @@ export const vtpassProvider = {
   buyData,
 
   buyAirtime,
+
+  getBalance,
 };
