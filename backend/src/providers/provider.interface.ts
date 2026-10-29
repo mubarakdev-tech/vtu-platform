@@ -50,6 +50,8 @@ export interface ProviderResponse {
   providerReference?: string;
 
   providerStatus?: string;
+
+  providerCost?: number;
 }
 
 export interface VTUProvider {

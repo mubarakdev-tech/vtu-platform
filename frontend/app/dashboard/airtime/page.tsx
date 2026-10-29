@@ -16,8 +16,7 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
 } from "lucide-react";
-import { buyAirtime } from "@/services/airtime";
-import { PROVIDERS, ProviderId } from "@/lib/providers";
+import { buyAirtime, buyBulkAirtime } from "@/services/airtime";
 import { jsPDF } from "jspdf";
 
 const networks = [
@@ -62,13 +61,14 @@ interface ReceiptData {
 }
 
 export default function AirtimePage() {
-  const [provider, setProvider] =
-    useState<ProviderId | "">("");
-
   const [network, setNetwork] = useState("mtn");
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkInput, setBulkInput] = useState("");
+  const [bulkPhones, setBulkPhones] = useState<string[]>([]);
 
   const [message, setMessage] = useState<{
     type: "success" | "error";
@@ -78,14 +78,103 @@ export default function AirtimePage() {
   const [receipt, setReceipt] =
     useState<ReceiptData | null>(null);
 
-  const handlePurchase = async () => {
-    if (!provider) {
+  const parseBulkPhones = (value: string) => {
+    const phones = value
+      .split(/[\n,;]+/)
+      .map((item) => item.replace(/\D/g, "").trim())
+      .filter(Boolean);
+
+    const uniquePhones = Array.from(new Set(phones)).slice(0, 100);
+
+    setBulkPhones(uniquePhones);
+  };
+
+  const handleBulkInputChange = (value: string) => {
+    setBulkInput(value);
+    parseBulkPhones(value);
+  };
+  const removeBulkPhone = (phoneToRemove: string) => {
+    const updatedPhones = bulkPhones.filter(
+      (item) => item !== phoneToRemove
+    );
+
+    setBulkPhones(updatedPhones);
+    setBulkInput(updatedPhones.join("\n"));
+  };
+  const handleBulkPurchase = async () => {
+    const validPhones = bulkPhones.filter(
+      (item) => item.length === 11
+    );
+
+    if (validPhones.length !== bulkPhones.length) {
       setMessage({
         type: "error",
-        text: "Please select a provider before continuing.",
+        text: "Please correct invalid phone numbers before continuing.",
       });
       return;
     }
+
+    if (validPhones.length < 2) {
+      setMessage({
+        type: "error",
+        text: "Please enter at least two valid phone numbers for multiple recipients.",
+      });
+      return;
+    }
+
+    if (!amount || Number(amount) <= 0) {
+      setMessage({
+        type: "error",
+        text: "Please enter a valid amount.",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setMessage(null);
+
+      const value = Number(amount);
+
+      const result = await buyBulkAirtime({
+        recipients: validPhones.map((recipientPhone) => ({
+          network,
+          phone: recipientPhone,
+          amount: value,
+        })),
+      });
+
+      const successful = Number(result?.successful || 0);
+      const failed = Number(result?.failed || 0);
+
+      setMessage({
+        type: failed === 0 ? "success" : "error",
+        text:
+          failed === 0
+            ? `Airtime sent successfully to ${successful} recipient${
+                successful === 1 ? "" : "s"
+              }.`
+            : `${successful} successful, ${failed} failed. Batch: ${
+                result?.batchReference || "N/A"
+              }`,
+      });
+
+      if (failed === 0) {
+        setBulkInput("");
+        setBulkPhones([]);
+      }
+    } catch (error: any) {
+      setMessage({
+        type: "error",
+        text:
+          error?.response?.data?.message ||
+          "Bulk airtime purchase failed. Please try again.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handlePurchase = async () => {
 
     if (!phone || phone.length < 11) {
       setMessage({
@@ -113,7 +202,6 @@ export default function AirtimePage() {
         network,
         phone,
         amount: value,
-        provider,
       });
 
       if (result.success) {
@@ -447,47 +535,6 @@ Powered by Abu Niematullah Ventures`;
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           {/* FORM */}
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-            {/* PROVIDER */}
-            <div className="border-b p-5 sm:p-6">
-              <p className="mb-3 text-sm font-semibold text-gray-800">
-                Select Package
-              </p>
-
-              <div className="grid grid-cols-2 gap-3">
-                {PROVIDERS.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setProvider(item.id);
-                      setMessage(null);
-                    }}
-                    className={`rounded-xl border p-3 text-left transition ${
-                      provider === item.id
-                        ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200"
-                        : "border-gray-200 hover:border-emerald-300 hover:bg-gray-50"
-                    }`}
-                  >
-                    <div className="text-sm font-semibold text-gray-900">
-                      {item.label}
-                    </div>
-
-                    {item.description && (
-                      <div className="mt-1 text-xs text-gray-500">
-                        {item.description}
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {!provider && (
-                <p className="mt-3 text-xs text-amber-700">
-                  Select Awoof or Gift to continue with your preferred provider.
-                </p>
-              )}
-            </div>
-
             {/* NETWORK */}
             <div className="border-b p-5 sm:p-6">
               <p className="mb-3 text-sm font-semibold text-gray-800">
@@ -531,12 +578,12 @@ Powered by Abu Niematullah Ventures`;
             {/* PHONE + AMOUNT */}
             <div className="space-y-6 p-5 sm:p-6">
               {/* PHONE */}
-              <div>
+              <div className={bulkMode ? "hidden" : ""}>
                 <label className="mb-2 block text-sm font-semibold text-gray-700">
                   Phone Number
                 </label>
 
-                <div className="relative">
+                <div className={bulkMode ? "hidden" : "relative"}>
                   <Phone
                     size={18}
                     className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
@@ -558,6 +605,81 @@ Powered by Abu Niematullah Ventures`;
                 </div>
               </div>
 
+              <button
+                type="button"
+                onClick={() => {
+                  setBulkMode(!bulkMode);
+                  setMessage(null);
+                }}
+                className="text-left text-sm font-semibold text-emerald-600 transition hover:text-emerald-700"
+              >
+                {bulkMode
+                  ? "Use single recipient"
+                  : "+ Add multiple recipients"}
+              </button>
+              {bulkMode && (
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">
+                    Multiple Recipients
+                  </label>
+
+                  <textarea
+                    value={bulkInput}
+                    onChange={(e) =>
+                      handleBulkInputChange(e.target.value)
+                    }
+                    rows={5}
+                    placeholder={"08012345678\n08023456789\n08034567890"}
+                    className="w-full resize-y rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  />
+
+                  <div className="mt-2 flex items-center justify-between gap-3 text-xs text-gray-500">
+                    <span>
+                      One number per line, or separate with commas or semicolons.
+                    </span>
+
+                    <span className="shrink-0 font-semibold text-emerald-700">
+                      {bulkPhones.length}/100
+                    </span>
+                  </div>
+
+                  {bulkPhones.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {bulkPhones.map((recipientPhone, index) => (
+                        <div
+                          key={recipientPhone}
+                          className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${
+                            recipientPhone.length === 11
+                              ? "border-gray-200 bg-white text-gray-700"
+                              : "border-red-200 bg-red-50 text-red-600"
+                          }`}
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600">
+                              {index + 1}
+                            </span>
+
+                            <span className="text-sm font-medium">
+                              {recipientPhone}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeBulkPhone(recipientPhone)
+                            }
+                            aria-label={`Remove ${recipientPhone}`}
+                            className="shrink-0 rounded-full p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-red-500"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {/* QUICK AMOUNT */}
               <div>
                 <label className="mb-3 block text-sm font-semibold text-gray-700">
@@ -608,7 +730,7 @@ Powered by Abu Niematullah Ventures`;
               {/* PURCHASE BUTTON */}
               <button
                 type="button"
-                onClick={handlePurchase}
+                onClick={bulkMode ? handleBulkPurchase : handlePurchase}
                 disabled={loading}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-4 font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -623,7 +745,7 @@ Powered by Abu Niematullah Ventures`;
                 ) : (
                   <>
                     <Smartphone size={19} />
-                    Buy Airtime
+                    {bulkMode ? "Buy Airtime for Recipients" : "Buy Airtime"}
                   </>
                 )}
               </button>

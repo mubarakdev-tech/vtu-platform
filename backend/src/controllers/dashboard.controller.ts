@@ -1,4 +1,4 @@
-import { Response } from "express";
+﻿import { Response } from "express";
 import Wallet from "../models/wallet.model";
 import Transaction from "../models/transaction.model";
 import FinancialLedger from "../models/financialLedger.model";
@@ -99,6 +99,7 @@ export const getDashboard = async (
     const ledgerEntries =
       await FinancialLedger.find({
         user: userId,
+        "metadata.isTest": { $ne: true },
       }).lean();
 
     // ==========================================

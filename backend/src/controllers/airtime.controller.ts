@@ -11,7 +11,7 @@ export const buyAirtime = async (
 ) => {
   try {
     const userId = req.user?.id;
-    const { network, phone, amount, provider } = req.body;
+    const { network, phone, amount } = req.body;
 
     if (!userId) {
       return next(new AppError("Unauthorized", 401));
@@ -22,12 +22,11 @@ export const buyAirtime = async (
       !phone ||
       amount === undefined ||
       amount === null ||
-      amount === "" ||
-      !provider
+      amount === ""
     ) {
       return next(
         new AppError(
-          "Network, phone, amount and provider are required",
+          "Network, phone and amount are required",
           400
         )
       );
@@ -44,7 +43,6 @@ export const buyAirtime = async (
       network,
       phone,
       amount: numericAmount,
-      provider,
     });
 
     if (!result.success) {

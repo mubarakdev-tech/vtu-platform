@@ -12,7 +12,7 @@ import {
   CheckCircle,
   ChevronDown,
 } from "lucide-react";
-import { getDataPlans, buyData } from "@/services/data";
+import { getDataPlans, buyData, buyBulkData } from "@/services/data";
 import { jsPDF } from "jspdf";
 
 const networks = [
@@ -67,6 +67,10 @@ export default function DataPage() {
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
 
   const [phone, setPhone] = useState("");
+
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkInput, setBulkInput] = useState("");
+  const [bulkPhones, setBulkPhones] = useState<string[]>([]);
 
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [loadingPurchase, setLoadingPurchase] = useState(false);
@@ -166,6 +170,33 @@ export default function DataPage() {
     }
   };
 
+  /*
+   * BULK DATA RECIPIENTS
+   */
+  const parseBulkPhones = (value: string) => {
+    const phones = value
+      .split(/[\n,;]+/)
+      .map((item) => item.replace(/\D/g, "").trim())
+      .filter(Boolean);
+
+    const uniquePhones = Array.from(new Set(phones)).slice(0, 100);
+
+    setBulkPhones(uniquePhones);
+  };
+
+  const handleBulkInputChange = (value: string) => {
+    setBulkInput(value);
+    parseBulkPhones(value);
+  };
+
+  const removeBulkPhone = (phoneToRemove: string) => {
+    const updatedPhones = bulkPhones.filter(
+      (item) => item !== phoneToRemove
+    );
+
+    setBulkPhones(updatedPhones);
+    setBulkInput(updatedPhones.join("\n"));
+  };
   /*
    * PURCHASE DATA
    */
@@ -272,6 +303,81 @@ export default function DataPage() {
     }
   };
 
+  /*
+   * PURCHASE DATA FOR MULTIPLE RECIPIENTS
+   */
+  const handleBulkPurchase = async () => {
+    const validPhones = bulkPhones.filter(
+      (item) => item.length === 11
+    );
+
+    if (validPhones.length !== bulkPhones.length) {
+      setMessage({
+        type: "error",
+        text: "Please correct invalid phone numbers before continuing.",
+      });
+      return;
+    }
+
+    if (validPhones.length < 2) {
+      setMessage({
+        type: "error",
+        text: "Please enter at least two valid phone numbers for multiple recipients.",
+      });
+      return;
+    }
+
+    if (!selectedPlan) {
+      setMessage({
+        type: "error",
+        text: "Please select a data plan.",
+      });
+      return;
+    }
+
+    try {
+      setLoadingPurchase(true);
+      setMessage(null);
+
+      const result = await buyBulkData({
+        recipients: validPhones.map((recipientPhone) => ({
+          network,
+          phone: recipientPhone,
+          plan: selectedPlan.variation_code,
+        })),
+      });
+
+      const successful = Number(result?.successful || 0);
+      const failed = Number(result?.failed || 0);
+
+      setMessage({
+        type: failed === 0 ? "success" : "error",
+        text:
+          failed === 0
+            ? `Data sent successfully to ${successful} recipient${
+                successful === 1 ? "" : "s"
+              }.`
+            : `${successful} successful, ${failed} failed. Batch: ${
+                result?.batchReference || "N/A"
+              }`,
+      });
+
+      if (failed === 0) {
+        setBulkInput("");
+        setBulkPhones([]);
+        setSelectedPlan(null);
+      }
+    } catch (error: any) {
+      setMessage({
+        type: "error",
+        text:
+          error?.response?.data?.message ||
+          "Bulk data purchase failed. Please try again.",
+      });
+    } finally {
+      setLoadingPurchase(false);
+    }
+  };
   /*
    * DOWNLOAD PDF RECEIPT
    */
@@ -516,7 +622,7 @@ Fast • Secure • Reliable`;
           <div className="space-y-5 p-5">
 
             {/* PHONE */}
-            <div>
+            <div className={bulkMode ? "hidden" : ""}>
               <label className="mb-2 block text-sm font-medium text-gray-700">
                 Phone Number
               </label>
@@ -533,6 +639,81 @@ Fast • Secure • Reliable`;
               />
             </div>
 
+            <button
+              type="button"
+              onClick={() => {
+                setBulkMode(!bulkMode);
+                setMessage(null);
+              }}
+              className="text-left text-sm font-semibold text-emerald-600 transition hover:text-emerald-700"
+            >
+              {bulkMode
+                ? "Use single recipient"
+                : "+ Add multiple recipients"}
+            </button>
+            {bulkMode && (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+                <label className="mb-2 block text-sm font-semibold text-gray-700">
+                  Multiple Recipients
+                </label>
+
+                <textarea
+                  value={bulkInput}
+                  onChange={(e) =>
+                    handleBulkInputChange(e.target.value)
+                  }
+                  rows={5}
+                  placeholder={"08012345678\n08023456789\n08034567890"}
+                  className="w-full resize-y rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                />
+
+                <div className="mt-2 flex items-center justify-between gap-3 text-xs text-gray-500">
+                  <span>
+                    One number per line, or separate with commas or semicolons.
+                  </span>
+
+                  <span className="shrink-0 font-semibold text-emerald-700">
+                    {bulkPhones.length}/100
+                  </span>
+                </div>
+
+                {bulkPhones.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {bulkPhones.map((recipientPhone, index) => (
+                      <div
+                        key={recipientPhone}
+                        className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${
+                          recipientPhone.length === 11
+                            ? "border-gray-200 bg-white text-gray-700"
+                            : "border-red-200 bg-red-50 text-red-600"
+                        }`}
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600">
+                            {index + 1}
+                          </span>
+
+                          <span className="text-sm font-medium">
+                            {recipientPhone}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeBulkPhone(recipientPhone)
+                          }
+                          aria-label={`Remove ${recipientPhone}`}
+                          className="shrink-0 rounded-full p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-red-500"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {/* DATA PLAN */}
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -624,7 +805,7 @@ Fast • Secure • Reliable`;
             {/* PURCHASE BUTTON */}
             <button
               type="button"
-              onClick={handlePurchase}
+              onClick={bulkMode ? handleBulkPurchase : handlePurchase}
               disabled={
                 loadingPurchase ||
                 !selectedPlan
@@ -642,7 +823,7 @@ Fast • Secure • Reliable`;
               ) : (
                 <>
                   <Wifi size={18} />
-                  Buy Data
+                  {bulkMode ? "Buy Data for Recipients" : "Buy Data"}
                 </>
               )}
             </button>

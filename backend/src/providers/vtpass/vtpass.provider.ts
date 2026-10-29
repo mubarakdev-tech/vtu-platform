@@ -281,6 +281,11 @@ export const buyAirtime = async ({
       "vtpass",
 
     request_id,
+
+    providerCost:
+      success && Number.isFinite(Number(data?.content?.transactions?.total_amount))
+        ? Number(data.content.transactions.total_amount)
+        : undefined,
   };
 };
 

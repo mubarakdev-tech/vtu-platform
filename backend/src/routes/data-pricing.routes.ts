@@ -9,6 +9,7 @@ import {
   listDataPricingProviders,
   getDataProviderCatalogue,
   mapDataPricingPlan,
+  bulkMapDataPricingPlans,
 } from "../controllers/data-pricing.controller";
 
 const router = Router();
@@ -46,6 +47,13 @@ router.patch(
   protect,
   adminOnly,
   mapDataPricingPlan
+);
+
+router.post(
+  "/plans/bulk-mapping",
+  protect,
+  adminOnly,
+  bulkMapDataPricingPlans
 );
 
 export default router;

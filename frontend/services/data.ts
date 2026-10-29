@@ -13,3 +13,13 @@ export const buyData = async (payload: {
   const { data } = await api.post("/data/buy", payload);
   return data;
 };
+export const buyBulkData = async (payload: {
+  recipients: {
+    network: string;
+    phone: string;
+    plan: string;
+  }[];
+}) => {
+  const { data } = await api.post("/bulk/data", payload);
+  return data;
+};

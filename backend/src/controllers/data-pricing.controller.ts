@@ -1,4 +1,4 @@
-﻿
+
 import { Request, Response, NextFunction } from "express";
 import DataPlan from "../models/dataPlan.model";
 import ProviderPlan from "../models/providerPlan.model";
@@ -231,7 +231,6 @@ export const listDataPricingProviders = async (
 ) => {
   try {
     const providers = await Provider.find({
-      active: true,
       supportsData: true,
     })
       .sort({ sortOrder: 1, displayName: 1 })
@@ -285,7 +284,6 @@ export const getDataProviderCatalogue = async (
 
     const provider = await Provider.findOne({
       key: providerKey,
-      active: true,
       supportsData: true,
     }).lean();
 
@@ -423,7 +421,6 @@ export const mapDataPricingPlan = async (
 
     const provider = await Provider.findOne({
       key: providerKey,
-      active: true,
       supportsData: true,
     });
 
@@ -541,5 +538,332 @@ export const mapDataPricingPlan = async (
     });
   } catch (error) {
     return next(error);
+  }
+};
+
+/**
+ * Bulk import/map selected live provider catalogue plans.
+ *
+ * Safety rules:
+ * - Provider catalogue is re-fetched server-side.
+ * - Only explicitly selected provider plan codes are processed.
+ * - Provider buying cost must be explicitly supplied and confirmed.
+ * - Customer selling price must be explicitly supplied for new AbuPay plans.
+ * - Existing AbuPay selling prices are never overwritten.
+ */
+export const bulkMapDataPricingPlans = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const {
+      providerKey,
+      network,
+      dataType = "DATA",
+      items,
+      costConfirmed,
+    } = req.body ?? {};
+
+    const normalizedProviderKey = String(providerKey || "")
+      .trim()
+      .toLowerCase();
+
+    const normalizedNetwork = String(network || "")
+      .trim()
+      .toLowerCase();
+
+    const normalizedDataType = String(dataType || "DATA")
+      .trim()
+      .toUpperCase();
+
+    if (!normalizedProviderKey) {
+      return next(new AppError("Provider is required.", 400));
+    }
+
+    if (!normalizedNetwork) {
+      return next(new AppError("Network is required.", 400));
+    }
+
+    if (
+      !["DATA", "DATA_SHARE", "GIFTING", "AWOOF"].includes(
+        normalizedDataType
+      )
+    ) {
+      return next(new AppError("Invalid data type.", 400));
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return next(
+        new AppError("Select at least one provider plan.", 400)
+      );
+    }
+
+    if (costConfirmed !== true) {
+      return next(
+        new AppError(
+          "Provider buying costs must be verified before bulk mapping.",
+          400
+        )
+      );
+    }
+
+    const provider = await Provider.findOne({
+      key: normalizedProviderKey,
+      supportsData: true,
+    });
+
+    if (!provider) {
+      return next(
+        new AppError(
+          "Selected provider is unavailable for data services.",
+          404
+        )
+      );
+    }
+
+    const adapter =
+      registeredProviders[
+        normalizedProviderKey as keyof typeof registeredProviders
+      ];
+
+    if (!adapter || typeof adapter.getDataPlans !== "function") {
+      return next(
+        new AppError(
+          "Selected provider does not expose a data catalogue.",
+          400
+        )
+      );
+    }
+
+    // Re-fetch the provider catalogue on the server.
+    // Never trust catalogue details supplied by the browser.
+    const livePlans = await adapter.getDataPlans(normalizedNetwork);
+
+    const liveCatalogue = new Map<
+      string,
+      {
+        name: string;
+        code: string;
+        catalogueAmount: number | null;
+        validity: string;
+      }
+    >();
+
+    for (const rawPlan of (Array.isArray(livePlans) ? livePlans : []) as any[]) {
+      const code = String(
+        rawPlan?.variation_code ??
+          rawPlan?.code ??
+          rawPlan?.plan_id ??
+          ""
+      ).trim();
+
+      if (!code) continue;
+
+      const rawAmount =
+        rawPlan?.amount ??
+        rawPlan?.provider_amount ??
+        rawPlan?.variation_amount;
+
+      const parsedAmount = Number(rawAmount);
+
+      liveCatalogue.set(code, {
+        name: String(
+          rawPlan?.name ??
+            rawPlan?.variation_name ??
+            "Data Plan"
+        ).trim(),
+        code,
+        catalogueAmount: Number.isFinite(parsedAmount)
+          ? parsedAmount
+          : null,
+        validity: String(rawPlan?.validity ?? "").trim(),
+      });
+    }
+
+    const results: any[] = [];
+
+    for (const item of items) {
+      const providerPlanCode = String(
+        item?.providerPlanCode || ""
+      ).trim();
+
+      const providerCost = Number(item?.providerCost);
+      const sellingPrice = Number(item?.sellingPrice);
+
+      if (!providerPlanCode) {
+        throw new AppError(
+          "Every selected item must include a provider plan code.",
+          400
+        );
+      }
+
+      if (!Number.isFinite(providerCost) || providerCost < 0) {
+        throw new AppError(
+          `Invalid verified provider cost for plan ${providerPlanCode}.`,
+          400
+        );
+      }
+
+      const livePlan = liveCatalogue.get(providerPlanCode);
+
+      if (!livePlan) {
+        throw new AppError(
+          `Provider plan ${providerPlanCode} is no longer available in the live catalogue.`,
+          400
+        );
+      }
+
+      let providerPlan = await ProviderPlan.findOneAndUpdate(
+        {
+          provider: provider._id,
+          network: normalizedNetwork,
+          dataType: normalizedDataType,
+          providerPlanCode,
+        },
+        {
+          $set: {
+            name: livePlan.name,
+            validity: livePlan.validity || undefined,
+            providerCost,
+            active: true,
+            metadata: {
+              catalogueSource: normalizedProviderKey,
+              catalogueAmount: livePlan.catalogueAmount,
+              catalogueCheckedAt: new Date(),
+            },
+          },
+        },
+        {
+          new: true,
+          upsert: true,
+          runValidators: true,
+          setDefaultsOnInsert: true,
+        }
+      );
+
+      /*
+       * If Admin supplied an existing AbuPay dataPlanId, this is a
+       * provider switch/remap. The existing customer product is reused
+       * and its selling price is preserved.
+       *
+       * If no dataPlanId was supplied, first check whether this exact
+       * provider product is already linked. Only create a new AbuPay
+       * product when neither case applies.
+       */
+      const requestedDataPlanId = String(
+        item?.dataPlanId || ""
+      ).trim();
+
+      let dataPlan = null;
+
+      if (requestedDataPlanId) {
+        dataPlan = await DataPlan.findById(requestedDataPlanId);
+
+        if (!dataPlan) {
+          throw new AppError(
+            `AbuPay data plan ${requestedDataPlanId} was not found.`,
+            404
+          );
+        }
+
+        if (
+          String(dataPlan.network || "").toLowerCase() !==
+          normalizedNetwork
+        ) {
+          throw new AppError(
+            `Selected AbuPay plan ${dataPlan.name} does not belong to ${normalizedNetwork.toUpperCase()}.`,
+            400
+          );
+        }
+
+        if (
+          String(dataPlan.dataType || "DATA").toUpperCase() !==
+          normalizedDataType
+        ) {
+          throw new AppError(
+            `Selected AbuPay plan ${dataPlan.name} has a different data type.`,
+            400
+          );
+        }
+
+        /*
+         * Switch the internal provider mapping.
+         * Customer selling price is preserved unless Admin explicitly
+         * supplies a new valid sellingPrice.
+         *
+         * Provider cost/catalogue amount must NEVER determine amount.
+         */
+        dataPlan.provider = provider._id;
+        dataPlan.providerPlan = providerPlan._id;
+
+        if (Number.isFinite(sellingPrice) && sellingPrice > 0) {
+          dataPlan.amount = sellingPrice;
+        }
+
+        await dataPlan.save();
+      } else {
+        dataPlan = await DataPlan.findOne({
+          provider: provider._id,
+          providerPlan: providerPlan._id,
+        });
+      }
+
+      let created = false;
+
+      if (!dataPlan) {
+        /*
+         * This is a genuinely new AbuPay customer product.
+         * Its selling price must be entered explicitly by Admin.
+         */
+        if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
+          throw new AppError(
+            `Enter a valid AbuPay selling price for ${livePlan.name}.`,
+            400
+          );
+        }
+
+        dataPlan = await DataPlan.create({
+          provider: provider._id,
+          providerPlan: providerPlan._id,
+          network: normalizedNetwork,
+          dataType: normalizedDataType,
+          name: livePlan.name,
+          validity: livePlan.validity || undefined,
+          amount: sellingPrice,
+          active: true,
+          sortOrder: 0,
+        });
+
+        created = true;
+      }
+
+      const sellingPriceUpdated =
+        Boolean(requestedDataPlanId) &&
+        Number.isFinite(sellingPrice) &&
+        sellingPrice > 0;
+
+      results.push({
+        id: String(dataPlan._id),
+        providerPlanId: String(providerPlan._id),
+        providerPlanCode,
+        name: dataPlan.name,
+        providerCost,
+        sellingPrice: Number(dataPlan.amount),
+        expectedProfit:
+          Number(dataPlan.amount) - providerCost,
+        created,
+        sellingPricePreserved: !created && !sellingPriceUpdated,
+        sellingPriceUpdated,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `${results.length} plan(s) processed successfully.`,
+      data: results,
+    });
+  } catch (error) {
+    next(error);
   }
 };

@@ -1,5 +1,7 @@
-﻿import { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
 import FinancialLedger from "../models/financialLedger.model";
+import User from "../models/user.model";
+import Wallet from "../models/wallet.model";
 import AppError from "../utils/AppError";
 
 export const getFinancialSummary = async (
@@ -49,6 +51,30 @@ export const getFinancialSummary = async (
     }
 
     const entries: any[] = await FinancialLedger.find(filter).lean();
+
+    // Current production customer wallet funds.
+    // Test accounts are excluded from this financial control figure.
+    const productionUsers = await User.find({
+      role: "user",
+      isTest: { $ne: true },
+    })
+      .select("_id")
+      .lean();
+
+    const productionUserIds = productionUsers.map(
+      (user) => user._id
+    );
+
+    const productionWallets = await Wallet.find({
+      user: { $in: productionUserIds },
+    })
+      .select("balance")
+      .lean();
+
+    const customerWalletFunds = productionWallets.reduce(
+      (total, wallet) => total + Number(wallet.balance || 0),
+      0
+    );
 
     // Successful service sales recorded as revenue.
     const sales = entries.filter(
@@ -206,6 +232,11 @@ export const getFinancialSummary = async (
         period: {
           from: from || null,
           to: to || null,
+        },
+
+        customerWalletFunds: {
+          total: customerWalletFunds,
+          testAccountsExcluded: true,
         },
 
         revenue: {

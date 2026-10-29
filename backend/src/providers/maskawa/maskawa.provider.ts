@@ -86,6 +86,11 @@ const classifyPurchaseResponse = (data: any) => {
 
 const classifyPurchaseError = (error: any) => {
   const providerResponse = error?.response?.data;
+  const httpStatus = Number(error?.response?.status);
+  const confirmedRejection =
+    httpStatus === 400 &&
+    Array.isArray(providerResponse?.error) &&
+    providerResponse.error.length > 0;
 
   console.error(
     "MASKAWA PURCHASE ERROR:",
@@ -94,12 +99,13 @@ const classifyPurchaseError = (error: any) => {
 
   return {
     success: false,
-    pending: true,
-    status: "UNCERTAIN" as const,
-    uncertain: true,
+    pending: !confirmedRejection,
+    status: confirmedRejection ? ("FAILED" as const) : ("UNCERTAIN" as const),
+    uncertain: !confirmedRejection,
     message:
       providerResponse?.message ||
       providerResponse?.detail ||
+      (Array.isArray(providerResponse?.error) ? providerResponse.error.join("; ") : undefined) ||
       "The provider outcome could not be confirmed. Verification is required before retrying or refunding.",
     data: providerResponse,
     provider: "maskawa",
@@ -219,6 +225,89 @@ export const buyAirtime = async ({
 };
 
 // =====================================================
+// GET LIVE MASKAWA DATA PLANS
+// =====================================================
+
+export const getDataPlans = async (network: string) => {
+  const networkId = getNetworkId(network);
+
+  const networkCatalogueKey: Record<number, string> = {
+    1: "MTN_PLAN",
+    2: "GLO_PLAN",
+    3: "9MOBILE_PLAN",
+    4: "AIRTEL_PLAN",
+  };
+
+  const catalogueKey = networkCatalogueKey[networkId];
+
+  if (!catalogueKey) {
+    throw new Error(`Maskawa data catalogue is not available for ${network}`);
+  }
+
+  try {
+    const response = await maskawaClient.get("/user/");
+    const rawCatalogue = response.data?.Dataplans?.[catalogueKey];
+
+    let rawPlans: any[] = [];
+
+    if (Array.isArray(rawCatalogue)) {
+      rawPlans = rawCatalogue;
+    } else if (rawCatalogue && typeof rawCatalogue === "object") {
+      rawPlans = Object.values(rawCatalogue).flatMap((value: any) =>
+        Array.isArray(value) ? value : [value]
+      );
+    }
+
+    const plans = rawPlans
+      .filter(
+        (item: any) =>
+          item &&
+          (item.dataplan_id ?? item.id) != null &&
+          Number(item.Ambassador_price ?? item.plan_amount) > 0
+      )
+      .map((item: any) => {
+        const planCode = String(item.dataplan_id ?? item.id);
+        const providerCost = Number(
+          item.Ambassador_price ?? item.plan_amount
+        );
+
+        const planName = String(item.plan ?? "Data").trim();
+        const planType = String(item.plan_type ?? "").trim();
+        const validity = String(item.month_validate ?? "").trim();
+
+        return {
+          name: [planName, planType, validity]
+            .filter(Boolean)
+            .join(" - "),
+          variation_code: planCode,
+          amount: providerCost,
+          plan_id: Number(planCode),
+          network: networkId,
+          network_name: String(
+            item.plan_network ?? network
+          ).trim(),
+          plantype: planType,
+          size: planName,
+          validity,
+          provider_amount: providerCost,
+        };
+      });
+
+    return Array.from(
+      new Map(
+        plans.map((plan) => [plan.variation_code, plan])
+      ).values()
+    );
+  } catch (error: any) {
+    console.error(
+      "MASKAWA GET DATA PLANS ERROR:",
+      error?.response?.data || error?.message || error
+    );
+
+    throw error;
+  }
+};
+// =====================================================
 // GET MASKAWA WALLET BALANCE
 // =====================================================
 
@@ -266,6 +355,7 @@ export const maskawaProvider = {
   key: "maskawa",
   buyData,
   buyAirtime,
+  getDataPlans,
   getBalance,
 };
 

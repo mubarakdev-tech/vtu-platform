@@ -14,6 +14,7 @@ type BuyDataInput = {
   plan: string;
   amount?: number;
   provider?: string;
+  batchReference?: string;
 };
 
 export const buyData = async ({
@@ -21,6 +22,7 @@ export const buyData = async ({
   network,
   phone,
   plan,
+  batchReference,
 }: BuyDataInput) => {
   if (!userId) {
     throw new AppError("Unauthorized", 401);
@@ -72,6 +74,12 @@ export const buyData = async ({
     );
   }
 
+  if (!providerRecord.activeForData) {
+    throw new AppError(
+      "This data plan is not available through the currently selected Data provider.",
+      409
+    );
+  }
   if (!providerPlan || !providerPlan.active) {
     throw new AppError(
       "The provider plan mapped to this AbuPay plan is not available.",
@@ -187,6 +195,7 @@ export const buyData = async ({
             providerResponse: providerResult,
             balanceBefore: walletResult.balanceAfter,
             balanceAfter: refundResult.balanceAfter,
+            batchReference,
           },
           session,
         });
@@ -226,6 +235,7 @@ export const buyData = async ({
           providerResponse: providerResult,
           balanceBefore: walletResult.balanceBefore,
           balanceAfter: walletResult.balanceAfter,
+          batchReference,
         },
         session,
       });
@@ -253,6 +263,7 @@ export const buyData = async ({
           dataPlan: String(savedDataPlan._id),
           providerPlanCode,
           providerCostKnown: true,
+          batchReference,
         },
         session,
       });

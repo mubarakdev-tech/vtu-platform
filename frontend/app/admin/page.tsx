@@ -30,6 +30,32 @@ interface DataPricingProvider {
   displayName: string;
 }
 
+interface AdminProvider {
+  key: string;
+  displayName: string;
+  active: boolean;
+  sortOrder: number;
+  supportsAirtime: boolean;
+  supportsData: boolean;
+  activeForAirtime: boolean;
+  activeForData: boolean;
+}
+
+interface ProviderWalletBalance {
+  key: string;
+  displayName: string;
+  active: boolean;
+  available: boolean;
+  balance: number | null;
+  isTest: boolean;
+  message?: string;
+}
+
+interface ProviderWalletFunds {
+  providers: ProviderWalletBalance[];
+  productionTotal: number;
+}
+
 interface ProviderCataloguePlan {
   name: string;
   code: string;
@@ -38,6 +64,10 @@ interface ProviderCataloguePlan {
 }
 
 interface FinancialData {
+  customerWalletFunds: {
+    total: number;
+    testAccountsExcluded: boolean;
+  };
   revenue: { total: number; transactions: number };
   expenses: { total: number; transactions: number };
   grossProfit: number | null;
@@ -95,6 +125,33 @@ interface AdminTransactionsResponse {
   message?: string;
 }
 
+
+interface AdminCustomer {
+  _id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  role: string;
+  isVerified: boolean;
+  referralCode?: string | null;
+  referralCount: number;
+  createdAt: string;
+  updatedAt: string;
+  wallet: {
+    balance: number;
+    exists: boolean;
+  };
+}
+
+interface AdminCustomersResponse {
+  success?: boolean;
+  customers?: AdminCustomer[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
+  message?: string;
+}
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
@@ -136,6 +193,11 @@ const normalizeFinancialData = (
   if (!data) return null;
 
   return {
+    customerWalletFunds: {
+      total: Number(data.customerWalletFunds?.total ?? 0),
+      testAccountsExcluded:
+        data.customerWalletFunds?.testAccountsExcluded === true,
+    },
     revenue: {
       total: Number(data.revenue?.total ?? 0),
       transactions: Number(data.revenue?.transactions ?? 0),
@@ -219,6 +281,15 @@ export default function Home() {
   >({});
   const [pricingSaving, setPricingSaving] = useState<string | null>(null);
 
+  // Providers & Integrations
+  const [adminProviders, setAdminProviders] = useState<AdminProvider[]>([]);
+  const [providerWalletFunds, setProviderWalletFunds] =
+    useState<ProviderWalletFunds | null>(null);
+  const [adminProvidersLoading, setAdminProvidersLoading] = useState(false);
+  const [adminProvidersSaving, setAdminProvidersSaving] = useState<string | null>(null);
+  const [adminProvidersError, setAdminProvidersError] = useState("");
+  const [adminProvidersMessage, setAdminProvidersMessage] = useState("");
+
   // Provider mapping
   const [pricingProviders, setPricingProviders] = useState<DataPricingProvider[]>([]);
   const [mappingProviderDrafts, setMappingProviderDrafts] = useState<Record<string, string>>({});
@@ -230,6 +301,20 @@ export default function Home() {
   const [mappingSaving, setMappingSaving] = useState<string | null>(null);
   const [mappingError, setMappingError] = useState("");
   const [mappingMessage, setMappingMessage] = useState("");
+
+  // Bulk provider catalogue mapping
+  const [bulkProvider, setBulkProvider] = useState("");
+  const [bulkNetwork, setBulkNetwork] = useState("mtn");
+  const [bulkCatalogue, setBulkCatalogue] = useState<ProviderCataloguePlan[]>([]);
+  const [bulkSelectedCodes, setBulkSelectedCodes] = useState<Record<string, boolean>>({});
+  const [bulkCosts, setBulkCosts] = useState<Record<string, string>>({});
+  const [bulkSellingPrices, setBulkSellingPrices] = useState<Record<string, string>>({});
+  const [bulkDataPlanIds, setBulkDataPlanIds] = useState<Record<string, string>>({});
+  const [bulkCostConfirmed, setBulkCostConfirmed] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkError, setBulkError] = useState("");
+  const [bulkMessage, setBulkMessage] = useState("");
 
   // Announcements
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -245,6 +330,14 @@ export default function Home() {
   const [announcementEndDate, setAnnouncementEndDate] = useState("");
   const [announcementSaving, setAnnouncementSaving] = useState(false);
 
+  // Customers & Wallets
+  const [adminCustomers, setAdminCustomers] = useState<AdminCustomer[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [customersError, setCustomersError] = useState("");
+  const [customersPage, setCustomersPage] = useState(1);
+  const [customersTotal, setCustomersTotal] = useState(0);
+  const [customersTotalPages, setCustomersTotalPages] = useState(1);
+  const [customerSearch, setCustomerSearch] = useState("");
   // Admin transactions
   const [adminTransactions, setAdminTransactions] = useState<AdminTransaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
@@ -259,6 +352,169 @@ export default function Home() {
   const [transactionFrom, setTransactionFrom] = useState("");
   const [transactionTo, setTransactionTo] = useState("");
 
+  // Load provider wallet balances for financial control.
+  const loadProviderWalletFunds = async () => {
+    try {
+      const response = await fetch(`${API_URL}/admin/providers/balances`, {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message || "Unable to load provider wallet balances."
+        );
+      }
+
+      setProviderWalletFunds({
+        providers: Array.isArray(result.data?.providers)
+          ? result.data.providers
+          : [],
+        productionTotal: Number(result.data?.productionTotal ?? 0),
+      });
+    } catch (err) {
+      console.error("Provider wallet balances error:", err);
+      setProviderWalletFunds(null);
+    }
+  };
+
+  // Load providers and current Airtime/Data routing selections.
+  const loadAdminProviders = async () => {
+    try {
+      setAdminProvidersLoading(true);
+      setAdminProvidersError("");
+
+      const response = await fetch(`${API_URL}/admin/providers`, {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Unable to load providers.");
+      }
+
+      setAdminProviders(
+        Array.isArray(result.data) ? result.data : []
+      );
+    } catch (err) {
+      console.error("Admin providers error:", err);
+      setAdminProvidersError(
+        err instanceof Error ? err.message : "Unable to load providers."
+      );
+    } finally {
+      setAdminProvidersLoading(false);
+    }
+  };
+
+
+  // Change the active provider route for Airtime or Data.
+  const setActiveAdminProvider = async (
+    providerKey: string,
+    service: "airtime" | "data"
+  ) => {
+    try {
+      setAdminProvidersSaving(`${providerKey}:${service}`);
+      setAdminProvidersError("");
+      setAdminProvidersMessage("");
+
+      const response = await fetch(
+        `${API_URL}/admin/providers/${encodeURIComponent(providerKey)}/${service}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message || `Unable to change ${service} provider.`
+        );
+      }
+
+      setAdminProvidersMessage(
+        result.message || `Active ${service} provider updated.`
+      );
+
+      await loadAdminProviders();
+    } catch (err) {
+      console.error("Provider route update error:", err);
+      setAdminProvidersError(
+        err instanceof Error
+          ? err.message
+          : "Unable to update provider route."
+      );
+    } finally {
+      setAdminProvidersSaving(null);
+    }
+  };
+
+  // Load registered customers and their wallet balances.
+  const loadAdminCustomers = async (
+    requestedPage = 1,
+    searchOverride?: string
+  ) => {
+    try {
+      setCustomersLoading(true);
+      setCustomersError("");
+
+      const search = searchOverride ?? customerSearch;
+
+      const params = new URLSearchParams({
+        page: String(requestedPage),
+        limit: "20",
+      });
+
+      if (search.trim()) {
+        params.set("search", search.trim());
+      }
+
+      const response = await fetch(
+        `${API_URL}/admin/customers?${params.toString()}`,
+        {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        }
+      );
+
+      const result: AdminCustomersResponse = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message || "Unable to load customers."
+        );
+      }
+
+      setAdminCustomers(
+        Array.isArray(result.customers) ? result.customers : []
+      );
+      setCustomersTotal(Number(result.total ?? 0));
+      setCustomersPage(Number(result.page ?? requestedPage));
+      setCustomersTotalPages(
+        Math.max(1, Number(result.totalPages ?? 1))
+      );
+    } catch (err) {
+      console.error("Admin customers error:", err);
+      setCustomersError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load customers."
+      );
+    } finally {
+      setCustomersLoading(false);
+    }
+  };
   // Load all customer transactions through the admin-only endpoint.
   const loadAdminTransactions = async (
     requestedPage = 1,
@@ -531,6 +787,201 @@ export default function Home() {
       setMappingError(err instanceof Error ? err.message : "Could not save mapping.");
     } finally {
       setMappingSaving(null);
+    }
+  };
+
+  // Load a live provider catalogue for bulk mapping/import.
+  const loadBulkProviderCatalogue = async () => {
+    if (!bulkProvider) {
+      setBulkError("Select a provider first.");
+      return;
+    }
+
+    if (!bulkNetwork) {
+      setBulkError("Select a network first.");
+      return;
+    }
+
+    setBulkLoading(true);
+    setBulkError("");
+    setBulkMessage("");
+    setBulkCatalogue([]);
+    setBulkSelectedCodes({});
+    setBulkCosts({});
+    setBulkSellingPrices({});
+    setBulkDataPlanIds({});
+    setBulkCostConfirmed(false);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/data-pricing/providers/${encodeURIComponent(bulkProvider)}/catalogue?network=${encodeURIComponent(bulkNetwork)}`,
+        { credentials: "include", cache: "no-store" }
+      );
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Could not load provider catalogue.");
+      }
+
+      const catalogue: ProviderCataloguePlan[] = Array.isArray(result.data?.plans)
+        ? result.data.plans
+        : [];
+
+      setBulkCatalogue(catalogue);
+
+      setBulkMessage(
+        catalogue.length
+          ? `Loaded ${catalogue.length} live catalogue plan(s). Select the plans you want to add or map.`
+          : "The provider returned no plans for this network."
+      );
+    } catch (err) {
+      setBulkError(
+        err instanceof Error ? err.message : "Could not load bulk catalogue."
+      );
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  // Save all selected catalogue plans in one bulk request.
+  const saveBulkProviderMappings = async () => {
+    const selectedPlans = bulkCatalogue.filter(
+      (item) => bulkSelectedCodes[item.code] === true
+    );
+
+    if (!bulkProvider || !bulkNetwork) {
+      setBulkError("Select a provider and network.");
+      return;
+    }
+
+    if (selectedPlans.length === 0) {
+      setBulkError("Select at least one catalogue plan.");
+      return;
+    }
+
+    const items = [];
+
+    for (const item of selectedPlans) {
+      const rawCost = bulkCosts[item.code];
+      const rawSellingPrice = bulkSellingPrices[item.code];
+      const dataPlanId = (bulkDataPlanIds[item.code] || "").trim();
+
+      const providerCost = Number(rawCost);
+      const sellingPrice = Number(rawSellingPrice);
+
+      if (
+        rawCost === undefined ||
+        rawCost.trim() === "" ||
+        !Number.isFinite(providerCost) ||
+        providerCost < 0
+      ) {
+        setBulkError(
+          `Enter a valid verified provider buying cost for ${item.name}.`
+        );
+        return;
+      }
+
+      if (
+        !dataPlanId &&
+        (
+          rawSellingPrice === undefined ||
+          rawSellingPrice.trim() === "" ||
+          !Number.isFinite(sellingPrice) ||
+          sellingPrice <= 0
+        )
+      ) {
+        setBulkError(
+          `Enter a valid AbuPay selling price for new plan ${item.name}.`
+        );
+        return;
+      }
+
+      items.push({
+        providerPlanCode: item.code,
+        providerCost,
+        ...(dataPlanId
+          ? {
+              dataPlanId,
+              ...(rawSellingPrice !== undefined &&
+              rawSellingPrice.trim() !== ""
+                ? { sellingPrice }
+                : {}),
+            }
+          : { sellingPrice }),
+      });
+    }
+
+    const selectedExistingIds = selectedPlans
+      .map((item) => (bulkDataPlanIds[item.code] || "").trim())
+      .filter(Boolean);
+
+    if (new Set(selectedExistingIds).size !== selectedExistingIds.length) {
+      setBulkError(
+        "The same existing AbuPay product cannot be assigned to more than one provider plan in the same bulk save."
+      );
+      return;
+    }
+
+    if (!bulkCostConfirmed) {
+      setBulkError(
+        "Confirm that you have verified the provider buying costs for all selected plans."
+      );
+      return;
+    }
+
+    setBulkSaving(true);
+    setBulkError("");
+    setBulkMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/data-pricing/plans/bulk-mapping`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            providerKey: bulkProvider,
+            network: bulkNetwork,
+            dataType: "DATA",
+            items,
+            costConfirmed: true,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Could not save bulk mappings.");
+      }
+
+      const results = Array.isArray(result.data)
+        ? result.data
+        : [];
+
+      const createdCount = results.filter(
+        (item: { created?: boolean }) => item.created === true
+      ).length;
+
+      const preservedCount = results.filter(
+        (item: { sellingPricePreserved?: boolean }) =>
+          item.sellingPricePreserved === true
+      ).length;
+
+      setBulkCostConfirmed(false);
+
+      setBulkMessage(
+        `Bulk mapping saved for ${results.length} plan(s). ${createdCount} new AbuPay plan(s) created. ${preservedCount} existing selling price(s) preserved.`
+      );
+
+      await loadDataPricing();
+    } catch (err) {
+      setBulkError(
+        err instanceof Error ? err.message : "Could not save bulk mappings."
+      );
+    } finally {
+      setBulkSaving(false);
     }
   };
 
@@ -880,6 +1331,9 @@ export default function Home() {
           loadFinancialData(),
           loadAnnouncements(),
           loadDataPricing(),
+          loadAdminProviders(),
+          loadProviderWalletFunds(),
+          loadAdminCustomers(1),
           loadAdminTransactions(1),
         ]);
       } else {
@@ -918,6 +1372,9 @@ export default function Home() {
         loadFinancialData(),
         loadAnnouncements(),
         loadDataPricing(),
+        loadAdminProviders(),
+        loadProviderWalletFunds(),
+        loadAdminCustomers(1),
         loadAdminTransactions(1),
       ]);
     } catch (err) {
@@ -1097,6 +1554,11 @@ export default function Home() {
           <a href="#admin-transactions" className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
             Transactions
           </a>
+          <a href="#customers-wallets" className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
+            Customers & Wallets
+          </a>          <a href="#admin-providers" className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
+            Providers & Integrations
+          </a>
           <a href="#admin-data-pricing" className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
             Data Plan Pricing
           </a>
@@ -1242,12 +1704,63 @@ export default function Home() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                   <p className="text-sm font-medium text-slate-500">Paystack Fees</p>
                   <p className="mt-3 text-3xl font-bold">
-  {financialData.financialResult === null
-    ? "Not available"
-    : formatMoney(financialData.financialResult)}
+                    {formatMoney(financialData.paystackFees.total)}
 </p>
                   <p className="mt-2 text-xs text-slate-500">{financialData.paystackFees.transactions} recorded fees</p>
                 </div>
+              </div>
+
+              <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <p className="text-sm font-medium text-slate-500">
+                  Customer Wallet Funds
+                </p>
+                <p className="mt-3 text-3xl font-bold">
+                  {formatMoney(financialData.customerWalletFunds.total)}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Current balance held in production customer wallets. This is a wallet liability/control figure, not AbuPay revenue or profit.
+                </p>
+                {financialData.customerWalletFunds.testAccountsExcluded && (
+                  <p className="mt-2 text-xs font-medium text-emerald-700">
+                    Test accounts excluded
+                  </p>
+                )}
+              </div>
+              <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <p className="text-sm font-medium text-slate-500">
+                  Provider Wallet Funds
+                </p>
+
+                <p className="mt-3 text-3xl font-bold">
+                  {providerWalletFunds
+                    ? formatMoney(providerWalletFunds.productionTotal)
+                    : "Loading..."}
+                </p>
+
+                <p className="mt-2 text-sm text-slate-500">
+                  Verified production funds currently held with service providers. Test and sandbox balances are excluded.
+                </p>
+
+                {providerWalletFunds &&
+                  providerWalletFunds.providers.some(
+                    (provider) =>
+                      provider.active &&
+                      !provider.isTest &&
+                      !provider.available
+                  ) && (
+                    <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                      Incomplete — one or more active production provider balances cannot currently be retrieved automatically.
+                    </p>
+                  )}
+
+                {providerWalletFunds &&
+                  providerWalletFunds.providers.some(
+                    (provider) => provider.isTest
+                  ) && (
+                    <p className="mt-2 text-xs font-medium text-emerald-700">
+                      Sandbox/test provider balances excluded
+                    </p>
+                  )}
               </div>
 
               <div className="mt-8">
@@ -1500,7 +2013,7 @@ export default function Home() {
                         </td>
                         <td className="px-5 py-4">
                           <p className="font-mono text-xs text-slate-700">
-                            {transaction.reference || "—"}
+                            {transaction.reference || "â€”"}
                           </p>
                           {transaction.gatewayReference && (
                             <p className="mt-1 text-xs text-slate-400">
@@ -1509,7 +2022,7 @@ export default function Home() {
                           )}
                         </td>
                         <td className="px-5 py-4">
-                          {String(transaction.category || "—").replaceAll("_", " ")}
+                          {String(transaction.category || "â€”").replaceAll("_", " ")}
                         </td>
                         <td className="px-5 py-4">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -1517,7 +2030,7 @@ export default function Home() {
                               ? "bg-blue-100 text-blue-700"
                               : "bg-slate-100 text-slate-700"
                           }`}>
-                            {transaction.type || "—"}
+                            {transaction.type || "â€”"}
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-5 py-4 font-semibold">
@@ -1530,7 +2043,7 @@ export default function Home() {
                         </td>
                         <td className="max-w-xs px-5 py-4 text-slate-600">
                           <p className="line-clamp-2">
-                            {transaction.description || transaction.gateway || "—"}
+                            {transaction.description || transaction.gateway || "â€”"}
                           </p>
                         </td>
                       </tr>
@@ -1564,7 +2077,408 @@ export default function Home() {
           </div>
         </div>
 
+        {/* CUSTOMERS & WALLETS */}
+        <div
+          id="customers-wallets"
+          className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-blue-600">
+                Operations / Customer Management
+              </p>
+              <h2 className="mt-2 text-2xl font-bold">
+                Customers & Wallets
+              </h2>
+              <p className="mt-2 text-sm text-slate-500">
+                View registered AbuPay customers and their current wallet balances.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => loadAdminCustomers(customersPage)}
+              disabled={customersLoading}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
+            >
+              {customersLoading ? "Refreshing..." : "Refresh Customers"}
+            </button>
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-end gap-3">
+            <div className="min-w-[280px] flex-1">
+              <label className="text-sm font-medium text-slate-700">
+                Search customers
+              </label>
+              <input
+                type="text"
+                value={customerSearch}
+                onChange={(event) => setCustomerSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") loadAdminCustomers(1);
+                }}
+                placeholder="Name, email or phone"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => loadAdminCustomers(1)}
+              disabled={customersLoading}
+              className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              Search
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCustomerSearch("");
+                loadAdminCustomers(1, "");
+              }}
+              disabled={customersLoading}
+              className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="mt-5">
+            <div className="w-full max-w-xs rounded-xl border border-slate-200 bg-slate-50 p-5">
+              <p className="text-sm font-semibold text-slate-500">
+                Total Customers
+              </p>
+              <p className="mt-2 text-3xl font-bold text-slate-900">
+                {customersTotal}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Registered AbuPay customer accounts
+              </p>
+            </div>
+          </div>
+
+          {customersError && (
+            <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {customersError}
+            </div>
+          )}
+
+          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-full divide-y divide-slate-200 text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                    Customer
+                  </th>
+                  <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                    Phone
+                  </th>
+                  <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                    Verification
+                  </th>
+                  <th className="px-5 py-3 text-right font-semibold text-slate-600">
+                    Wallet Balance
+                  </th>
+                  <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                    Wallet
+                  </th>
+                  <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                    Registered
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {customersLoading && adminCustomers.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-5 py-10 text-center text-slate-500"
+                    >
+                      Loading customers...
+                    </td>
+                  </tr>
+                ) : adminCustomers.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-5 py-10 text-center text-slate-500"
+                    >
+                      No customers found.
+                    </td>
+                  </tr>
+                ) : (
+                  adminCustomers.map((customer) => (
+                    <tr key={customer._id} className="hover:bg-slate-50">
+                      <td className="px-5 py-4">
+                        <p className="font-semibold text-slate-900">
+                          {customer.name}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {customer.email}
+                        </p>
+                      </td>
+
+                      <td className="px-5 py-4 text-slate-700">
+                        {customer.phone || "—"}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            customer.isVerified
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {customer.isVerified ? "Verified" : "Unverified"}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4 text-right font-bold text-slate-900">
+                        {formatMoney(customer.wallet.balance)}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            customer.wallet.exists
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {customer.wallet.exists ? "Active" : "No wallet"}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4 text-slate-600">
+                        {new Date(customer.createdAt).toLocaleDateString("en-NG")}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-500">
+              Showing {adminCustomers.length} customer(s) on this page
+              {customersTotal > 0 ? ` of ${customersTotal}` : ""}
+            </p>
+
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-slate-500">
+                Page {customersPage} of {customersTotalPages}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => loadAdminCustomers(customersPage - 1)}
+                disabled={customersLoading || customersPage <= 1}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              <button
+                type="button"
+                onClick={() => loadAdminCustomers(customersPage + 1)}
+                disabled={
+                  customersLoading || customersPage >= customersTotalPages
+                }
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
         {/* ABUPAY DATA PLAN PRICING */}
+        {/* PROVIDERS & INTEGRATIONS */}
+        <div
+          id="admin-providers"
+          className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-blue-600">
+                Admin / Service Routing
+              </p>
+              <h2 className="mt-2 text-2xl font-bold">
+                Providers & Integrations
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm text-slate-500">
+                Control which enabled provider processes AbuPay Airtime and Data
+                services. Provider routing is internal and is not shown to customers.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => loadAdminProviders()}
+              disabled={adminProvidersLoading}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {adminProvidersLoading ? "Refreshing..." : "Refresh Providers"}
+            </button>
+          </div>
+
+          {adminProvidersError && (
+            <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {adminProvidersError}
+            </div>
+          )}
+
+          {adminProvidersMessage && (
+            <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {adminProvidersMessage}
+            </div>
+          )}
+
+          {adminProvidersLoading && adminProviders.length === 0 ? (
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+              Loading providers...
+            </div>
+          ) : adminProviders.length === 0 ? (
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+              No providers are currently configured.
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              {adminProviders.map((provider) => {
+                const airtimeSaving =
+                  adminProvidersSaving === `${provider.key}:airtime`;
+
+                const dataSaving =
+                  adminProvidersSaving === `${provider.key}:data`;
+
+                return (
+                  <div
+                    key={provider.key}
+                    className="rounded-xl border border-slate-200 p-5"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">
+                          {provider.displayName}
+                        </h3>
+                        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                          {provider.key}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-bold ${
+                          provider.active
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {provider.active ? "Enabled" : "Disabled"}
+                      </span>
+                    </div>
+
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-lg bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-slate-700">
+                            Airtime
+                          </span>
+
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                              provider.activeForAirtime
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-slate-200 text-slate-600"
+                            }`}
+                          >
+                            {provider.activeForAirtime
+                              ? "ACTIVE"
+                              : provider.supportsAirtime
+                                ? "Available"
+                                : "Not Supported"}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActiveAdminProvider(provider.key, "airtime")
+                          }
+                          disabled={
+                            !provider.active ||
+                            !provider.supportsAirtime ||
+                            provider.activeForAirtime ||
+                            adminProvidersSaving !== null
+                          }
+                          className="mt-4 w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        >
+                          {airtimeSaving
+                            ? "Switching..."
+                            : provider.activeForAirtime
+                              ? "Active Airtime Provider"
+                              : "Use for Airtime"}
+                        </button>
+                      </div>
+
+                      <div className="rounded-lg bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-slate-700">
+                            Data
+                          </span>
+
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                              provider.activeForData
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-slate-200 text-slate-600"
+                            }`}
+                          >
+                            {provider.activeForData
+                              ? "ACTIVE"
+                              : provider.supportsData
+                                ? "Available"
+                                : "Not Supported"}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActiveAdminProvider(provider.key, "data")
+                          }
+                          disabled={
+                            !provider.active ||
+                            !provider.supportsData ||
+                            provider.activeForData ||
+                            adminProvidersSaving !== null
+                          }
+                          className="mt-4 w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        >
+                          {dataSaving
+                            ? "Switching..."
+                            : provider.activeForData
+                              ? "Active Data Provider"
+                              : "Use for Data"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {!provider.active && (
+                      <p className="mt-4 text-xs text-slate-500">
+                        This integration is currently disabled and cannot be selected
+                        until it has been configured and verified.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <div id="admin-data-pricing" className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -1614,6 +2528,270 @@ export default function Home() {
             </p>
           )}
 
+          {/* BULK PROVIDER CATALOGUE MANAGER */}
+          <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50/40 p-5">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">
+                Bulk Catalogue Manager
+              </h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Load a live VTpass or BigiSub catalogue, select multiple plans, and either create new AbuPay products or switch existing AbuPay products to the selected provider.
+              </p>
+            </div>
+
+            {bulkError && (
+              <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {bulkError}
+              </p>
+            )}
+
+            {bulkMessage && (
+              <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                {bulkMessage}
+              </p>
+            )}
+
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <label className="text-sm font-medium text-slate-700">
+                Provider
+                <select
+                  value={bulkProvider}
+                  onChange={(event) => {
+                    setBulkProvider(event.target.value);
+                    setBulkCatalogue([]);
+                    setBulkSelectedCodes({});
+                    setBulkCosts({});
+                    setBulkSellingPrices({});
+                    setBulkDataPlanIds({});
+                    setBulkCostConfirmed(false);
+                    setBulkError("");
+                    setBulkMessage("");
+                  }}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2"
+                >
+                  <option value="">Select provider</option>
+                  {pricingProviders.map((provider) => (
+                    <option key={provider.key} value={provider.key}>
+                      {provider.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm font-medium text-slate-700">
+                Network
+                <select
+                  value={bulkNetwork}
+                  onChange={(event) => {
+                    setBulkNetwork(event.target.value);
+                    setBulkCatalogue([]);
+                    setBulkSelectedCodes({});
+                    setBulkCosts({});
+                    setBulkSellingPrices({});
+                    setBulkDataPlanIds({});
+                    setBulkCostConfirmed(false);
+                    setBulkError("");
+                    setBulkMessage("");
+                  }}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2"
+                >
+                  <option value="mtn">MTN</option>
+                  <option value="airtel">Airtel</option>
+                  <option value="glo">Glo</option>
+                  <option value="9mobile">9mobile</option>
+                </select>
+              </label>
+
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={loadBulkProviderCatalogue}
+                  disabled={bulkLoading || !bulkProvider}
+                  className="w-full rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {bulkLoading ? "Loading catalogue..." : "Load live catalogue"}
+                </button>
+              </div>
+            </div>
+
+            {bulkCatalogue.length > 0 && (
+              <div className="mt-6 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-800">
+                    Live catalogue - {bulkCatalogue.length} plan(s)
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Select only the plans you want AbuPay to offer.
+                  </p>
+                </div>
+
+                <div className="max-h-[620px] space-y-3 overflow-y-auto pr-1">
+                  {bulkCatalogue.map((item) => {
+                    const selected = bulkSelectedCodes[item.code] === true;
+                    const existingDataPlanId = bulkDataPlanIds[item.code] || "";
+                    const matchingPlans = pricingPlans.filter(
+                      (plan) =>
+                        plan.network.toLowerCase() === bulkNetwork.toLowerCase()
+                    );
+
+                    return (
+                      <div
+                        key={item.code}
+                        className="rounded-xl border border-slate-200 bg-white p-4"
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={(event) =>
+                              setBulkSelectedCodes((previous) => ({
+                                ...previous,
+                                [item.code]: event.target.checked,
+                              }))
+                            }
+                            className="mt-1 h-4 w-4"
+                          />
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div>
+                                <p className="font-semibold text-slate-900">
+                                  {item.name}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  Provider code: {item.code}
+                                  {item.validity ? ` - ${item.validity}` : ""}
+                                </p>
+                              </div>
+
+                              <div className="text-right">
+                                <p className="text-xs text-slate-500">
+                                  Catalogue amount
+                                </p>
+                                <p className="font-semibold text-slate-800">
+                                  {item.catalogueAmount != null
+                                    ? `NGN ${item.catalogueAmount}`
+                                    : "Not supplied"}
+                                </p>
+                              </div>
+                            </div>
+
+                            {selected && (
+                              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                                <label className="text-sm font-medium text-slate-700">
+                                  AbuPay product
+                                  <select
+                                    value={existingDataPlanId}
+                                    onChange={(event) =>
+                                      setBulkDataPlanIds((previous) => ({
+                                        ...previous,
+                                        [item.code]: event.target.value,
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2"
+                                  >
+                                    <option value="">
+                                      Create new: {item.name} {item.validity ? ` - ${item.validity}` : ""}
+                                    </option>
+                                    {matchingPlans.map((plan) => (
+                                      <option key={plan.id} value={plan.id}>
+                                        {plan.name} - NGN {plan.sellingPrice}
+                                        {plan.validity
+                                          ? ` - ${plan.validity}`
+                                          : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+
+                                <label className="text-sm font-medium text-slate-700">
+                                  Verified provider buying cost
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={bulkCosts[item.code] || ""}
+                                    onChange={(event) =>
+                                      setBulkCosts((previous) => ({
+                                        ...previous,
+                                        [item.code]: event.target.value,
+                                      }))
+                                    }
+                                    placeholder={
+                                      item.catalogueAmount != null
+                                        ? `Catalogue: NGN ${item.catalogueAmount}`
+                                        : "Enter verified cost"
+                                    }
+                                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2"
+                                  />
+                                </label>
+
+                                <label className="text-sm font-medium text-slate-700">
+                                  AbuPay selling price
+                                  <input
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    value={bulkSellingPrices[item.code] || ""}
+                                    onChange={(event) =>
+                                      setBulkSellingPrices((previous) => ({
+                                        ...previous,
+                                        [item.code]: event.target.value,
+                                      }))
+                                    }
+                                    placeholder={
+                                      existingDataPlanId
+                                        ? `Leave blank to preserve NGN ${Number(
+                                            pricingPlans.find(
+                                              (plan) => plan.id === existingDataPlanId
+                                            )?.sellingPrice || 0
+                                          ).toLocaleString()}`
+                                        : "Enter customer price"
+                                    }
+                                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2"
+                                  />
+                                </label>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <label className="mt-5 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  <input
+                    type="checkbox"
+                    checked={bulkCostConfirmed}
+                    onChange={(event) =>
+                      setBulkCostConfirmed(event.target.checked)
+                    }
+                    className="mt-1 h-4 w-4"
+                  />
+                  <span>
+                    I confirm that the provider buying costs entered above have been verified. Catalogue amounts are reference values only and are not automatically treated as AbuPay buying costs or customer selling prices.
+                  </span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={saveBulkProviderMappings}
+                  disabled={
+                    bulkSaving ||
+                    !bulkCostConfirmed ||
+                    !Object.values(bulkSelectedCodes).some(Boolean)
+                  }
+                  className="mt-4 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {bulkSaving
+                    ? "Saving selected plans..."
+                    : "Save selected plans"}
+                </button>
+              </div>
+            )}
+          </div>
+
           {pricingPlans.length > 0 && (
             <div className="mt-6 space-y-4">
               {pricingPlans.map((plan) => {
@@ -1636,12 +2814,12 @@ export default function Home() {
                       <div>
                         <h3 className="font-semibold text-slate-900">{plan.name}</h3>
                         <p className="mt-1 text-sm text-slate-500">
-                          {plan.network.toUpperCase()} · {plan.dataType}
-                          {plan.validity ? ` · ${plan.validity}` : ""}
+                          {plan.network.toUpperCase()} Â· {plan.dataType}
+                          {plan.validity ? ` Â· ${plan.validity}` : ""}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
                           Provider: {plan.provider?.displayName || "Not mapped"}
-                          {" · "}Provider plan: {plan.providerPlan?.name || "Not mapped"}
+                          {" Â· "}Provider plan: {plan.providerPlan?.name || "Not mapped"}
                         </p>
                       </div>
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -1653,7 +2831,7 @@ export default function Home() {
 
                     <div className="mt-4 grid gap-4 sm:grid-cols-3">
                       <label className="block text-sm">
-                        <span className="mb-1 block text-slate-600">Provider cost (₦)</span>
+                        <span className="mb-1 block text-slate-600">Provider cost (?)</span>
                         <input
                           type="number"
                           min="0"
@@ -1673,7 +2851,7 @@ export default function Home() {
                       </label>
 
                       <label className="block text-sm">
-                        <span className="mb-1 block text-slate-600">Customer selling price (₦)</span>
+                        <span className="mb-1 block text-slate-600">Customer selling price (?)</span>
                         <input
                           type="number"
                           min="0.01"
@@ -1780,10 +2958,10 @@ export default function Home() {
                               <option value="">Select exact catalogue plan</option>
                               {mappingCatalogues[plan.id].map((item) => (
                                 <option key={item.code} value={item.code}>
-                                  {item.name} — {item.code}
-                                  {item.validity ? ` — ${item.validity}` : ""}
+                                  {item.name} â€” {item.code}
+                                  {item.validity ? ` â€” ${item.validity}` : ""}
                                   {item.catalogueAmount != null
-                                    ? ` — catalogue amount ₦${item.catalogueAmount}`
+                                    ? ` — catalogue amount ?${item.catalogueAmount}`
                                     : ""}
                                 </option>
                               ))}
@@ -1792,7 +2970,7 @@ export default function Home() {
                         )}
 
                         <label className="text-sm font-medium text-slate-700">
-                          Verified provider buying cost (₦)
+                          Verified provider buying cost (?)
                           <input
                             type="number"
                             min="0"

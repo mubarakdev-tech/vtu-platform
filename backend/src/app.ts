@@ -1,4 +1,4 @@
-﻿
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -13,7 +13,10 @@ import walletRoutes from "./routes/wallet.routes";
 import airtimeRoutes from "./routes/airtime.routes";
 import transactionRoutes from "./routes/transaction.routes";
 import adminTransactionRoutes from "./routes/admin-transaction.routes";
+import adminProviderRoutes from "./routes/admin-provider.routes";
+import adminCustomerRoutes from "./routes/admin-customer.routes";
 import dataRoutes from "./routes/data.routes";
+import bulkPurchaseRoutes from "./routes/bulk-purchase.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import financialLedgerRoutes from "./routes/financial-ledger.routes";
 import dataPricingRoutes from "./routes/data-pricing.routes";
@@ -198,6 +201,13 @@ app.use("/api/airtime", airtimeRoutes);
 app.use("/api/data", dataRoutes);
 
 // =====================================================
+// BULK PURCHASE ROUTES
+// Reuses existing Airtime/Data purchase services.
+// =====================================================
+
+app.use("/api/bulk", bulkPurchaseRoutes);
+
+// =====================================================
 // CUSTOMER TRANSACTION ROUTES
 // Existing customer-scoped endpoint remains unchanged.
 // =====================================================
@@ -210,6 +220,8 @@ app.use("/api/transactions", transactionRoutes);
 // =====================================================
 
 app.use("/api/admin/transactions", adminTransactionRoutes);
+app.use("/api/admin/providers", adminProviderRoutes);
+app.use("/api/admin/customers", adminCustomerRoutes);
 
 // =====================================================
 // DASHBOARD ROUTES

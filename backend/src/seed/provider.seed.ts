@@ -17,6 +17,14 @@ const providers = [
     supportsData: true,
     supportsAirtime: true,
   },
+  {
+    key: "maskawa",
+    displayName: "AbuPay Saver",
+    active: false,
+    sortOrder: 3,
+    supportsData: true,
+    supportsAirtime: true,
+  },
 ];
 
 export const seedProviders = async () => {
