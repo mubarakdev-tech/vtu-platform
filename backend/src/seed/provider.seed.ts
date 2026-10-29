@@ -9,7 +9,6 @@ const providers = [
     supportsData: true,
     supportsAirtime: true,
   },
-
   {
     key: "bigisub",
     displayName: "AbuPay Value",
@@ -18,10 +17,9 @@ const providers = [
     supportsData: true,
     supportsAirtime: true,
   },
-
   {
-    key: "vtu-com-ng",
-    displayName: "AbuPay Plus",
+    key: "maskawa",
+    displayName: "AbuPay Saver",
     active: false,
     sortOrder: 3,
     supportsData: true,
@@ -30,9 +28,7 @@ const providers = [
 ];
 
 export const seedProviders = async () => {
-  console.log(
-    "========== ABUPAY PROVIDER SEED =========="
-  );
+  console.log("========== ABUPAY PROVIDER SEED ==========");
 
   for (const provider of providers) {
     const existing = await Provider.findOne({
@@ -40,43 +36,16 @@ export const seedProviders = async () => {
     });
 
     if (existing) {
-      await Provider.updateOne(
-        { key: provider.key },
-        {
-          $set: {
-            displayName:
-              provider.displayName,
-
-            active:
-              provider.active,
-
-            sortOrder:
-              provider.sortOrder,
-
-            supportsData:
-              provider.supportsData,
-
-            supportsAirtime:
-              provider.supportsAirtime,
-          },
-        }
-      );
-
       console.log(
-        `Provider updated: ${provider.displayName} | active=${provider.active}`
+        `Provider preserved: ${existing.key} | active=${existing.active}`
       );
-
       continue;
     }
 
     await Provider.create(provider);
 
-    console.log(
-      `Created provider: ${provider.displayName}`
-    );
+    console.log(`Created missing provider: ${provider.key}`);
   }
 
-  console.log(
-    "========== PROVIDER SEED COMPLETE =========="
-  );
+  console.log("========== ABUPAY PROVIDER SEED COMPLETE ==========");
 };

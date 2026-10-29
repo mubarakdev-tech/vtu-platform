@@ -1,7 +1,10 @@
-import { Request, Response, NextFunction } from "express";
+﻿import { Request, Response, NextFunction } from "express";
 import AppError from "../utils/AppError";
 import * as dataService from "../services/data.service";
 import { getProvider } from "../providers";
+import Provider from "../models/provider.model";
+import ProviderPlan from "../models/providerPlan.model";
+import DataPlan from "../models/dataPlan.model";
 
 export const getDataPlans = async (
   req: Request,
@@ -13,40 +16,41 @@ export const getDataPlans = async (
       .toLowerCase()
       .trim();
 
-    const providerName = String(
-      req.query.provider || req.body?.provider || "vtpass"
-    )
-      .toLowerCase()
-      .trim();
-
     if (!network) {
-      return next(new AppError("Network is required", 400));
-    }
-
-    const provider = getProvider(providerName);
-
-    if (!provider || typeof provider.getDataPlans !== "function") {
       return next(
-        new AppError("Provider does not support data plans", 400)
+        new AppError("Network is required", 400)
       );
     }
 
-    console.log("GET DATA PLANS:", {
-      network,
-      provider: providerName,
-    });
+    const plans = await DataPlan.find({
+      network: {
+        $regex: "^" + network + "$",
+        $options: "i",
+      },
+      active: true,
+      provider: { $exists: true, $ne: null },
+      providerPlan: { $exists: true, $ne: null },
+    })
+      .sort({ sortOrder: 1, name: 1 })
+      .select("_id name amount validity")
+      .lean();
 
-    const plans = await provider.getDataPlans(network);
+    const data = plans.map((plan: any) => ({
+      id: String(plan._id),
+      name: plan.name,
+      variation_code: String(plan._id),
+      amount: Number(plan.amount),
+      validity: plan.validity || "",
+    }));
 
     return res.status(200).json({
       success: true,
-      data: Array.isArray(plans) ? plans : [],
-      provider: providerName,
+      data,
     });
   } catch (error: any) {
     console.error(
       "GET DATA PLANS ERROR:",
-      error?.response?.data || error?.message || error
+      error?.message || error
     );
 
     return next(

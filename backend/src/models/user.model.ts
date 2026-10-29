@@ -9,6 +9,8 @@ export interface IUser extends mongoose.Document {
   role: "user" | "admin" | "super_admin";
 
   isVerified: boolean;
+  // Distinguishes test accounts from real AbuPay customers.
+  isTest: boolean;
   verificationToken?: string | null;
 
   // Password reset
@@ -77,6 +79,10 @@ const userSchema = new Schema<IUser>(
       default: false,
     },
 
+    isTest: {
+      type: Boolean,
+      default: false,
+    },
     verificationToken: {
       type: String,
       default: null,

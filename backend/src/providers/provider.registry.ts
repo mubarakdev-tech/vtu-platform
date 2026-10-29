@@ -11,6 +11,7 @@ import {
 
 import { vtpassProvider } from "./vtpass/vtpass.provider";
 import { bigisubProvider } from "./bigisub/bigisub.provider";
+import { maskawaProvider } from "./maskawa/maskawa.provider";
 
 // ==========================================
 // REGISTERED ABUPAY PROVIDERS
@@ -33,6 +34,9 @@ const providerRegistry: Record<
 
   // Additional customer-selectable provider
   bigisub: bigisubProvider,
+
+  // Maskawa provider
+  maskawa: maskawaProvider,
 
   // Future providers:
   //
@@ -913,3 +917,4 @@ export const buyDataThroughProviders =
 
 export const registeredProviders =
   providerRegistry;
+

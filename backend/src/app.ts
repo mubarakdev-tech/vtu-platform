@@ -1,3 +1,4 @@
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -11,9 +12,14 @@ import userRoutes from "./routes/user.routes";
 import walletRoutes from "./routes/wallet.routes";
 import airtimeRoutes from "./routes/airtime.routes";
 import transactionRoutes from "./routes/transaction.routes";
+import adminTransactionRoutes from "./routes/admin-transaction.routes";
+import adminProviderRoutes from "./routes/admin-provider.routes";
+import adminCustomerRoutes from "./routes/admin-customer.routes";
 import dataRoutes from "./routes/data.routes";
+import bulkPurchaseRoutes from "./routes/bulk-purchase.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import financialLedgerRoutes from "./routes/financial-ledger.routes";
+import dataPricingRoutes from "./routes/data-pricing.routes";
 import announcementRoutes from "./routes/announcement.routes";
 
 import { errorHandler } from "./middleware/error.middleware";
@@ -42,20 +48,6 @@ app.use(
 // =====================================================
 // CORS
 // =====================================================
-//
-// Customer application:
-// http://localhost:3000
-//
-// Admin application:
-// http://localhost:3001
-//
-// Production frontend:
-// FRONTEND_URL from environment variables
-//
-// Backend:
-// http://localhost:5000
-//
-// =====================================================
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -66,22 +58,17 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests from Postman,
-      // curl and other clients without
-      // an Origin header.
       if (!origin) {
         callback(null, true);
         return;
       }
 
-      // Allow registered frontend origins.
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
         return;
       }
 
       console.log("CORS BLOCKED ORIGIN:", origin);
-
       callback(new Error("Not allowed by CORS"));
     },
 
@@ -138,11 +125,8 @@ app.use(cookieParser());
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-
   max: 500,
-
   standardHeaders: true,
-
   legacyHeaders: false,
 
   message: {
@@ -168,7 +152,7 @@ app.use(
 );
 
 // =====================================================
-// HEALTH CHECK
+// HEALTH CHECKS
 // =====================================================
 
 app.get("/", (req, res) => {
@@ -177,10 +161,6 @@ app.get("/", (req, res) => {
     message: "VTU Platform API is running 🚀",
   });
 });
-
-// =====================================================
-// API HEALTH CHECK
-// =====================================================
 
 app.get("/api", (req, res) => {
   res.status(200).json({
@@ -193,96 +173,91 @@ app.get("/api", (req, res) => {
 // AUTH ROUTES
 // =====================================================
 
-app.use(
-  "/api/auth",
-  authRoutes
-);
+app.use("/api/auth", authRoutes);
 
 // =====================================================
 // USER ROUTES
 // =====================================================
 
-app.use(
-  "/api/user",
-  userRoutes
-);
+app.use("/api/user", userRoutes);
 
 // =====================================================
 // WALLET ROUTES
 // =====================================================
 
-app.use(
-  "/api/wallet",
-  walletRoutes
-);
+app.use("/api/wallet", walletRoutes);
 
 // =====================================================
 // AIRTIME ROUTES
 // =====================================================
 
-app.use(
-  "/api/airtime",
-  airtimeRoutes
-);
+app.use("/api/airtime", airtimeRoutes);
 
 // =====================================================
 // DATA ROUTES
+// Customer data-plan loading and purchase endpoints.
 // =====================================================
 
-app.use(
-  "/api/data",
-  dataRoutes
-);
+app.use("/api/data", dataRoutes);
 
 // =====================================================
-// TRANSACTION ROUTES
+// BULK PURCHASE ROUTES
+// Reuses existing Airtime/Data purchase services.
 // =====================================================
 
-app.use(
-  "/api/transactions",
-  transactionRoutes
-);
+app.use("/api/bulk", bulkPurchaseRoutes);
+
+// =====================================================
+// CUSTOMER TRANSACTION ROUTES
+// Existing customer-scoped endpoint remains unchanged.
+// =====================================================
+
+app.use("/api/transactions", transactionRoutes);
+
+// =====================================================
+// ADMIN TRANSACTION ROUTES
+// Protected by protect + adminOnly in the route file.
+// =====================================================
+
+app.use("/api/admin/transactions", adminTransactionRoutes);
+app.use("/api/admin/providers", adminProviderRoutes);
+app.use("/api/admin/customers", adminCustomerRoutes);
 
 // =====================================================
 // DASHBOARD ROUTES
 // =====================================================
 
-app.use(
-  "/api/dashboard",
-  dashboardRoutes
-);
+app.use("/api/dashboard", dashboardRoutes);
 
 // =====================================================
 // FINANCIAL LEDGER ROUTES
 // =====================================================
 
-app.use(
-  "/api/financial-ledger",
-  financialLedgerRoutes
-);
+app.use("/api/financial-ledger", financialLedgerRoutes);
+
+// =====================================================
+// DATA PRICING ROUTES
+// =====================================================
+
+app.use("/api/data-pricing", dataPricingRoutes);
 
 // =====================================================
 // ANNOUNCEMENT ROUTES
 // =====================================================
 
-app.use(
-  "/api/announcements",
-  announcementRoutes
-);
+app.use("/api/announcements", announcementRoutes);
 
 // =====================================================
 // 404 HANDLER
 // =====================================================
 
-app.use(
-  (req, res) => {
-    res.status(404).json({
-      success: false,
-      message: "Route not found",
-      path: req.originalUrl,
-    });
-  }
-);
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route not found",
+    path: req.originalUrl,
+  });
+});
 
 // =====================================================
 // GLOBAL ERROR HANDLER

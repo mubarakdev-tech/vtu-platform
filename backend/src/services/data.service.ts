@@ -1,16 +1,20 @@
 import mongoose from "mongoose";
 import AppError from "../utils/AppError";
 import { getProvider } from "../providers";
+import DataPlan from "../models/dataPlan.model";
+import ProviderPlan from "../models/providerPlan.model";
 import { debitWallet, creditWallet } from "./wallet.service";
 import { createTransaction } from "./transaction.service";
+import { createFinancialLedgerEntry } from "./financial-ledger.service";
 
 type BuyDataInput = {
   userId: string;
   network: string;
   phone: string;
   plan: string;
-  amount: number;
+  amount?: number;
   provider?: string;
+  batchReference?: string;
 };
 
 export const buyData = async ({
@@ -18,67 +22,119 @@ export const buyData = async ({
   network,
   phone,
   plan,
-  amount,
-  provider = "vtpass",
+  batchReference,
 }: BuyDataInput) => {
-  // ==========================================
-  // VALIDATION
-  // ==========================================
-
   if (!userId) {
     throw new AppError("Unauthorized", 401);
   }
 
-  if (
-    !network ||
-    !phone ||
-    !plan ||
-    amount === undefined ||
-    amount === null
-  ) {
+  if (!network || !phone || !plan) {
     throw new AppError(
-      "network, phone, plan and amount are required",
+      "network, phone and plan are required",
       400
     );
   }
 
-  const value = Number(amount);
+  const normalizedNetwork = network.toLowerCase().trim();
 
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new AppError("Invalid amount", 400);
+  /*
+   * `plan` is now the AbuPay DataPlan ID.
+   *
+   * Customer does NOT choose:
+   * - provider
+   * - provider plan code
+   * - selling price
+   * - provider buying cost
+   */
+  const savedDataPlan = await DataPlan.findOne({
+    _id: plan,
+    network: {
+      $regex: "^" + normalizedNetwork + "$",
+      $options: "i",
+    },
+    active: true,
+  })
+    .populate("provider")
+    .populate("providerPlan");
+
+  if (!savedDataPlan) {
+    throw new AppError(
+      "This AbuPay data plan is not available.",
+      409
+    );
   }
 
-  // ==========================================
-  // NORMALIZE PROVIDER
-  // ==========================================
+  const providerRecord: any = savedDataPlan.provider;
+  const providerPlan: any = savedDataPlan.providerPlan;
 
-  const providerName = String(provider || "vtpass")
+  if (!providerRecord || !providerRecord.active) {
+    throw new AppError(
+      "The provider mapped to this plan is not available.",
+      409
+    );
+  }
+
+  if (!providerRecord.activeForData) {
+    throw new AppError(
+      "This data plan is not available through the currently selected Data provider.",
+      409
+    );
+  }
+  if (!providerPlan || !providerPlan.active) {
+    throw new AppError(
+      "The provider plan mapped to this AbuPay plan is not available.",
+      409
+    );
+  }
+
+  const customerAmount = Number(savedDataPlan.amount);
+  const providerAmount = Number(providerPlan.providerCost);
+  const providerPlanCode = String(
+    providerPlan.providerPlanCode || ""
+  ).trim();
+
+  if (
+    !Number.isFinite(customerAmount) ||
+    customerAmount <= 0
+  ) {
+    throw new AppError(
+      "The saved AbuPay selling price is invalid.",
+      409
+    );
+  }
+
+  if (
+    !Number.isFinite(providerAmount) ||
+    providerAmount < 0
+  ) {
+    throw new AppError(
+      "The saved provider buying cost is invalid.",
+      409
+    );
+  }
+
+  if (!providerPlanCode) {
+    throw new AppError(
+      "The mapped provider plan code is missing.",
+      409
+    );
+  }
+
+  const providerName = String(
+    providerRecord.key || ""
+  )
     .toLowerCase()
     .trim();
 
-  /*
-   * IMPORTANT:
-   *
-   * This allows either of your configured providers
-   * to handle the purchase.
-   *
-   * Provider name is kept internally only.
-   * It is NOT displayed to customers.
-   */
-
   const selectedProvider = getProvider(providerName);
 
-  if (!selectedProvider) {
+  if (
+    !selectedProvider ||
+    typeof selectedProvider.buyData !== "function"
+  ) {
     throw new AppError(
-      `Provider "${providerName}" is not available`,
-      400
-    );
-  }
-
-  if (typeof selectedProvider.buyData !== "function") {
-    throw new AppError(
-      "Selected provider does not support data purchase",
-      400
+      "The mapped provider does not support data purchase.",
+      409
     );
   }
 
@@ -88,263 +144,145 @@ export const buyData = async ({
     let response: any = null;
 
     await session.withTransaction(async () => {
-      // ==========================================
-      // 1. DEBIT WALLET
-      // ==========================================
-
       const walletResult = await debitWallet({
         userId,
-        amount: value,
+        amount: customerAmount,
         session,
       });
 
       console.log("\n======================================");
       console.log("DATA PURCHASE STARTED");
       console.log("User ID:", userId);
-      console.log("Network:", network);
+      console.log("Network:", normalizedNetwork);
       console.log("Phone:", phone);
-      console.log("Plan:", plan);
-      console.log("Amount:", value);
-
-      // Provider is logged internally only.
+      console.log("AbuPay Plan:", savedDataPlan.name);
+      console.log("Selling Price:", customerAmount);
       console.log("Provider:", providerName);
-
-      console.log(
-        "Balance Before:",
-        walletResult.balanceBefore
-      );
-
-      console.log(
-        "Balance After:",
-        walletResult.balanceAfter
-      );
-
+      console.log("Provider Plan:", providerPlanCode);
+      console.log("Provider Cost:", providerAmount);
       console.log("======================================\n");
-
-      // ==========================================
-      // 2. CALL SELECTED PROVIDER
-      // ==========================================
 
       const providerResult =
         await selectedProvider.buyData({
-          network: network.toLowerCase(),
+          network: normalizedNetwork,
           phone: phone.trim(),
-          plan,
-          amount: value,
+          plan: providerPlanCode,
+          amount: providerAmount,
         });
-
-      console.log(
-        "========== DATA PROVIDER RESPONSE =========="
-      );
-
-      console.log(
-        JSON.stringify(providerResult, null, 2)
-      );
-
-      console.log(
-        "============================================"
-      );
-
-      // ==========================================
-      // 3. PROVIDER FAILED
-      // ==========================================
 
       if (!providerResult?.success) {
-        console.log(
-          "Data provider failed. Refunding wallet..."
-        );
-
-        // ----------------------------------------
-        // REFUND WALLET
-        // ----------------------------------------
-
         const refundResult = await creditWallet({
           userId,
-          amount: value,
+          amount: customerAmount,
           session,
         });
-
-        console.log(
-          "Wallet refunded successfully."
-        );
-
-        console.log(
-          "Refund Balance:",
-          refundResult.balanceAfter
-        );
-
-        // ----------------------------------------
-        // RECORD FAILED TRANSACTION
-        // ----------------------------------------
 
         await createTransaction({
           userId,
-
           type: "CREDIT",
-
           category: "DATA",
-
-          amount: value,
-
+          amount: customerAmount,
           status: "FAILED",
-
           description:
-            `${network.toUpperCase()} Data Refund`,
-
+            `${normalizedNetwork.toUpperCase()} Data Refund`,
           metadata: {
-            network,
+            network: normalizedNetwork,
             phone,
-            plan,
-
-            /*
-             * INTERNAL ONLY.
-             *
-             * Useful for admin/accounting.
-             * Do not display this on customer UI.
-             */
+            plan: String(savedDataPlan._id),
+            planName: savedDataPlan.name,
             provider: providerName,
-
+            providerPlanCode,
             providerResponse: providerResult,
-
-            balanceBefore:
-              walletResult.balanceAfter,
-
-            balanceAfter:
-              refundResult.balanceAfter,
+            balanceBefore: walletResult.balanceAfter,
+            balanceAfter: refundResult.balanceAfter,
+            batchReference,
           },
-
           session,
         });
 
-        // ----------------------------------------
-        // RETURN FAILURE
-        // ----------------------------------------
-
         response = {
           success: false,
-
           message:
             providerResult?.message ||
             "Data purchase failed",
-
-          balanceBefore:
-            walletResult.balanceBefore,
-
-          amountPaid: value,
-
-          balanceAfter:
-            refundResult.balanceAfter,
-
-          walletBalance:
-            refundResult.balanceAfter,
-
+          balanceBefore: walletResult.balanceBefore,
+          amountPaid: customerAmount,
+          balanceAfter: refundResult.balanceAfter,
+          walletBalance: refundResult.balanceAfter,
           providerResponse:
-            providerResult?.data ||
+            (providerResult as any)?.data ||
             providerResult,
         };
 
         return;
       }
 
-      // ==========================================
-      // 4. PROVIDER SUCCESS
-      // ==========================================
-
-      console.log(
-        "Data provider purchase successful."
-      );
-
-      // ==========================================
-      // 5. SAVE SUCCESSFUL TRANSACTION
-      // ==========================================
-
       const transaction = await createTransaction({
         userId,
-
         type: "DEBIT",
-
         category: "DATA",
-
-        amount: value,
-
+        amount: customerAmount,
         status: "SUCCESS",
-
         description:
-          `${network.toUpperCase()} Data Purchase`,
-
+          `${normalizedNetwork.toUpperCase()} Data Purchase`,
         metadata: {
-          network,
+          network: normalizedNetwork,
           phone,
-          plan,
-
-          /*
-           * INTERNAL ONLY.
-           *
-           * This lets you know which provider
-           * processed the transaction.
-           *
-           * It should NOT be displayed to customers.
-           */
+          plan: String(savedDataPlan._id),
+          planName: savedDataPlan.name,
           provider: providerName,
-
+          providerPlanCode,
           providerResponse: providerResult,
-
-          balanceBefore:
-            walletResult.balanceBefore,
-
-          balanceAfter:
-            walletResult.balanceAfter,
+          balanceBefore: walletResult.balanceBefore,
+          balanceAfter: walletResult.balanceAfter,
+          batchReference,
         },
-
         session,
       });
 
-      console.log(
-        "Data transaction saved:",
-        transaction?._id
-      );
+      const grossProfit =
+        customerAmount - providerAmount;
 
-      // ==========================================
-      // 6. RETURN SUCCESS
-      // ==========================================
+      await createFinancialLedgerEntry({
+        type: "REVENUE",
+        category: "DATA_SALE",
+        amount: customerAmount,
+        customerAmount,
+        providerCost: providerAmount,
+        grossProfit,
+        provider: providerName,
+        service: "DATA",
+        user: userId,
+        transaction: transaction._id,
+        reference: `DATA-SALE-${transaction._id}`,
+        description:
+          `${normalizedNetwork.toUpperCase()} Data Sale`,
+        metadata: {
+          network: normalizedNetwork,
+          phone,
+          dataPlan: String(savedDataPlan._id),
+          providerPlanCode,
+          providerCostKnown: true,
+          batchReference,
+        },
+        session,
+      });
 
       response = {
         success: true,
-
         message:
           providerResult?.message ||
           "Data purchase successful",
-
-        // Wallet information
-        balanceBefore:
-          walletResult.balanceBefore,
-
-        amountPaid: value,
-
-        balanceAfter:
-          walletResult.balanceAfter,
-
-        walletBalance:
-          walletResult.balanceAfter,
-
-        // Transaction
+        balanceBefore: walletResult.balanceBefore,
+        amountPaid: customerAmount,
+        balanceAfter: walletResult.balanceAfter,
+        walletBalance: walletResult.balanceAfter,
         transaction,
-
-        /*
-         * Provider response is returned for
-         * internal/frontend processing.
-         *
-         * We DO NOT return providerName separately.
-         */
         providerResponse:
-          providerResult?.data ||
+          (providerResult as any)?.data ||
           providerResult,
       };
     });
-
-    // ==========================================
-    // SAFETY CHECK
-    // ==========================================
 
     if (!response) {
       throw new AppError(
@@ -356,45 +294,19 @@ export const buyData = async ({
     return response;
   } catch (error: any) {
     console.error(
-      "======================================"
-    );
-
-    console.error(
-      "BUY DATA SERVICE ERROR:"
-    );
-
-    console.error(
+      "BUY DATA SERVICE ERROR:",
       error?.message || error
     );
-
-    console.error(
-      "======================================"
-    );
-
-    /*
-     * withTransaction() automatically handles
-     * transaction rollback when an error is thrown.
-     *
-     * Therefore we DO NOT manually credit the
-     * wallet here.
-     *
-     * This prevents double refunds.
-     */
 
     if (error instanceof AppError) {
       throw error;
     }
 
     throw new AppError(
-      error?.message ||
-        "Data purchase failed",
+      error?.message || "Data purchase failed",
       500
     );
   } finally {
     await session.endSession();
-
-    console.log(
-      "========== DATA PURCHASE ENDED ==========\n"
-    );
   }
 };

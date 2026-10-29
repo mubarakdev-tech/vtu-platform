@@ -129,11 +129,17 @@ const env = cleanEnv(process.env, {
 
   // ==========================================
   // EMAIL - RESEND
+  // Optional when email credentials are not configured.
+  // Email sending must handle missing credentials safely.
   // ==========================================
 
-  RESEND_API_KEY: str(),
+  RESEND_API_KEY: str({
+    default: "",
+  }),
 
-  EMAIL_FROM: str(),
+  EMAIL_FROM: str({
+    default: "",
+  }),
 });
 
 export default env;

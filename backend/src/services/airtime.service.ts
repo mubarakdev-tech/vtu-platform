@@ -1,15 +1,20 @@
 import mongoose from "mongoose";
 import AppError from "../utils/AppError";
+import Provider from "../models/provider.model";
 import { getProvider } from "../providers";
+import type { ProviderResponse } from "../providers/provider.interface";
 import { debitWallet, creditWallet } from "./wallet.service";
 import { createTransaction } from "./transaction.service";
+import { createFinancialLedgerEntry } from "./financial-ledger.service";
+
+const isTest = String(process.env.VTPASS_BASE_URL || "").toLowerCase().includes("sandbox");
 
 interface PurchaseAirtimePayload {
   userId: string;
   network: string;
   phone: string;
   amount: number;
-  provider?: string;
+  batchReference?: string;
 }
 
 export const purchaseAirtime = async ({
@@ -17,10 +22,36 @@ export const purchaseAirtime = async ({
   network,
   phone,
   amount,
-  provider = "vtpass",
+  batchReference,
 }: PurchaseAirtimePayload) => {
   if (!amount || amount <= 0) {
     throw new AppError("Invalid airtime amount", 400);
+  }
+
+  const activeProvider = await Provider.findOne({
+    active: true,
+    supportsAirtime: true,
+    activeForAirtime: true,
+  }).lean();
+
+  if (!activeProvider) {
+    throw new AppError(
+      "No active Airtime provider is configured.",
+      503
+    );
+  }
+
+  const provider = String(activeProvider.key)
+    .trim()
+    .toLowerCase();
+
+  const selectedProvider = getProvider(provider);
+
+  if (!selectedProvider) {
+    throw new AppError(
+      "The active Airtime provider integration is unavailable.",
+      503
+    );
   }
 
   const session = await mongoose.startSession();
@@ -48,7 +79,7 @@ export const purchaseAirtime = async ({
         session,
       });
 
-      console.log("✅ Wallet debited successfully");
+      console.log("Γ£à Wallet debited successfully");
       console.log(
         "Balance Before:",
         walletResult.balanceBefore
@@ -57,25 +88,11 @@ export const purchaseAirtime = async ({
         "Balance After:",
         walletResult.balanceAfter
       );
-
       // =====================================================
-      // 2. GET PROVIDER
-      // =====================================================
-
-      const selectedProvider = getProvider(provider);
-
-      if (!selectedProvider) {
-        throw new AppError(
-          `Provider "${provider}" is not available`,
-          400
-        );
-      }
-
-      // =====================================================
-      // 3. BUY AIRTIME
+      // 2. BUY AIRTIME THROUGH ADMIN-SELECTED PROVIDER
       // =====================================================
 
-      const providerResponse =
+      const providerResponse: ProviderResponse =
         await selectedProvider.buyAirtime({
           network: network.toLowerCase(),
           phone: phone.trim(),
@@ -95,12 +112,12 @@ export const purchaseAirtime = async ({
       );
 
       // =====================================================
-      // 4. PROVIDER FAILED → REFUND WALLET
+      // 4. PROVIDER FAILED ΓåÆ REFUND WALLET
       // =====================================================
 
       if (!providerResponse.success) {
         console.log(
-          "❌ Provider failed. Refunding wallet..."
+          "Γ¥î Provider failed. Refunding wallet..."
         );
 
         const refundResult = await creditWallet({
@@ -110,7 +127,7 @@ export const purchaseAirtime = async ({
         });
 
         console.log(
-          "✅ Wallet refunded successfully"
+          "Γ£à Wallet refunded successfully"
         );
 
         await createTransaction({
@@ -125,6 +142,8 @@ export const purchaseAirtime = async ({
             phone,
             provider,
             providerResponse,
+            isTest,
+            batchReference,
 
             balanceBefore:
               walletResult.balanceAfter,
@@ -147,7 +166,7 @@ export const purchaseAirtime = async ({
       // =====================================================
 
       console.log(
-        "✅ Provider airtime purchase successful"
+        "Γ£à Provider airtime purchase successful"
       );
 
       // =====================================================
@@ -167,6 +186,8 @@ export const purchaseAirtime = async ({
           phone,
           provider,
           providerResponse,
+          isTest,
+          batchReference,
 
           balanceBefore:
             walletResult.balanceBefore,
@@ -178,7 +199,40 @@ export const purchaseAirtime = async ({
         session,
       });
 
-      console.log("✅ Transaction saved");
+      console.log("Γ£à Transaction saved");
+
+      const providerCost = Number(providerResponse.providerCost);
+      const providerCostKnown =
+        Number.isFinite(providerCost) && providerCost >= 0;
+
+      const grossProfit = providerCostKnown
+        ? amount - providerCost
+        : undefined;
+
+      await createFinancialLedgerEntry({
+        type: "REVENUE",
+        category: "AIRTIME_SALE",
+        amount,
+        customerAmount: amount,
+        providerCost: providerCostKnown ? providerCost : undefined,
+        grossProfit,
+        provider,
+        service: "AIRTIME",
+        user: userId,
+        transaction: transaction._id,
+        reference: `AIRTIME-SALE-${transaction._id}`,
+        description: `${network.toUpperCase()} Airtime Sale`,
+        metadata: {
+          network: network.toLowerCase(),
+          phone,
+          providerCostKnown,
+          isTest,
+          batchReference,
+        },
+        session,
+      });
+
+      console.log("Airtime financial ledger entry saved");
 
       // =====================================================
       // 7. RETURN RESULT TO FRONTEND

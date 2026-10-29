@@ -10,6 +10,8 @@ export interface IProvider extends Document {
   sortOrder: number;
   supportsData: boolean;
   supportsAirtime: boolean;
+  activeForAirtime: boolean;
+  activeForData: boolean;
 }
 
 const ProviderSchema = new Schema<IProvider>(
@@ -46,6 +48,16 @@ const ProviderSchema = new Schema<IProvider>(
     supportsAirtime: {
       type: Boolean,
       default: true,
+    },
+
+    activeForAirtime: {
+      type: Boolean,
+      default: false,
+    },
+
+    activeForData: {
+      type: Boolean,
+      default: false,
     },
   },
   {
