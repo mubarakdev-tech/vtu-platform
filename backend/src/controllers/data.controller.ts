@@ -1,4 +1,4 @@
-﻿import { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
 import AppError from "../utils/AppError";
 import * as dataService from "../services/data.service";
 import { getProvider } from "../providers";
@@ -22,13 +22,19 @@ export const getDataPlans = async (
       );
     }
 
+    const activeDataProvider = await Provider.findOne({ active: true, supportsData: true, activeForData: true }).select("_id").lean();
+
+    if (!activeDataProvider) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
     const plans = await DataPlan.find({
+      provider: activeDataProvider._id,
       network: {
         $regex: "^" + network + "$",
         $options: "i",
       },
       active: true,
-      provider: { $exists: true, $ne: null },
       providerPlan: { $exists: true, $ne: null },
     })
       .sort({ sortOrder: 1, name: 1 })
