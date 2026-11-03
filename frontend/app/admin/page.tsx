@@ -1004,6 +1004,8 @@ export default function Home() {
     try {
       setPricingLoading(true);
       setPricingError("");
+      setMappingError("");
+      setMappingMessage("");
 
       const response = await fetch(`${API_URL}/data-pricing/plans`, {
         method: "GET",

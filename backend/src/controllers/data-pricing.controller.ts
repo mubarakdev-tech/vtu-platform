@@ -175,15 +175,25 @@ export const updateDataPricingPlan = async (
       await linkedProviderPlan.save();
     }
 
+    const planUpdates: Record<string, number | boolean> = {};
+
     if (sellingPrice !== undefined) {
       plan.amount = Number(sellingPrice);
+      planUpdates.amount = Number(sellingPrice);
     }
 
     if (active !== undefined) {
       plan.active = active;
+      planUpdates.active = active;
     }
 
-    await plan.save();
+    if (Object.keys(planUpdates).length > 0) {
+      await DataPlan.updateOne(
+        { _id: plan._id },
+        { $set: planUpdates },
+        { runValidators: false }
+      );
+    }
 
     if (!linkedProviderPlan && plan.providerPlan) {
       linkedProviderPlan = await ProviderPlan.findById(
