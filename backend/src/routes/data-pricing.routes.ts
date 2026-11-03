@@ -1,5 +1,4 @@
-﻿
-import { Router } from "express";
+﻿import { Router } from "express";
 import { protect } from "../middleware/auth.middleware";
 import { adminOnly } from "../middleware/admin.middleware";
 
@@ -11,6 +10,10 @@ import {
   mapDataPricingPlan,
   bulkMapDataPricingPlans,
 } from "../controllers/data-pricing.controller";
+
+import {
+  previewBigiSubCatalogueSyncController,
+} from "../controllers/provider-catalogue-sync.controller";
 
 const router = Router();
 
@@ -54,6 +57,14 @@ router.post(
   protect,
   adminOnly,
   bulkMapDataPricingPlans
+);
+
+// Read-only BigiSub catalogue sync preview
+router.post(
+  "/providers/bigisub/sync-preview",
+  protect,
+  adminOnly,
+  previewBigiSubCatalogueSyncController
 );
 
 export default router;
