@@ -1,3 +1,4 @@
+﻿
 import mongoose from "mongoose";
 import AppError from "../utils/AppError";
 import { getProvider } from "../providers";
@@ -24,9 +25,7 @@ export const buyData = async ({
   plan,
   batchReference,
 }: BuyDataInput) => {
-  if (!userId) {
-    throw new AppError("Unauthorized", 401);
-  }
+  if (!userId) throw new AppError("Unauthorized", 401);
 
   if (!network || !phone || !plan) {
     throw new AppError(
@@ -37,15 +36,6 @@ export const buyData = async ({
 
   const normalizedNetwork = network.toLowerCase().trim();
 
-  /*
-   * `plan` is now the AbuPay DataPlan ID.
-   *
-   * Customer does NOT choose:
-   * - provider
-   * - provider plan code
-   * - selling price
-   * - provider buying cost
-   */
   const savedDataPlan = await DataPlan.findOne({
     _id: plan,
     network: {
@@ -80,6 +70,7 @@ export const buyData = async ({
       409
     );
   }
+
   if (!providerPlan || !providerPlan.active) {
     throw new AppError(
       "The provider plan mapped to this AbuPay plan is not available.",
@@ -116,6 +107,15 @@ export const buyData = async ({
   if (!providerPlanCode) {
     throw new AppError(
       "The mapped provider plan code is missing.",
+      409
+    );
+  }
+
+  // Prevent sales at zero profit or at a loss.
+  // This check happens before wallet debit and provider purchase.
+  if (customerAmount <= providerAmount) {
+    throw new AppError(
+      "This data plan is temporarily unavailable because its selling price must be higher than the provider cost. Please contact support.",
       409
     );
   }

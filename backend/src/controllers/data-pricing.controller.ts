@@ -319,6 +319,21 @@ export const getDataProviderCatalogue = async (
         const raw = item.raw || {};
         const amount = Number(item.amount);
 
+        const rawProviderCost =
+          item.corporate_amount ?? raw.corporate_amount;
+
+        const parsedProviderCost = Number(rawProviderCost);
+
+        const providerCost =
+          providerKey === "bigisub" &&
+          rawProviderCost !== undefined &&
+          rawProviderCost !== null &&
+          String(rawProviderCost).trim() !== "" &&
+          Number.isFinite(parsedProviderCost) &&
+          parsedProviderCost > 0
+            ? parsedProviderCost
+            : null;
+
         return {
           name: String(
             item.name || item.variation_code || ""
@@ -330,6 +345,7 @@ export const getDataProviderCatalogue = async (
             Number.isFinite(amount)
               ? amount
               : null,
+          providerCost,
           validity: String(
             item.validity ||
             raw.validity ||
@@ -646,6 +662,7 @@ export const bulkMapDataPricingPlans = async (
         name: string;
         code: string;
         catalogueAmount: number | null;
+        providerCost: number | null;
         validity: string;
       }
     >();
@@ -667,6 +684,19 @@ export const bulkMapDataPricingPlans = async (
 
       const parsedAmount = Number(rawAmount);
 
+      const rawCorporateAmount = rawPlan?.corporate_amount;
+      const parsedCorporateAmount = Number(rawCorporateAmount);
+
+      const liveProviderCost =
+        normalizedProviderKey === "bigisub" &&
+        rawCorporateAmount !== undefined &&
+        rawCorporateAmount !== null &&
+        String(rawCorporateAmount).trim() !== "" &&
+        Number.isFinite(parsedCorporateAmount) &&
+        parsedCorporateAmount > 0
+          ? parsedCorporateAmount
+          : null;
+
       liveCatalogue.set(code, {
         name: String(
           rawPlan?.name ??
@@ -677,8 +707,91 @@ export const bulkMapDataPricingPlans = async (
         catalogueAmount: Number.isFinite(parsedAmount)
           ? parsedAmount
           : null,
+        providerCost: liveProviderCost,
         validity: String(rawPlan?.validity ?? "").trim(),
       });
+    }
+
+    // Validate the entire batch before making any database writes.
+    const validatedCodes = new Set<string>();
+
+    for (const item of items) {
+      const code = String(item?.providerPlanCode || "").trim();
+      const cost = Number(item?.providerCost);
+      const sellingPrice = Number(item?.sellingPrice);
+      const requestedId = String(item?.dataPlanId || "").trim();
+
+      if (!code) {
+        throw new AppError("Every selected item must include a provider plan code.", 400);
+      }
+
+      if (validatedCodes.has(code)) {
+        throw new AppError(`Provider plan ${code} was selected more than once.`, 400);
+      }
+      validatedCodes.add(code);
+
+      if (!Number.isFinite(cost) || cost < 0) {
+        throw new AppError(`Invalid verified provider cost for plan ${code}.`, 400);
+      }
+
+      const livePlan = liveCatalogue.get(code);
+      if (!livePlan) {
+        throw new AppError(`Provider plan ${code} is no longer available in the live catalogue.`, 400);
+      }
+
+      if (normalizedProviderKey === "bigisub") {
+        if (livePlan.providerCost === null) {
+          throw new AppError(`BigiSub corporate buying cost is missing for plan ${code}.`, 409);
+        }
+        if (Math.abs(cost - livePlan.providerCost) > 0.01) {
+          throw new AppError(
+            `Buying cost mismatch for ${code}. Live BigiSub corporate cost is ${livePlan.providerCost}.`,
+            409
+          );
+        }
+      }
+
+      let existingDataPlan: any = null;
+
+      if (requestedId) {
+        existingDataPlan = await DataPlan.findById(requestedId);
+
+        if (!existingDataPlan) {
+          throw new AppError(`AbuPay data plan ${requestedId} was not found.`, 404);
+        }
+
+        if (String(existingDataPlan.network || "").toLowerCase() !== normalizedNetwork) {
+          throw new AppError(
+            `Selected AbuPay plan ${existingDataPlan.name} does not belong to ${normalizedNetwork.toUpperCase()}.`,
+            400
+          );
+        }
+
+        if (String(existingDataPlan.dataType || "DATA").toUpperCase() !== normalizedDataType) {
+          throw new AppError(
+            `Selected AbuPay plan ${existingDataPlan.name} has a different data type.`,
+            400
+          );
+        }
+      } else {
+        const existingProviderPlan = await ProviderPlan.findOne({
+          provider: provider._id,
+          network: normalizedNetwork,
+          dataType: normalizedDataType,
+          providerPlanCode: code,
+        });
+
+        if (existingProviderPlan) {
+          existingDataPlan = await DataPlan.findOne({
+            provider: provider._id,
+            providerPlan: existingProviderPlan._id,
+          });
+        }
+      }
+
+      if (!existingDataPlan && (!Number.isFinite(sellingPrice) || sellingPrice <= 0)) {
+        throw new AppError(`Enter a valid AbuPay selling price for ${livePlan.name}.`, 400);
+      }
     }
 
     const results: any[] = [];
@@ -714,6 +827,22 @@ export const bulkMapDataPricingPlans = async (
         );
       }
 
+      if (normalizedProviderKey === "bigisub") {
+        if (livePlan.providerCost === null) {
+          throw new AppError(
+            `BigiSub corporate buying cost is missing for plan ${providerPlanCode}.`,
+            409
+          );
+        }
+
+        if (Math.abs(providerCost - livePlan.providerCost) > 0.01) {
+          throw new AppError(
+            `Buying cost mismatch for ${providerPlanCode}. Live BigiSub corporate cost is ${livePlan.providerCost}.`,
+            409
+          );
+        }
+      }
+
       let providerPlan = await ProviderPlan.findOneAndUpdate(
         {
           provider: provider._id,
@@ -727,11 +856,9 @@ export const bulkMapDataPricingPlans = async (
             validity: livePlan.validity || undefined,
             providerCost,
             active: true,
-            metadata: {
-              catalogueSource: normalizedProviderKey,
-              catalogueAmount: livePlan.catalogueAmount,
-              catalogueCheckedAt: new Date(),
-            },
+            "metadata.catalogueSource": normalizedProviderKey,
+            "metadata.catalogueAmount": livePlan.catalogueAmount,
+            "metadata.catalogueCheckedAt": new Date(),
           },
         },
         {
@@ -831,7 +958,7 @@ export const bulkMapDataPricingPlans = async (
           name: livePlan.name,
           validity: livePlan.validity || undefined,
           amount: sellingPrice,
-          active: true,
+          active: false,
           sortOrder: 0,
         });
 

@@ -60,6 +60,7 @@ interface ProviderCataloguePlan {
   name: string;
   code: string;
   catalogueAmount: number | null;
+  providerCost: number | null;
   validity: string;
 }
 
@@ -828,6 +829,19 @@ export default function Home() {
         : [];
 
       setBulkCatalogue(catalogue);
+      // Prefill buying costs from the provider's verified live cost.
+      setBulkCosts(
+        Object.fromEntries(
+          catalogue
+            .filter(
+              (item) =>
+                item.providerCost != null &&
+                Number.isFinite(Number(item.providerCost)) &&
+                Number(item.providerCost) > 0
+            )
+            .map((item) => [item.code, String(item.providerCost)])
+        )
+      );
 
       setBulkMessage(
         catalogue.length
@@ -2013,7 +2027,7 @@ export default function Home() {
                         </td>
                         <td className="px-5 py-4">
                           <p className="font-mono text-xs text-slate-700">
-                            {transaction.reference || "â€”"}
+                            {transaction.reference || "—"}
                           </p>
                           {transaction.gatewayReference && (
                             <p className="mt-1 text-xs text-slate-400">
@@ -2022,7 +2036,7 @@ export default function Home() {
                           )}
                         </td>
                         <td className="px-5 py-4">
-                          {String(transaction.category || "â€”").replaceAll("_", " ")}
+                          {String(transaction.category || "—").replaceAll("_", " ")}
                         </td>
                         <td className="px-5 py-4">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -2030,7 +2044,7 @@ export default function Home() {
                               ? "bg-blue-100 text-blue-700"
                               : "bg-slate-100 text-slate-700"
                           }`}>
-                            {transaction.type || "â€”"}
+                            {transaction.type || "—"}
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-5 py-4 font-semibold">
@@ -2043,7 +2057,7 @@ export default function Home() {
                         </td>
                         <td className="max-w-xs px-5 py-4 text-slate-600">
                           <p className="line-clamp-2">
-                            {transaction.description || transaction.gateway || "â€”"}
+                            {transaction.description || transaction.gateway || "—"}
                           </p>
                         </td>
                       </tr>
@@ -2485,7 +2499,7 @@ export default function Home() {
               <p className="text-sm font-semibold text-blue-600">Admin / Service Configuration</p>
               <h2 className="mt-2 text-2xl font-bold">AbuPay Data Plan Pricing</h2>
               <p className="mt-2 text-sm text-slate-500">
-                Provider buying costs and customer selling prices are separate. Catalogue amounts are informational and do not automatically change customer prices.
+                Provider buying costs and customer selling prices are separate. Provider buying costs are informational and do not automatically change customer prices.
               </p>
             </div>
             <button
@@ -2665,15 +2679,23 @@ export default function Home() {
                               </div>
 
                               <div className="text-right">
-                                <p className="text-xs text-slate-500">
-                                  Catalogue amount
-                                </p>
-                                <p className="font-semibold text-slate-800">
-                                  {item.catalogueAmount != null
-                                    ? `NGN ${item.catalogueAmount}`
-                                    : "Not supplied"}
-                                </p>
-                              </div>
+  <p className="text-xs text-slate-500">
+    Provider buying cost
+  </p>
+  <p className="font-semibold text-emerald-700">
+    {item.providerCost != null
+      ? `NGN ${Number(item.providerCost).toLocaleString()}`
+      : "Not supplied"}
+  </p>
+  <p className="mt-2 text-xs text-slate-500">
+    Catalogue retail amount (informational only)
+  </p>
+  <p className="font-semibold text-slate-800">
+    {item.catalogueAmount != null
+      ? `NGN ${Number(item.catalogueAmount).toLocaleString()}`
+      : "Not supplied"}
+  </p>
+</div>
                             </div>
 
                             {selected && (
@@ -2718,9 +2740,9 @@ export default function Home() {
                                       }))
                                     }
                                     placeholder={
-                                      item.catalogueAmount != null
-                                        ? `Catalogue: NGN ${item.catalogueAmount}`
-                                        : "Enter verified cost"
+                                      item.providerCost != null
+                                        ? `Live cost: NGN ${item.providerCost}`
+                                        : "Enter verified buying cost"
                                     }
                                     className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2"
                                   />
@@ -2770,7 +2792,7 @@ export default function Home() {
                     className="mt-1 h-4 w-4"
                   />
                   <span>
-                    I confirm that the provider buying costs entered above have been verified. Catalogue amounts are reference values only and are not automatically treated as AbuPay buying costs or customer selling prices.
+                    I confirm that the provider buying costs entered above have been verified. Provider buying costs are reference values only and are not automatically treated as AbuPay buying costs or customer selling prices.
                   </span>
                 </label>
 
@@ -2814,12 +2836,12 @@ export default function Home() {
                       <div>
                         <h3 className="font-semibold text-slate-900">{plan.name}</h3>
                         <p className="mt-1 text-sm text-slate-500">
-                          {plan.network.toUpperCase()} Â· {plan.dataType}
-                          {plan.validity ? ` Â· ${plan.validity}` : ""}
+                          {plan.network.toUpperCase()} · {plan.dataType}
+                          {plan.validity ? ` · ${plan.validity}` : ""}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
                           Provider: {plan.provider?.displayName || "Not mapped"}
-                          {" Â· "}Provider plan: {plan.providerPlan?.name || "Not mapped"}
+                          {" · "}Provider plan: {plan.providerPlan?.name || "Not mapped"}
                         </p>
                       </div>
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -2831,7 +2853,7 @@ export default function Home() {
 
                     <div className="mt-4 grid gap-4 sm:grid-cols-3">
                       <label className="block text-sm">
-                        <span className="mb-1 block text-slate-600">Provider cost (?)</span>
+                        <span className="mb-1 block text-slate-600">Provider cost (₦)</span>
                         <input
                           type="number"
                           min="0"
@@ -2851,7 +2873,7 @@ export default function Home() {
                       </label>
 
                       <label className="block text-sm">
-                        <span className="mb-1 block text-slate-600">Customer selling price (?)</span>
+                        <span className="mb-1 block text-slate-600">Customer selling price (₦)</span>
                         <input
                           type="number"
                           min="0.01"
@@ -2958,10 +2980,10 @@ export default function Home() {
                               <option value="">Select exact catalogue plan</option>
                               {mappingCatalogues[plan.id].map((item) => (
                                 <option key={item.code} value={item.code}>
-                                  {item.name} â€” {item.code}
-                                  {item.validity ? ` â€” ${item.validity}` : ""}
+                                  {item.name} — {item.code}
+                                  {item.validity ? ` — ${item.validity}` : ""}
                                   {item.catalogueAmount != null
-                                    ? ` — catalogue amount ?${item.catalogueAmount}`
+                                    ? ` — catalogue amount ₦${item.catalogueAmount}`
                                     : ""}
                                 </option>
                               ))}
