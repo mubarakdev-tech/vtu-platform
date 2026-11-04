@@ -9,6 +9,7 @@ export const buyData = async (payload: {
   network: string;
   phone: string;
   plan: string;
+  amount: number;
 }) => {
   const { data } = await api.post("/data/buy", payload);
   return data;

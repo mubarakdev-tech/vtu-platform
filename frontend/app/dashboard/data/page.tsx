@@ -225,6 +225,7 @@ export default function DataPage() {
         network,
         phone,
         plan: selectedPlan.variation_code,
+        amount: selectedPlan.amount,
       });
 
       console.log("BUY DATA RESULT:", result);
