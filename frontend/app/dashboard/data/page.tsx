@@ -266,11 +266,12 @@ export default function DataPage() {
        * Get transaction reference.
        */
       const reference =
-        result.providerResponse?.request_id ||
-        result.providerResponse?.data?.request_id ||
-        result.transaction?._id ||
-        result.transaction?.id ||
-        "DATA-" + Date.now();
+  result.transaction?.reference ||
+  result.transaction?._id ||
+  result.transaction?.id ||
+  result.providerResponse?.request_id ||
+  result.providerResponse?.data?.request_id ||
+  "DATA-" + Date.now();
 
       /*
        * Get wallet balances returned by backend.

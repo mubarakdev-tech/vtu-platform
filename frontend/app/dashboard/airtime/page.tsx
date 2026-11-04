@@ -261,11 +261,12 @@ export default function AirtimePage() {
 
       if (result.success) {
         const ref =
-          result.providerResponse?.request_id ||
-          result.providerResponse?.data?.request_id ||
-          result.transaction?._id ||
-          result.transaction?.id ||
-          `AIR-${Date.now()}`;
+  result.transaction?.reference ||
+  result.transaction?._id ||
+  result.transaction?.id ||
+  result.providerResponse?.request_id ||
+  result.providerResponse?.data?.request_id ||
+  `AIR-${Date.now()}`;
 
         const balanceBefore = Number(
           result.balanceBefore ??
