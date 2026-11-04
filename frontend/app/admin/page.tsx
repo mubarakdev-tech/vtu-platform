@@ -1704,17 +1704,27 @@ export default function Home() {
                 </div>
 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
   <p className="text-sm font-medium text-slate-500">
-    Financial Result (Provisional)
+    {financialData.providerCostsComplete
+      ? "Financial Result (Recorded)"
+      : "Financial Result (Provisional)"}
   </p>
+
   <p className="mt-3 text-3xl font-bold">
     {financialData.financialResult === null
       ? "Not available"
       : formatMoney(financialData.financialResult)}
   </p>
-  <p className="mt-2 text-xs text-amber-700">
-    {financialData.financialResult === null
-      ? "A reliable financial result cannot be calculated until every service sale has a verified provider cost."
-      : "This result uses the financial records currently available and is not necessarily confirmed net profit."}
+
+  <p
+    className={`mt-2 text-xs ${
+      financialData.providerCostsComplete
+        ? "text-slate-500"
+        : "text-amber-700"
+    }`}
+  >
+    {financialData.providerCostsComplete
+      ? "All service-sale provider costs have been recorded. This result is based on available financial records and is not necessarily confirmed net profit. Paystack fee recovery remains unreconciled."
+      : "A reliable financial result cannot be calculated until every service sale has a verified provider cost."}
   </p>
 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
