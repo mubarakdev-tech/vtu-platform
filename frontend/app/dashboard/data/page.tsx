@@ -81,6 +81,7 @@ export default function DataPage() {
   } | null>(null);
 
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   /*
    * LOAD DATA PLANS
@@ -200,7 +201,28 @@ export default function DataPage() {
   /*
    * PURCHASE DATA
    */
-  const handlePurchase = async () => {
+  const handlePurchase = () => {
+    if (!phone || phone.length < 11) {
+      setMessage({
+        type: "error",
+        text: "Please enter a valid phone number.",
+      });
+      return;
+    }
+
+    if (!selectedPlan) {
+      setMessage({
+        type: "error",
+        text: "Please select a data plan.",
+      });
+      return;
+    }
+
+    setMessage(null);
+    setShowPreview(true);
+  };
+
+  const confirmPurchase = async () => {
     if (!phone || phone.length < 11) {
       setMessage({
         type: "error",
@@ -302,6 +324,39 @@ export default function DataPage() {
     } finally {
       setLoadingPurchase(false);
     }
+  };
+
+  const handleBulkPreview = () => {
+    const validPhones = bulkPhones.filter(
+      (item) => item.length === 11
+    );
+
+    if (validPhones.length !== bulkPhones.length) {
+      setMessage({
+        type: "error",
+        text: "Please correct all invalid phone numbers.",
+      });
+      return;
+    }
+
+    if (validPhones.length < 2) {
+      setMessage({
+        type: "error",
+        text: "Please enter at least 2 valid recipients.",
+      });
+      return;
+    }
+
+    if (!selectedPlan) {
+      setMessage({
+        type: "error",
+        text: "Please select a data plan.",
+      });
+      return;
+    }
+
+    setMessage(null);
+    setShowPreview(true);
   };
 
   /*
@@ -806,7 +861,7 @@ Fast • Secure • Reliable`;
             {/* PURCHASE BUTTON */}
             <button
               type="button"
-              onClick={bulkMode ? handleBulkPurchase : handlePurchase}
+              onClick={bulkMode ? handleBulkPreview : handlePurchase}
               disabled={
                 loadingPurchase ||
                 !selectedPlan
@@ -824,7 +879,7 @@ Fast • Secure • Reliable`;
               ) : (
                 <>
                   <Wifi size={18} />
-                  {bulkMode ? "Buy Data for Recipients" : "Buy Data"}
+                  {bulkMode ? "Review Bulk Purchase" : "Continue"}
                 </>
               )}
             </button>
@@ -844,6 +899,99 @@ Fast • Secure • Reliable`;
           </div>
         </div>
       </div>
+
+      {/* PURCHASE PREVIEW MODAL */}
+      {showPreview && selectedPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-3">
+          <div className="my-auto w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+            <h2 className="text-xl font-bold text-gray-900">Review Data Purchase</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Confirm the details before paying.
+            </p>
+
+            <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-500">Network</span>
+                <strong className="uppercase text-gray-900">{network}</strong>
+              </div>
+
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-500">Purchase type</span>
+                <strong className="text-gray-900">{bulkMode ? "Bulk data" : "Single data"}</strong>
+              </div>
+
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-500">Data plan</span>
+                <strong className="text-right text-gray-900">{selectedPlan.name}</strong>
+              </div>
+
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-500">Price per recipient</span>
+                <strong className="text-gray-900">
+                  {"\u20A6"}{selectedPlan.amount.toLocaleString("en-NG")}
+                </strong>
+              </div>
+
+              {bulkMode ? (
+                <>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-500">Recipients</span>
+                    <strong className="text-gray-900">{bulkPhones.length}</strong>
+                  </div>
+
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white p-3">
+                    <p className="mb-2 font-semibold text-gray-700">Recipient numbers</p>
+                    {bulkPhones.map((item, index) => (
+                      <div key={`${item}-${index}`} className="py-1 text-gray-700">
+                        {index + 1}. {item}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">Phone number</span>
+                  <strong className="text-gray-900">{phone}</strong>
+                </div>
+              )}
+
+              <div className="flex justify-between border-t border-gray-200 pt-3 text-base">
+                <strong className="text-gray-900">Total charge</strong>
+                <strong className="text-emerald-700">
+                  {"\u20A6"}{(selectedPlan.amount * (bulkMode ? bulkPhones.length : 1)).toLocaleString("en-NG")}
+                </strong>
+              </div>
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                disabled={loadingPurchase}
+                onClick={() => setShowPreview(false)}
+                className="flex-1 rounded-xl border border-gray-300 py-3 font-semibold text-gray-700 disabled:opacity-50"
+              >
+                Edit / Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={loadingPurchase}
+                onClick={() => {
+                  setShowPreview(false);
+                  if (bulkMode) {
+                    void handleBulkPurchase();
+                  } else {
+                    void confirmPurchase();
+                  }
+                }}
+                className="flex-1 rounded-xl bg-emerald-600 py-3 font-semibold text-white disabled:opacity-50"
+              >
+                Confirm & Pay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* RECEIPT MODAL */}
       {receipt && (
