@@ -1,9 +1,8 @@
+﻿
 import { Request, Response, NextFunction } from "express";
 import AppError from "../utils/AppError";
 import * as dataService from "../services/data.service";
-import { getProvider } from "../providers";
 import Provider from "../models/provider.model";
-import ProviderPlan from "../models/providerPlan.model";
 import DataPlan from "../models/dataPlan.model";
 
 export const getDataPlans = async (
@@ -22,10 +21,19 @@ export const getDataPlans = async (
       );
     }
 
-    const activeDataProvider = await Provider.findOne({ active: true, supportsData: true, activeForData: true }).select("_id").lean();
+    const activeDataProvider = await Provider.findOne({
+      active: true,
+      supportsData: true,
+      activeForData: true,
+    })
+      .select("_id")
+      .lean();
 
     if (!activeDataProvider) {
-      return res.status(200).json({ success: true, data: [] });
+      return res.status(200).json({
+        success: true,
+        data: [],
+      });
     }
 
     const plans = await DataPlan.find({
@@ -88,16 +96,8 @@ export const buyData = async (
       plan,
       amount,
       provider,
+      requestId,
     } = req.body;
-
-    console.log("BUY DATA BODY:", {
-      userId,
-      network,
-      phone,
-      plan,
-      amount,
-      provider,
-    });
 
     if (
       !network ||
@@ -109,6 +109,20 @@ export const buyData = async (
       return next(
         new AppError(
           "network, phone, plan and amount are required",
+          400
+        )
+      );
+    }
+
+    if (
+      typeof requestId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        requestId
+      )
+    ) {
+      return next(
+        new AppError(
+          "A valid purchase request ID is required",
           400
         )
       );
@@ -137,10 +151,17 @@ export const buyData = async (
       plan: String(plan),
       amount: value,
       provider: selectedProvider,
+      requestId: requestId.toLowerCase(),
     });
 
     return res
-      .status(result.success ? 200 : 400)
+      .status(
+        result.status === "PENDING"
+          ? 202
+          : result.success
+            ? 200
+            : 400
+      )
       .json(result);
   } catch (error: any) {
     console.error(

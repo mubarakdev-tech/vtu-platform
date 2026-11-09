@@ -1,3 +1,4 @@
+
 import api from "@/lib/api";
 
 export const getDataPlans = async (network: string) => {
@@ -10,11 +11,14 @@ export const buyData = async (payload: {
   phone: string;
   plan: string;
   amount: number;
+  requestId: string;
 }) => {
   const { data } = await api.post("/data/buy", payload);
   return data;
 };
+
 export const buyBulkData = async (payload: {
+  requestId: string;
   recipients: {
     network: string;
     phone: string;

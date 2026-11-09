@@ -1,8 +1,10 @@
+
+import { createHash } from "crypto";
 import { purchaseAirtime } from "./airtime.service";
 import { buyData } from "./data.service";
 import AppError from "../utils/AppError";
 
-const MIN_RECIPIENTS = 1;
+const MIN_RECIPIENTS = 2;
 const MAX_RECIPIENTS = 100;
 
 type BulkAirtimeRecipient = {
@@ -22,6 +24,7 @@ type BulkRecipientResult = {
   phone: string;
   success: boolean;
   message: string;
+  status?: "SUCCESS" | "FAILED" | "PENDING";
 };
 
 const validateRecipientCount = (recipients: unknown[]) => {
@@ -34,6 +37,50 @@ const validateRecipientCount = (recipients: unknown[]) => {
       400
     );
   }
+};
+
+const isValidRequestId = (requestId: unknown): requestId is string => {
+  return (
+    typeof requestId === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      requestId
+    )
+  );
+};
+
+/**
+ * Creates a deterministic UUID for one recipient in a bulk Data batch.
+ * Repeating the same batch request with the same recipient order and
+ * details produces the same recipient request IDs.
+ */
+const createBulkDataRecipientRequestId = (
+  batchRequestId: string,
+  index: number,
+  network: string,
+  phone: string,
+  plan: string
+): string => {
+  const hash = createHash("sha256")
+    .update(
+      `${batchRequestId.toLowerCase()}:${index}:${network}:${phone}:${plan}`
+    )
+    .digest("hex")
+    .slice(0, 32)
+    .split("");
+
+  // Set UUID version 5 and RFC 4122 variant bits.
+  hash[12] = "5";
+  hash[16] = (parseInt(hash[16], 16) & 0x3 | 0x8).toString(16);
+
+  const value = hash.join("");
+
+  return [
+    value.slice(0, 8),
+    value.slice(8, 12),
+    value.slice(12, 16),
+    value.slice(16, 20),
+    value.slice(20, 32),
+  ].join("-");
 };
 
 export const purchaseBulkAirtime = async ({
@@ -135,9 +182,11 @@ export const purchaseBulkAirtime = async ({
 export const purchaseBulkData = async ({
   userId,
   recipients,
+  requestId,
 }: {
   userId: string;
   recipients: BulkDataRecipient[];
+  requestId: string;
 }) => {
   if (!userId) {
     throw new AppError("Unauthorized", 401);
@@ -149,11 +198,17 @@ export const purchaseBulkData = async ({
 
   validateRecipientCount(recipients);
 
-  const batchReference =
-    `BULK-DATA-${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 8)
-      .toUpperCase()}`;
+  if (!isValidRequestId(requestId)) {
+    throw new AppError(
+      "A valid bulk Data request ID is required.",
+      400
+    );
+  }
+
+  const normalizedRequestId = requestId.toLowerCase();
+
+  // Stable across retries of this batch.
+  const batchReference = `BULK-DATA-${normalizedRequestId}`;
 
   const results: BulkRecipientResult[] = [];
 
@@ -178,11 +233,21 @@ export const purchaseBulkData = async ({
         continue;
       }
 
+      const recipientRequestId =
+        createBulkDataRecipientRequestId(
+          normalizedRequestId,
+          index,
+          network,
+          phone,
+          plan
+        );
+
       const result: any = await buyData({
         userId,
         network,
         phone,
         plan,
+        requestId: recipientRequestId,
         batchReference,
       });
 
@@ -190,6 +255,7 @@ export const purchaseBulkData = async ({
         index,
         phone,
         success: Boolean(result?.success),
+        status: result?.status || (result?.success ? "SUCCESS" : "FAILED"),
         message:
           result?.message ||
           (result?.success
@@ -211,14 +277,25 @@ export const purchaseBulkData = async ({
     (item) => item.success
   ).length;
 
+  const pending = results.filter(
+    (item) => item.status === "PENDING"
+  ).length;
+
+  const failed = results.filter(
+    (item) =>
+      !item.success && item.status !== "PENDING"
+  ).length;
+
   return {
     success: successful === results.length,
     batchReference,
+    requestId: normalizedRequestId,
     partialSuccess:
       successful > 0 && successful < results.length,
     total: results.length,
     successful,
-    failed: results.length - successful,
+    pending,
+    failed,
     results,
   };
 };

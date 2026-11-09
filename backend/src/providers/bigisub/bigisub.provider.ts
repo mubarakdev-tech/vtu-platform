@@ -1,5 +1,4 @@
-
-import bigisubClient from "./bigisub.client";
+﻿import bigisubClient from "./bigisub.client";
 
 // =====================================================
 // NETWORK MAP
@@ -44,7 +43,8 @@ const withPin = (payload: Record<string, any>) => {
 };
 
 // =====================================================
-// CLASSIFY PROVIDER PURCHASE RESPONSE
+// EXISTING GENERAL PURCHASE CLASSIFIER
+// KEPT FOR AIRTIME COMPATIBILITY
 // =====================================================
 
 const classifyPurchaseResponse = (data: any) => {
@@ -64,8 +64,6 @@ const classifyPurchaseResponse = (data: any) => {
     "in_progress",
   ].includes(status);
 
-  // Only these statuses are treated as confirmed failure.
-  // Confirm their meanings against BigiSub's API documentation.
   const confirmedFailure = [
     "failed",
     "failure",
@@ -94,6 +92,73 @@ const classifyPurchaseResponse = (data: any) => {
             ? "Purchase failed"
             : "Purchase outcome requires verification"),
     data,
+    provider: "bigisub",
+  };
+};
+
+// =====================================================
+// CLASSIFY BIGISUB DATA PURCHASE RESPONSE
+// =====================================================
+
+const classifyDataPurchaseResponse = (response: any) => {
+  // The actual purchase result is normally nested inside
+  // the API response's data object.
+  const purchaseData = response?.data;
+
+  // Prefer the actual purchase status over the API
+  // envelope's success flag.
+  const status = String(
+    purchaseData?.status ?? response?.status ?? ""
+  )
+    .toLowerCase()
+    .trim();
+
+  const successfulStatuses = [
+    "success",
+    "successful",
+    "completed",
+  ];
+
+  const pendingStatuses = [
+    "processing",
+    "submitted",
+    "pending",
+    "in_progress",
+    "in progress",
+  ];
+
+  const failedStatuses = [
+    "failed",
+    "failure",
+    "rejected",
+    "declined",
+  ];
+
+  const success = successfulStatuses.includes(status);
+  const pending = pendingStatuses.includes(status);
+  const confirmedFailure = failedStatuses.includes(status);
+  const uncertain = !success && !pending && !confirmedFailure;
+
+  return {
+    success,
+    pending: pending || uncertain,
+    status: success
+      ? ("SUCCESS" as const)
+      : confirmedFailure
+        ? ("FAILED" as const)
+        : ("UNCERTAIN" as const),
+    uncertain,
+    message:
+      purchaseData?.status_message ||
+      response?.message ||
+      (success
+        ? "Purchase successful"
+        : pending
+          ? "Purchase is processing"
+          : confirmedFailure
+            ? "Purchase failed"
+            : "Purchase outcome requires verification"),
+    data: response,
     provider: "bigisub",
   };
 };
@@ -247,7 +312,9 @@ export const buyData = async ({
       JSON.stringify(data, null, 2)
     );
 
-    const result = classifyPurchaseResponse(data);
+    // Use the data-specific classifier so a top-level
+    // success flag cannot override a nested failed status.
+    const result = classifyDataPurchaseResponse(data);
 
     return {
       ...result,

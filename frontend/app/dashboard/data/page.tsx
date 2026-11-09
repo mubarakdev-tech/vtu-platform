@@ -1,6 +1,7 @@
+﻿
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import {
   Wifi,
@@ -60,6 +61,66 @@ interface ReceiptData {
   balanceAfter: number;
 }
 
+const SINGLE_REQUESTS_STORAGE_KEY = "abupay:data:single:requests";
+const BULK_REQUESTS_STORAGE_KEY = "abupay:data:bulk:requests";
+
+const createRequestId = (): string => {
+  return window.crypto.randomUUID();
+};
+
+const getOrCreateRequestId = (
+  storageKey: string,
+  fingerprint: string
+): string => {
+  try {
+    const stored = sessionStorage.getItem(storageKey);
+
+    const requests: Record<string, string> = stored
+      ? JSON.parse(stored)
+      : {};
+
+    if (requests[fingerprint]) {
+      return requests[fingerprint];
+    }
+
+    const requestId = createRequestId();
+
+    requests[fingerprint] = requestId;
+
+    sessionStorage.setItem(
+      storageKey,
+      JSON.stringify(requests)
+    );
+
+    return requestId;
+  } catch {
+    // Fallback if session storage is unavailable.
+    return createRequestId();
+  }
+};
+
+const clearStoredRequestId = (
+  storageKey: string,
+  fingerprint: string
+) => {
+  try {
+    const stored = sessionStorage.getItem(storageKey);
+
+    if (!stored) return;
+
+    const requests: Record<string, string> = JSON.parse(stored);
+
+    delete requests[fingerprint];
+
+    sessionStorage.setItem(
+      storageKey,
+      JSON.stringify(requests)
+    );
+  } catch {
+    // Do not interrupt purchase handling if storage is unavailable.
+  }
+};
+
 export default function DataPage() {
   const [network, setNetwork] = useState("mtn");
 
@@ -74,9 +135,12 @@ export default function DataPage() {
 
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [loadingPurchase, setLoadingPurchase] = useState(false);
+  const [pendingPurchaseKey, setPendingPurchaseKey] = useState<string | null>(null);
+
+  const purchaseLockRef = useRef(false);
 
   const [message, setMessage] = useState<{
-    type: "success" | "error";
+    type: "success" | "error" | "warning";
     text: string;
   } | null>(null);
 
@@ -148,8 +212,7 @@ export default function DataPage() {
       if (normalized.length === 0) {
         setMessage({
           type: "error",
-          text:
-            "No data plans available for this network.",
+          text: "No data plans available for this network.",
         });
       }
     } catch (error: any) {
@@ -198,6 +261,7 @@ export default function DataPage() {
     setBulkPhones(updatedPhones);
     setBulkInput(updatedPhones.join("\n"));
   };
+
   /*
    * PURCHASE DATA
    */
@@ -223,6 +287,8 @@ export default function DataPage() {
   };
 
   const confirmPurchase = async () => {
+    if (purchaseLockRef.current) return;
+
     if (!phone || phone.length < 11) {
       setMessage({
         type: "error",
@@ -239,39 +305,85 @@ export default function DataPage() {
       return;
     }
 
+    const purchaseKey = `${network}|${phone}|${selectedPlan.variation_code}|${selectedPlan.amount}`;
+
+    purchaseLockRef.current = true;
+
     try {
       setLoadingPurchase(true);
       setMessage(null);
+
+      const requestId = getOrCreateRequestId(
+        SINGLE_REQUESTS_STORAGE_KEY,
+        purchaseKey
+      );
 
       const result = await buyData({
         network,
         phone,
         plan: selectedPlan.variation_code,
         amount: selectedPlan.amount,
+        requestId,
       });
 
       console.log("BUY DATA RESULT:", result);
 
+      const resultStatus = String(
+        result?.status || ""
+      ).toUpperCase();
+
+      if (resultStatus === "PENDING") {
+        setPendingPurchaseKey(purchaseKey);
+
+        setMessage({
+          type: "warning",
+          text:
+            result?.message ||
+            "Your purchase is pending verification. You may check again using this same request.",
+        });
+
+        return;
+      }
+
       if (!result?.success) {
+        if (resultStatus === "FAILED") {
+          clearStoredRequestId(
+            SINGLE_REQUESTS_STORAGE_KEY,
+            purchaseKey
+          );
+
+          setPendingPurchaseKey(null);
+        }
+
         setMessage({
           type: "error",
           text:
             result?.message ||
             "Data purchase failed. Please try again.",
         });
+
         return;
       }
+
+      // Confirmed success: clear the ID so a future intentional
+      // purchase of the same plan and number gets a fresh request ID.
+      clearStoredRequestId(
+        SINGLE_REQUESTS_STORAGE_KEY,
+        purchaseKey
+      );
+
+      setPendingPurchaseKey(null);
 
       /*
        * Get transaction reference.
        */
       const reference =
-  result.transaction?.reference ||
-  result.transaction?._id ||
-  result.transaction?.id ||
-  result.providerResponse?.request_id ||
-  result.providerResponse?.data?.request_id ||
-  "DATA-" + Date.now();
+        result.transaction?.reference ||
+        result.transaction?._id ||
+        result.transaction?.id ||
+        result.providerResponse?.request_id ||
+        result.providerResponse?.data?.request_id ||
+        "DATA-" + Date.now();
 
       /*
        * Get wallet balances returned by backend.
@@ -314,15 +426,18 @@ export default function DataPage() {
         error?.response?.data || error
       );
 
+      // Keep the same request ID after an uncertain network error.
+      // Retrying the same purchase will reuse that ID.
       setMessage({
         type: "error",
         text:
           error?.response?.data?.message ||
           error?.response?.data?.error ||
           error?.message ||
-          "Something went wrong. Please try again.",
+          "The request could not be confirmed. Retry this same purchase; do not start a new one.",
       });
     } finally {
+      purchaseLockRef.current = false;
       setLoadingPurchase(false);
     }
   };
@@ -364,6 +479,8 @@ export default function DataPage() {
    * PURCHASE DATA FOR MULTIPLE RECIPIENTS
    */
   const handleBulkPurchase = async () => {
+    if (purchaseLockRef.current) return;
+
     const validPhones = bulkPhones.filter(
       (item) => item.length === 11
     );
@@ -392,49 +509,74 @@ export default function DataPage() {
       return;
     }
 
+    purchaseLockRef.current = true;
+
     try {
       setLoadingPurchase(true);
       setMessage(null);
 
+      const recipients = validPhones.map((recipientPhone) => ({
+        network,
+        phone: recipientPhone,
+        plan: selectedPlan.variation_code,
+      }));
+
+      // The same ordered batch retains the same request ID if
+      // the response is uncertain or the page is refreshed.
+      const batchFingerprint = JSON.stringify({
+        network,
+        plan: selectedPlan.variation_code,
+        amount: selectedPlan.amount,
+        recipients,
+      });
+
+      const requestId = getOrCreateRequestId(
+        BULK_REQUESTS_STORAGE_KEY,
+        batchFingerprint
+      );
+
       const result = await buyBulkData({
-        recipients: validPhones.map((recipientPhone) => ({
-          network,
-          phone: recipientPhone,
-          plan: selectedPlan.variation_code,
-        })),
+        requestId,
+        recipients,
       });
 
       const successful = Number(result?.successful || 0);
       const failed = Number(result?.failed || 0);
+      const pending = Number(result?.pending || 0);
+
+      // Keep the batch ID while any recipient is pending.
+      // Clear it only when all recipients have a terminal result.
+      if (pending === 0) {
+        clearStoredRequestId(
+          BULK_REQUESTS_STORAGE_KEY,
+          batchFingerprint
+        );
+      }
 
       setMessage({
-        type: failed === 0 ? "success" : "error",
-        text:
-          failed === 0
-            ? `Data sent successfully to ${successful} recipient${
-                successful === 1 ? "" : "s"
-              }.`
-            : `${successful} successful, ${failed} failed. Batch: ${
-                result?.batchReference || "N/A"
-              }`,
+        type: failed === 0 && pending === 0 ? "success" : "error",
+        text: `${successful} successful, ${failed} failed, ${pending} pending verification. Batch: ${result?.batchReference || "N/A"}${pending > 0 ? " Do not repeat purchases for pending recipients." : ""}`,
       });
 
-      if (failed === 0) {
+      if (failed === 0 && pending === 0) {
         setBulkInput("");
         setBulkPhones([]);
         setSelectedPlan(null);
       }
     } catch (error: any) {
+      // Keep the same batch ID after an uncertain network error.
       setMessage({
         type: "error",
         text:
           error?.response?.data?.message ||
-          "Bulk data purchase failed. Please try again.",
+          "The batch result could not be confirmed. Retry the same batch rather than creating a new one.",
       });
     } finally {
+      purchaseLockRef.current = false;
       setLoadingPurchase(false);
     }
   };
+
   /*
    * DOWNLOAD PDF RECEIPT
    */
@@ -558,9 +700,7 @@ export default function DataPage() {
       y + 25
     );
 
-    doc.save(
-      `AbuPay-Data-${tx.reference}.pdf`
-    );
+    doc.save(`AbuPay-Data-${tx.reference}.pdf`);
   };
 
   /*
@@ -637,9 +777,7 @@ Fast • Secure • Reliable`;
                 <button
                   key={net.id}
                   type="button"
-                  onClick={() =>
-                    setNetwork(net.id)
-                  }
+                  onClick={() => setNetwork(net.id)}
                   className={
                     network === net.id
                       ? "flex w-full items-center justify-between rounded-xl border border-emerald-600 bg-emerald-50 px-4 py-3.5 text-left ring-1 ring-emerald-200 transition"
@@ -655,9 +793,7 @@ Fast • Secure • Reliable`;
                         net.text
                       }
                     >
-                      {net.name
-                        .slice(0, 3)
-                        .toUpperCase()}
+                      {net.name.slice(0, 3).toUpperCase()}
                     </div>
 
                     <span className="font-medium text-gray-900">
@@ -687,9 +823,7 @@ Fast • Secure • Reliable`;
               <input
                 type="tel"
                 value={phone}
-                onChange={(e) =>
-                  setPhone(e.target.value)
-                }
+                onChange={(e) => setPhone(e.target.value)}
                 placeholder="08012345678"
                 maxLength={11}
                 className="w-full rounded-xl border px-4 py-3.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
@@ -708,6 +842,7 @@ Fast • Secure • Reliable`;
                 ? "Use single recipient"
                 : "+ Add multiple recipients"}
             </button>
+
             {bulkMode && (
               <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
                 <label className="mb-2 block text-sm font-semibold text-gray-700">
@@ -771,6 +906,7 @@ Fast • Secure • Reliable`;
                 )}
               </div>
             )}
+
             {/* DATA PLAN */}
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -791,15 +927,12 @@ Fast • Secure • Reliable`;
               ) : (
                 <div className="relative">
                   <select
-                    value={
-                      selectedPlan?.variation_code || ""
-                    }
+                    value={selectedPlan?.variation_code || ""}
                     onChange={(e) => {
                       const plan =
                         plans.find(
                           (item) =>
-                            item.variation_code ===
-                            e.target.value
+                            item.variation_code === e.target.value
                         ) || null;
 
                       setSelectedPlan(plan);
@@ -819,9 +952,7 @@ Fast • Secure • Reliable`;
                           "-" +
                           index
                         }
-                        value={
-                          plan.variation_code
-                        }
+                        value={plan.variation_code}
                       >
                         {plan.name} — ₦
                         {plan.amount.toLocaleString()}
@@ -852,8 +983,7 @@ Fast • Secure • Reliable`;
                   </div>
 
                   <p className="text-lg font-bold text-emerald-700">
-                    ₦
-                    {selectedPlan.amount.toLocaleString()}
+                    ₦{selectedPlan.amount.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -863,10 +993,7 @@ Fast • Secure • Reliable`;
             <button
               type="button"
               onClick={bulkMode ? handleBulkPreview : handlePurchase}
-              disabled={
-                loadingPurchase ||
-                !selectedPlan
-              }
+              disabled={loadingPurchase || !selectedPlan}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loadingPurchase ? (
@@ -891,7 +1018,9 @@ Fast • Secure • Reliable`;
                 className={
                   message.type === "success"
                     ? "rounded-xl bg-emerald-50 px-4 py-3 text-center text-sm font-medium text-emerald-700"
-                    : "rounded-xl bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-600"
+                    : message.type === "warning"
+                      ? "rounded-xl bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-700"
+                      : "rounded-xl bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-600"
                 }
               >
                 {message.text}
@@ -905,7 +1034,10 @@ Fast • Secure • Reliable`;
       {showPreview && selectedPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-3">
           <div className="my-auto w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
-            <h2 className="text-xl font-bold text-gray-900">Review Data Purchase</h2>
+            <h2 className="text-xl font-bold text-gray-900">
+              Review Data Purchase
+            </h2>
+
             <p className="mt-1 text-sm text-gray-500">
               Confirm the details before paying.
             </p>
@@ -913,23 +1045,30 @@ Fast • Secure • Reliable`;
             <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4 text-sm">
               <div className="flex justify-between gap-3">
                 <span className="text-gray-500">Network</span>
-                <strong className="uppercase text-gray-900">{network}</strong>
+                <strong className="uppercase text-gray-900">
+                  {network}
+                </strong>
               </div>
 
               <div className="flex justify-between gap-3">
                 <span className="text-gray-500">Purchase type</span>
-                <strong className="text-gray-900">{bulkMode ? "Bulk data" : "Single data"}</strong>
+                <strong className="text-gray-900">
+                  {bulkMode ? "Bulk data" : "Single data"}
+                </strong>
               </div>
 
               <div className="flex justify-between gap-3">
                 <span className="text-gray-500">Data plan</span>
-                <strong className="text-right text-gray-900">{selectedPlan.name}</strong>
+                <strong className="text-right text-gray-900">
+                  {selectedPlan.name}
+                </strong>
               </div>
 
               <div className="flex justify-between gap-3">
                 <span className="text-gray-500">Price per recipient</span>
                 <strong className="text-gray-900">
-                  {"\u20A6"}{selectedPlan.amount.toLocaleString("en-NG")}
+                  {"\u20A6"}
+                  {selectedPlan.amount.toLocaleString("en-NG")}
                 </strong>
               </div>
 
@@ -937,13 +1076,21 @@ Fast • Secure • Reliable`;
                 <>
                   <div className="flex justify-between gap-3">
                     <span className="text-gray-500">Recipients</span>
-                    <strong className="text-gray-900">{bulkPhones.length}</strong>
+                    <strong className="text-gray-900">
+                      {bulkPhones.length}
+                    </strong>
                   </div>
 
                   <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white p-3">
-                    <p className="mb-2 font-semibold text-gray-700">Recipient numbers</p>
+                    <p className="mb-2 font-semibold text-gray-700">
+                      Recipient numbers
+                    </p>
+
                     {bulkPhones.map((item, index) => (
-                      <div key={`${item}-${index}`} className="py-1 text-gray-700">
+                      <div
+                        key={`${item}-${index}`}
+                        className="py-1 text-gray-700"
+                      >
                         {index + 1}. {item}
                       </div>
                     ))}
@@ -952,14 +1099,21 @@ Fast • Secure • Reliable`;
               ) : (
                 <div className="flex justify-between gap-3">
                   <span className="text-gray-500">Phone number</span>
-                  <strong className="text-gray-900">{phone}</strong>
+                  <strong className="text-gray-900">
+                    {phone}
+                  </strong>
                 </div>
               )}
 
               <div className="flex justify-between border-t border-gray-200 pt-3 text-base">
                 <strong className="text-gray-900">Total charge</strong>
+
                 <strong className="text-emerald-700">
-                  {"\u20A6"}{(selectedPlan.amount * (bulkMode ? bulkPhones.length : 1)).toLocaleString("en-NG")}
+                  {"\u20A6"}
+                  {(
+                    selectedPlan.amount *
+                    (bulkMode ? bulkPhones.length : 1)
+                  ).toLocaleString("en-NG")}
                 </strong>
               </div>
             </div>
@@ -979,6 +1133,7 @@ Fast • Secure • Reliable`;
                 disabled={loadingPurchase}
                 onClick={() => {
                   setShowPreview(false);
+
                   if (bulkMode) {
                     void handleBulkPurchase();
                   } else {
@@ -997,17 +1152,13 @@ Fast • Secure • Reliable`;
       {/* RECEIPT MODAL */}
       {receipt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-3 sm:p-4">
-
           <div className="my-auto w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
 
             {/* RECEIPT HEADER */}
             <div className="relative bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-4 text-white">
-
               <button
                 type="button"
-                onClick={() =>
-                  setReceipt(null)
-                }
+                onClick={() => setReceipt(null)}
                 className="absolute right-3 top-3 rounded-full bg-white/10 p-1.5 hover:bg-white/20"
               >
                 <X size={16} />
@@ -1038,14 +1189,12 @@ Fast • Secure • Reliable`;
 
               {/* AMOUNT */}
               <div className="text-center">
-
                 <p className="text-[11px] font-medium uppercase tracking-wider text-gray-400">
                   Amount Paid
                 </p>
 
                 <p className="mt-0.5 text-3xl font-extrabold tracking-tight text-gray-900">
-                  ₦
-                  {receipt.amount.toLocaleString()}
+                  ₦{receipt.amount.toLocaleString()}
                 </p>
 
                 <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
@@ -1056,12 +1205,9 @@ Fast • Secure • Reliable`;
 
               {/* NETWORK + PHONE */}
               <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 text-center">
-
                 <p className="text-sm font-bold text-gray-900">
                   {receipt.network.toUpperCase()}{" "}
-                  <span className="text-gray-300">
-                    •
-                  </span>{" "}
+                  <span className="text-gray-300">•</span>{" "}
                   {receipt.phone}
                 </p>
 
@@ -1072,47 +1218,39 @@ Fast • Secure • Reliable`;
 
               {/* BALANCE MOVEMENT */}
               <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-gray-100">
-
                 <div className="p-2 text-center">
-
                   <p className="text-[9px] font-medium uppercase text-gray-400">
                     Before
                   </p>
 
                   <p className="mt-0.5 text-xs font-bold text-gray-900">
-                    ₦
-                    {receipt.balanceBefore.toLocaleString()}
+                    ₦{receipt.balanceBefore.toLocaleString()}
                   </p>
                 </div>
 
                 <div className="border-x border-gray-100 bg-emerald-50/50 p-2 text-center">
-
                   <p className="text-[9px] font-medium uppercase text-gray-400">
                     Paid
                   </p>
 
                   <p className="mt-0.5 text-xs font-bold text-emerald-700">
-                    ₦
-                    {receipt.amount.toLocaleString()}
+                    ₦{receipt.amount.toLocaleString()}
                   </p>
                 </div>
 
                 <div className="p-2 text-center">
-
                   <p className="text-[9px] font-medium uppercase text-gray-400">
                     After
                   </p>
 
                   <p className="mt-0.5 text-xs font-bold text-gray-900">
-                    ₦
-                    {receipt.balanceAfter.toLocaleString()}
+                    ₦{receipt.balanceAfter.toLocaleString()}
                   </p>
                 </div>
               </div>
 
               {/* DETAILS */}
               <div className="space-y-2 rounded-xl bg-gray-50 p-3 text-xs">
-
                 <div className="flex items-start justify-between gap-3">
                   <span className="shrink-0 text-gray-500">
                     Description
@@ -1128,7 +1266,7 @@ Fast • Secure • Reliable`;
                     Plan
                   </span>
 
-                  <span className="max-w-[65%] text-right font-semibold text-gray-900 break-words">
+                  <span className="max-w-[65%] break-words text-right font-semibold text-gray-900">
                     {receipt.planName}
                   </span>
                 </div>
@@ -1186,7 +1324,6 @@ Fast • Secure • Reliable`;
 
               {/* FOOTER */}
               <div className="text-center">
-
                 <p className="text-[11px] text-gray-400">
                   Powered by Abu Niematullah Ventures
                 </p>
@@ -1199,12 +1336,9 @@ Fast • Secure • Reliable`;
 
             {/* ACTIONS */}
             <div className="grid grid-cols-2 gap-2.5 border-t border-gray-100 px-4 py-3">
-
               <button
                 type="button"
-                onClick={() =>
-                  downloadPdf(receipt)
-                }
+                onClick={() => downloadPdf(receipt)}
                 className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50"
               >
                 <Download size={15} />
@@ -1213,9 +1347,7 @@ Fast • Secure • Reliable`;
 
               <button
                 type="button"
-                onClick={() =>
-                  shareReceipt(receipt)
-                }
+                onClick={() => shareReceipt(receipt)}
                 className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
               >
                 <Share2 size={15} />
