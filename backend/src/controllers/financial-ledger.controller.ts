@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import FinancialLedger from "../models/financialLedger.model";
+import Transaction from "../models/transaction.model";
 import User from "../models/user.model";
 import Wallet from "../models/wallet.model";
 import AppError from "../utils/AppError";
@@ -64,6 +65,65 @@ export const getFinancialSummary = async (
     const productionUserIds = productionUsers.map(
       (user) => user._id
     );
+
+
+    // Reconcile successful production Airtime/Data transactions.
+    const transactionDateFilter: Record<string, any> = {};
+
+    if (from) {
+      transactionDateFilter.$gte =
+        new Date(from + "T00:00:00.000Z");
+    }
+
+    if (to) {
+      transactionDateFilter.$lte =
+        new Date(to + "T23:59:59.999Z");
+    }
+
+    const successfulServiceTransactions: any[] =
+      await Transaction.find({
+        user: { $in: productionUserIds },
+        type: "DEBIT",
+        status: "SUCCESS",
+        category: { $in: ["AIRTIME", "DATA"] },
+        "metadata.isTest": { $ne: true },
+        ...(Object.keys(transactionDateFilter).length
+          ? { createdAt: transactionDateFilter }
+          : {}),
+      })
+        .select("_id")
+        .lean();
+
+    const serviceTransactionIds =
+      successfulServiceTransactions.map((item) => item._id);
+
+    // Check all ledger dates to allow for delayed ledger entries.
+    const matchingSalesLedgerEntries: any[] =
+      serviceTransactionIds.length
+        ? await FinancialLedger.find({
+            type: "REVENUE",
+            category: { $in: ["AIRTIME_SALE", "DATA_SALE"] },
+            transaction: { $in: serviceTransactionIds },
+            "metadata.isTest": { $ne: true },
+          })
+            .select("transaction")
+            .lean()
+        : [];
+
+    const matchedSaleTransactionIds = new Set(
+      matchingSalesLedgerEntries
+        .filter((entry) => entry.transaction)
+        .map((entry) => String(entry.transaction))
+    );
+
+    const missingSalesTransactions =
+      successfulServiceTransactions.filter(
+        (item) =>
+          !matchedSaleTransactionIds.has(String(item._id))
+      );
+
+    const salesComplete =
+      missingSalesTransactions.length === 0;
 
     const productionWallets = await Wallet.find({
       user: { $in: productionUserIds },
@@ -212,17 +272,20 @@ export const getFinancialSummary = async (
 
     // A zero-sales period has no missing sale costs to reconcile.
     const providerCostsComplete = unknownCostSales === 0;
+    const reconciliationComplete =
+      salesComplete && providerCostsComplete;
 
-    const profitStatus = providerCostsComplete
+
+    const profitStatus = reconciliationComplete
       ? "RECORDED_COSTS_COMPLETE"
       : "PROVISIONAL";
 
     // Do not present incomplete calculations as confirmed profit.
-    const financialResult = providerCostsComplete
+    const financialResult = reconciliationComplete
       ? recordedFinancialResult
       : null;
 
-    const grossProfit = providerCostsComplete
+    const grossProfit = reconciliationComplete
       ? recordedGrossProfit
       : null;
 
@@ -259,6 +322,18 @@ export const getFinancialSummary = async (
 
         profitStatus,
         providerCostsComplete,
+        salesComplete,
+        reconciliationComplete,
+
+        salesReconciliation: {
+          successfulServiceTransactions:
+            successfulServiceTransactions.length,
+          matchedSalesTransactions:
+            successfulServiceTransactions.length -
+            missingSalesTransactions.length,
+          missingSalesTransactions:
+            missingSalesTransactions.length,
+        },
 
         airtime: {
           revenue: sumAmounts(airtimeEntries),
