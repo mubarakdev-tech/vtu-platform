@@ -154,11 +154,14 @@ export const purchaseAirtime = async ({
           session,
         });
 
-        throw new AppError(
-          providerResponse.message ||
+        response = {
+          failed: true,
+          message:
+            providerResponse.message ||
             "Airtime purchase failed",
-          400
-        );
+        };
+
+        return;
       }
 
       // =====================================================
@@ -262,6 +265,13 @@ export const purchaseAirtime = async ({
         providerResponse,
       };
     });
+
+    if (response?.failed) {
+      throw new AppError(
+        response.message || "Airtime purchase failed",
+        400
+      );
+    }
 
     if (!response) {
       throw new AppError(
