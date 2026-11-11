@@ -116,40 +116,80 @@ export const purchaseAirtime = async ({
       // =====================================================
 
       if (!providerResponse.success) {
-        console.log(
-          "Γ¥î Provider failed. Refunding wallet..."
-        );
+        console.log("Provider failed. Refunding wallet...");
 
+        // Record the original failed purchase.
+        const failedTransaction = await createTransaction({
+          userId,
+          type: "DEBIT",
+          category: "AIRTIME",
+          amount,
+          status: "FAILED",
+          description: `${network.toUpperCase()} Airtime Purchase Failed`,
+          metadata: {
+            network: network.toLowerCase(),
+            phone: phone.trim(),
+            provider,
+            providerResponse,
+            purchaseStatus: "FAILED",
+            refundProcessed: true,
+            refundAmount: amount,
+            refundedAt: new Date(),
+            isTest,
+            batchReference,
+          },
+          balanceBefore: walletResult.balanceBefore,
+          balanceAfter: walletResult.balanceAfter,
+          session,
+        });
+
+        // Credit the wallet within the same MongoDB session.
         const refundResult = await creditWallet({
           userId,
           amount,
           session,
         });
 
-        console.log(
-          "Γ£à Wallet refunded successfully"
-        );
-
+        // Record the successful customer refund.
         await createTransaction({
           userId,
           type: "CREDIT",
-          category: "AIRTIME",
+          category: "REFUND",
           amount,
-          status: "FAILED",
-          description: `${network.toUpperCase()} Airtime Refund`,
+          status: "SUCCESS",
+          description: `${network.toUpperCase()} Airtime Purchase Refund`,
+          idempotencyKey: `AIRTIME-REFUND-${failedTransaction._id}`,
+          balanceBefore: refundResult.balanceBefore,
+          balanceAfter: refundResult.balanceAfter,
           metadata: {
-            network,
-            phone,
+            network: network.toLowerCase(),
+            phone: phone.trim(),
             provider,
-            providerResponse,
+            originalTransaction: failedTransaction.reference,
+            originalTransactionId: String(failedTransaction._id),
+            refundProcessed: true,
             isTest,
             batchReference,
+          },
+          session,
+        });
 
-            balanceBefore:
-              walletResult.balanceAfter,
-
-            balanceAfter:
-              refundResult.balanceAfter,
+        // Record the refund expense in the financial ledger.
+        await createFinancialLedgerEntry({
+          type: "EXPENSE",
+          category: "REFUND",
+          amount,
+          provider,
+          service: "AIRTIME",
+          user: userId,
+          transaction: failedTransaction._id,
+          reference: `AIRTIME-REFUND-${failedTransaction._id}`,
+          description: `${network.toUpperCase()} Airtime Purchase Refund`,
+          metadata: {
+            originalTransaction: failedTransaction.reference,
+            refundProcessed: true,
+            isTest,
+            batchReference,
           },
           session,
         });
@@ -158,7 +198,7 @@ export const purchaseAirtime = async ({
           failed: true,
           message:
             providerResponse.message ||
-            "Airtime purchase failed",
+            "Airtime purchase failed and your wallet has been refunded",
         };
 
         return;

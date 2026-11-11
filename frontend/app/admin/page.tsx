@@ -114,6 +114,11 @@ interface AdminTransaction {
   description?: string | null;
   createdAt: string;
   gateway?: string;
+  metadata?: {
+    purchaseStatus?: string;
+    providerResponse?: { success?: boolean };
+    refundProcessed?: boolean;
+  };
 }
 
 interface AdminTransactionsResponse {
@@ -352,6 +357,7 @@ export default function Home() {
   const [transactionType, setTransactionType] = useState("");
   const [transactionFrom, setTransactionFrom] = useState("");
   const [transactionTo, setTransactionTo] = useState("");
+  const [refundingTransactionId, setRefundingTransactionId] = useState("");
 
   // Load provider wallet balances for financial control.
   const loadProviderWalletFunds = async () => {
@@ -583,6 +589,62 @@ export default function Home() {
       );
     } finally {
       setTransactionsLoading(false);
+    }
+  };
+
+  const canAdminRefund = (transaction: AdminTransaction) => {
+    const metadata = transaction.metadata;
+
+    return (
+      transaction.type === "DEBIT" &&
+      transaction.status === "FAILED" &&
+      ["AIRTIME", "DATA"].includes(transaction.category) &&
+      metadata?.providerResponse?.success === false &&
+      metadata?.refundProcessed === false
+    );
+  };
+
+  const handleAdminRefund = async (transaction: AdminTransaction) => {
+    if (!canAdminRefund(transaction)) return;
+
+    const confirmed = window.confirm(
+      `Confirm refund of ${formatMoney(Number(transaction.amount))} to this customer's wallet? This action cannot be reversed.`
+    );
+
+    if (!confirmed) return;
+
+    setRefundingTransactionId(transaction._id);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/admin/transactions/${encodeURIComponent(transaction._id)}/refund`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Refund could not be processed.");
+      }
+
+      window.alert(
+        `Refund processed successfully. Amount: ${formatMoney(Number(result.amount ?? transaction.amount))}`
+      );
+
+      await Promise.all([
+        loadAdminTransactions(transactionsPage),
+        loadFinancialData(),
+      ]);
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Refund failed."
+      );
+    } finally {
+      setRefundingTransactionId("");
     }
   };
 
@@ -2007,6 +2069,7 @@ export default function Home() {
                     <th className="px-5 py-4 font-semibold">Amount</th>
                     <th className="px-5 py-4 font-semibold">Status</th>
                     <th className="px-5 py-4 font-semibold">Description</th>
+                    <th className="px-5 py-4 font-semibold">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -2071,6 +2134,26 @@ export default function Home() {
                           <p className="line-clamp-2">
                             {transaction.description || transaction.gateway || "—"}
                           </p>
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4">
+                          {transaction.metadata?.refundProcessed === true ? (
+                            <span className="text-xs font-medium text-emerald-700">
+                              Refunded
+                            </span>
+                          ) : canAdminRefund(transaction) ? (
+                            <button
+                              type="button"
+                              onClick={() => handleAdminRefund(transaction)}
+                              disabled={Boolean(refundingTransactionId)}
+                              className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {refundingTransactionId === transaction._id
+                                ? "Processing..."
+                                : "Refund"}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
                         </td>
                       </tr>
                     );

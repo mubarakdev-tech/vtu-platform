@@ -1,3 +1,4 @@
+﻿
 import { Request, Response, NextFunction } from "express";
 import FinancialLedger from "../models/financialLedger.model";
 import Transaction from "../models/transaction.model";
@@ -43,18 +44,23 @@ export const getFinancialSummary = async (
       filter.createdAt = {};
 
       if (from) {
-        filter.createdAt.$gte = new Date(`${from}T00:00:00.000Z`);
+        filter.createdAt.$gte = new Date(
+          `${from}T00:00:00.000Z`
+        );
       }
 
       if (to) {
-        filter.createdAt.$lte = new Date(`${to}T23:59:59.999Z`);
+        filter.createdAt.$lte = new Date(
+          `${to}T23:59:59.999Z`
+        );
       }
     }
 
-    const entries: any[] = await FinancialLedger.find(filter).lean();
+    // Entries normally use their own ledger creation date.
+    const dateFilteredEntries: any[] =
+      await FinancialLedger.find(filter).lean();
 
-    // Current production customer wallet funds.
-    // Test accounts are excluded from this financial control figure.
+    // Identify production customer accounts.
     const productionUsers = await User.find({
       role: "user",
       isTest: { $ne: true },
@@ -66,18 +72,39 @@ export const getFinancialSummary = async (
       (user) => user._id
     );
 
+    // Reconcile all successful production Airtime/Data transactions.
+    // This all-time list also helps identify delayed ledger entries
+    // belonging to transactions outside the selected reporting period.
+    const allSuccessfulServiceTransactions: any[] =
+      await Transaction.find({
+        user: { $in: productionUserIds },
+        type: "DEBIT",
+        status: "SUCCESS",
+        category: { $in: ["AIRTIME", "DATA"] },
+        "metadata.isTest": { $ne: true },
+      })
+        .select("_id")
+        .lean();
 
-    // Reconcile successful production Airtime/Data transactions.
+    const allSuccessfulServiceIds = new Set(
+      allSuccessfulServiceTransactions.map(
+        (item) => String(item._id)
+      )
+    );
+
+    // Apply the selected reporting period to the original transaction date.
     const transactionDateFilter: Record<string, any> = {};
 
     if (from) {
-      transactionDateFilter.$gte =
-        new Date(from + "T00:00:00.000Z");
+      transactionDateFilter.$gte = new Date(
+        `${from}T00:00:00.000Z`
+      );
     }
 
     if (to) {
-      transactionDateFilter.$lte =
-        new Date(to + "T23:59:59.999Z");
+      transactionDateFilter.$lte = new Date(
+        `${to}T23:59:59.999Z`
+      );
     }
 
     const successfulServiceTransactions: any[] =
@@ -95,14 +122,19 @@ export const getFinancialSummary = async (
         .lean();
 
     const serviceTransactionIds =
-      successfulServiceTransactions.map((item) => item._id);
+      successfulServiceTransactions.map(
+        (item) => item._id
+      );
 
-    // Check all ledger dates to allow for delayed ledger entries.
+    // Find matching sales ledger entries regardless of ledger date.
+    // A delayed ledger entry still belongs to its original transaction.
     const matchingSalesLedgerEntries: any[] =
       serviceTransactionIds.length
         ? await FinancialLedger.find({
             type: "REVENUE",
-            category: { $in: ["AIRTIME_SALE", "DATA_SALE"] },
+            category: {
+              $in: ["AIRTIME_SALE", "DATA_SALE"],
+            },
             transaction: { $in: serviceTransactionIds },
             "metadata.isTest": { $ne: true },
           })
@@ -125,6 +157,59 @@ export const getFinancialSummary = async (
     const salesComplete =
       missingSalesTransactions.length === 0;
 
+    // Load linked sales and provider costs for transactions in the
+    // selected period, regardless of when the ledger entries were created.
+    const periodLinkedFinancialEntries: any[] =
+      serviceTransactionIds.length
+        ? await FinancialLedger.find({
+            $or: [
+              {
+                type: "REVENUE",
+                category: {
+                  $in: ["AIRTIME_SALE", "DATA_SALE"],
+                },
+              },
+              {
+                type: "EXPENSE",
+                category: "PROVIDER_COST",
+              },
+            ],
+            transaction: { $in: serviceTransactionIds },
+            "metadata.isTest": { $ne: true },
+          }).lean()
+        : [];
+
+    // Keep unrelated entries on their own ledger dates.
+    // Remove linked entries for successful service transactions from
+    // the date-filtered list so they are not duplicated or attributed
+    // to the wrong reporting period.
+    const entries: any[] = [
+      ...dateFilteredEntries.filter((entry) => {
+        if (!entry.transaction) return true;
+
+        const isLinkedServiceEntry =
+          (
+            entry.type === "REVENUE" &&
+            ["AIRTIME_SALE", "DATA_SALE"].includes(
+              entry.category
+            )
+          ) ||
+          (
+            entry.type === "EXPENSE" &&
+            entry.category === "PROVIDER_COST"
+          );
+
+        if (!isLinkedServiceEntry) return true;
+
+        return !allSuccessfulServiceIds.has(
+          String(entry.transaction)
+        );
+      }),
+      ...periodLinkedFinancialEntries,
+    ];
+
+    // Current production customer wallet funds.
+    // Test accounts are excluded from this financial control figure.
     const productionWallets = await Wallet.find({
       user: { $in: productionUserIds },
     })
@@ -132,7 +217,8 @@ export const getFinancialSummary = async (
       .lean();
 
     const customerWalletFunds = productionWallets.reduce(
-      (total, wallet) => total + Number(wallet.balance || 0),
+      (total, wallet) =>
+        total + Number(wallet.balance || 0),
       0
     );
 
@@ -140,15 +226,19 @@ export const getFinancialSummary = async (
     const sales = entries.filter(
       (entry) =>
         entry.type === "REVENUE" &&
-        ["AIRTIME_SALE", "DATA_SALE"].includes(entry.category)
+        ["AIRTIME_SALE", "DATA_SALE"].includes(
+          entry.category
+        )
     );
 
     const revenueEntries = entries.filter(
       (entry) =>
         entry.type === "REVENUE" &&
-        ["AIRTIME_SALE", "DATA_SALE", "OTHER_REVENUE"].includes(
-          entry.category
-        )
+        [
+          "AIRTIME_SALE",
+          "DATA_SALE",
+          "OTHER_REVENUE",
+        ].includes(entry.category)
     );
 
     // All recorded expenses, including Paystack fees.
@@ -166,12 +256,16 @@ export const getFinancialSummary = async (
 
     const otherExpenseEntries = expenses.filter(
       (entry) =>
-        !["PROVIDER_COST", "PAYSTACK_FEE"].includes(entry.category)
+        ![
+          "PROVIDER_COST",
+          "PAYSTACK_FEE",
+        ].includes(entry.category)
     );
 
     const sumAmounts = (items: any[]) =>
       items.reduce(
-        (sum, item) => sum + Number(item.amount || 0),
+        (sum, item) =>
+          sum + Number(item.amount || 0),
         0
       );
 
@@ -184,13 +278,17 @@ export const getFinancialSummary = async (
     );
 
     // Index provider-cost expense entries by linked sale transaction.
-    const expensesByTransaction = new Map<string, any[]>();
+    const expensesByTransaction = new Map<
+      string,
+      any[]
+    >();
 
     for (const expense of providerExpenseEntries) {
       if (!expense.transaction) continue;
 
       const key = String(expense.transaction);
-      const linked = expensesByTransaction.get(key) || [];
+      const linked =
+        expensesByTransaction.get(key) || [];
 
       linked.push(expense);
       expensesByTransaction.set(key, linked);
@@ -200,7 +298,8 @@ export const getFinancialSummary = async (
     let knownCostSales = 0;
     let unknownCostSales = 0;
 
-    const consumedProviderExpenseIds = new Set<string>();
+    const consumedProviderExpenseIds =
+      new Set<string>();
 
     for (const sale of sales) {
       const saleTransactionId = sale.transaction
@@ -208,7 +307,9 @@ export const getFinancialSummary = async (
         : "";
 
       const linkedExpenses = saleTransactionId
-        ? expensesByTransaction.get(saleTransactionId) || []
+        ? expensesByTransaction.get(
+            saleTransactionId
+          ) || []
         : [];
 
       const metadata = sale.metadata || {};
@@ -218,7 +319,9 @@ export const getFinancialSummary = async (
         Number.isFinite(sale.providerCost) &&
         sale.providerCost >= 0;
 
-      const metadataCost = Number(metadata.providerCost);
+      const metadataCost = Number(
+        metadata.providerCost
+      );
 
       const metadataCostIsKnown =
         metadata.providerCostKnown === true &&
@@ -235,14 +338,21 @@ export const getFinancialSummary = async (
 
         // Avoid counting the same sale cost twice.
         for (const expense of linkedExpenses) {
-          consumedProviderExpenseIds.add(String(expense._id));
+          consumedProviderExpenseIds.add(
+            String(expense._id)
+          );
         }
       } else if (linkedExpenses.length > 0) {
-        totalProviderCost += sumAmounts(linkedExpenses);
+        totalProviderCost += sumAmounts(
+          linkedExpenses
+        );
+
         knownCostSales += 1;
 
         for (const expense of linkedExpenses) {
-          consumedProviderExpenseIds.add(String(expense._id));
+          consumedProviderExpenseIds.add(
+            String(expense._id)
+          );
         }
       } else {
         // Never assume an unrecorded provider cost is zero.
@@ -251,30 +361,49 @@ export const getFinancialSummary = async (
     }
 
     // Include provider-cost entries not already attributed to a sale.
-    const unlinkedProviderExpenses = providerExpenseEntries.filter(
-      (expense) =>
-        !consumedProviderExpenseIds.has(String(expense._id))
+    const unlinkedProviderExpenses =
+      providerExpenseEntries.filter(
+        (expense) =>
+          !consumedProviderExpenseIds.has(
+            String(expense._id)
+          )
+      );
+
+    totalProviderCost += sumAmounts(
+      unlinkedProviderExpenses
     );
 
-    totalProviderCost += sumAmounts(unlinkedProviderExpenses);
+    const totalRevenue = sumAmounts(
+      revenueEntries
+    );
 
-    const totalRevenue = sumAmounts(revenueEntries);
-    const otherExpenses = sumAmounts(otherExpenseEntries);
-    const totalPaystackFees = sumAmounts(paystackFeeEntries);
+    const otherExpenses = sumAmounts(
+      otherExpenseEntries
+    );
+
+    const totalPaystackFees = sumAmounts(
+      paystackFeeEntries
+    );
 
     // Includes recorded provider costs, Paystack fees and other expenses.
     const totalExpenses =
-      totalProviderCost + otherExpenses + totalPaystackFees;
+      totalProviderCost +
+      otherExpenses +
+      totalPaystackFees;
 
     // Arithmetic based only on currently recorded amounts.
-    const recordedFinancialResult = totalRevenue - totalExpenses;
-    const recordedGrossProfit = totalRevenue - totalProviderCost;
+    const recordedFinancialResult =
+      totalRevenue - totalExpenses;
+
+    const recordedGrossProfit =
+      totalRevenue - totalProviderCost;
 
     // A zero-sales period has no missing sale costs to reconcile.
-    const providerCostsComplete = unknownCostSales === 0;
+    const providerCostsComplete =
+      unknownCostSales === 0;
+
     const reconciliationComplete =
       salesComplete && providerCostsComplete;
-
 
     const profitStatus = reconciliationComplete
       ? "RECORDED_COSTS_COMPLETE"
@@ -316,7 +445,7 @@ export const getFinancialSummary = async (
         grossProfit,
 
         // Audit values based only on entries currently recorded.
-        // These are not confirmed profit when provider costs are missing.
+        // These are not confirmed profit when reconciliation is incomplete.
         recordedFinancialResult,
         recordedGrossProfit,
 
@@ -328,9 +457,11 @@ export const getFinancialSummary = async (
         salesReconciliation: {
           successfulServiceTransactions:
             successfulServiceTransactions.length,
+
           matchedSalesTransactions:
             successfulServiceTransactions.length -
             missingSalesTransactions.length,
+
           missingSalesTransactions:
             missingSalesTransactions.length,
         },
@@ -347,8 +478,11 @@ export const getFinancialSummary = async (
 
         providerCosts: {
           total: totalProviderCost,
+
           transactions:
-            knownCostSales + unlinkedProviderExpenses.length,
+            knownCostSales +
+            unlinkedProviderExpenses.length,
+
           unknownServiceCosts: unknownCostSales,
         },
 
@@ -360,7 +494,11 @@ export const getFinancialSummary = async (
       },
     });
   } catch (error) {
-    console.error("Get Financial Summary Error:", error);
+    console.error(
+      "Get Financial Summary Error:",
+      error
+    );
+
     return next(error);
   }
 };
