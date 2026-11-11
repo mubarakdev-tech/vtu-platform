@@ -6,6 +6,21 @@ import User from "../models/user.model";
 import Wallet from "../models/wallet.model";
 import AppError from "../utils/AppError";
 
+const isValidDate = (value: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+  !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) &&
+  new Date(`${value}T00:00:00.000Z`)
+    .toISOString()
+    .startsWith(value);
+
+const escapeLedgerRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// ======================================================
+// FINANCIAL SUMMARY
+// Existing financial reconciliation logic
+// ======================================================
+
 export const getFinancialSummary = async (
   req: Request,
   res: Response,
@@ -18,13 +33,6 @@ export const getFinancialSummary = async (
     const filter: Record<string, any> = {
       "metadata.isTest": { $ne: true },
     };
-
-    const isValidDate = (value: string) =>
-      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-      !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) &&
-      new Date(`${value}T00:00:00.000Z`)
-        .toISOString()
-        .startsWith(value);
 
     if (from && !isValidDate(from)) {
       return next(new AppError("Invalid from date", 400));
@@ -73,8 +81,6 @@ export const getFinancialSummary = async (
     );
 
     // Reconcile all successful production Airtime/Data transactions.
-    // This all-time list also helps identify delayed ledger entries
-    // belonging to transactions outside the selected reporting period.
     const allSuccessfulServiceTransactions: any[] =
       await Transaction.find({
         user: { $in: productionUserIds },
@@ -127,7 +133,6 @@ export const getFinancialSummary = async (
       );
 
     // Find matching sales ledger entries regardless of ledger date.
-    // A delayed ledger entry still belongs to its original transaction.
     const matchingSalesLedgerEntries: any[] =
       serviceTransactionIds.length
         ? await FinancialLedger.find({
@@ -181,8 +186,7 @@ export const getFinancialSummary = async (
 
     // Keep unrelated entries on their own ledger dates.
     // Remove linked entries for successful service transactions from
-    // the date-filtered list so they are not duplicated or attributed
-    // to the wrong reporting period.
+    // the date-filtered list to avoid duplication or incorrect attribution.
     const entries: any[] = [
       ...dateFilteredEntries.filter((entry) => {
         if (!entry.transaction) return true;
@@ -445,7 +449,6 @@ export const getFinancialSummary = async (
         grossProfit,
 
         // Audit values based only on entries currently recorded.
-        // These are not confirmed profit when reconciliation is incomplete.
         recordedFinancialResult,
         recordedGrossProfit,
 
@@ -496,6 +499,149 @@ export const getFinancialSummary = async (
   } catch (error) {
     console.error(
       "Get Financial Summary Error:",
+      error
+    );
+
+    return next(error);
+  }
+};
+
+// ======================================================
+// FINANCIAL LEDGER ENTRIES
+// Read-only, paginated admin ledger listing
+// ======================================================
+
+export const getFinancialEntries = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const page = Math.max(
+      1,
+      parseInt(String(req.query.page || "1"), 10) || 1
+    );
+
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(String(req.query.limit || "20"), 10) || 20)
+    );
+
+    const filter: Record<string, any> = {
+      "metadata.isTest": { $ne: true },
+    };
+
+    const type = String(req.query.type || "").toUpperCase();
+    const category = String(req.query.category || "").toUpperCase();
+    const search = String(req.query.search || "").trim();
+
+    const from = String(req.query.from || "");
+    const to = String(req.query.to || "");
+
+    if (["REVENUE", "EXPENSE"].includes(type)) {
+      filter.type = type;
+    }
+
+    const allowedCategories = [
+      "AIRTIME_SALE",
+      "DATA_SALE",
+      "WALLET_FUNDING",
+      "PAYSTACK_FEE",
+      "PROVIDER_COST",
+      "REFUND",
+      "OTHER_REVENUE",
+      "OTHER_EXPENSE",
+    ];
+
+    if (allowedCategories.includes(category)) {
+      filter.category = category;
+    }
+
+    if (from && !isValidDate(from)) {
+      return next(new AppError("Invalid from date", 400));
+    }
+
+    if (to && !isValidDate(to)) {
+      return next(new AppError("Invalid to date", 400));
+    }
+
+    if (from && to && from > to) {
+      return next(
+        new AppError("The from date must not be after the to date", 400)
+      );
+    }
+
+    // These dates filter the ledger entry creation date,
+    // not the linked service transaction date.
+    if (from || to) {
+      filter.createdAt = {};
+
+      if (from) {
+        filter.createdAt.$gte = new Date(
+          `${from}T00:00:00.000Z`
+        );
+      }
+
+      if (to) {
+        filter.createdAt.$lte = new Date(
+          `${to}T23:59:59.999Z`
+        );
+      }
+    }
+
+    if (search) {
+      const pattern = new RegExp(
+        escapeLedgerRegex(search),
+        "i"
+      );
+
+      const matchingUsers = await User.find({
+        $or: [
+          { name: pattern },
+          { email: pattern },
+          { phone: pattern },
+        ],
+      })
+        .select("_id")
+        .limit(500)
+        .lean();
+
+      filter.$or = [
+        { reference: pattern },
+        { description: pattern },
+        { provider: pattern },
+        { service: pattern },
+        { user: { $in: matchingUsers.map((user) => user._id) } },
+      ];
+    }
+
+    const [entries, total] = await Promise.all([
+      FinancialLedger.find(filter)
+        .populate("user", "name email phone")
+        .populate(
+          "transaction",
+          "category status createdAt reference"
+        )
+        .sort({ createdAt: -1, _id: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+
+      FinancialLedger.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      count: entries.length,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      entries,
+    });
+  } catch (error) {
+    console.error(
+      "Financial Ledger Entries Error:",
       error
     );
 

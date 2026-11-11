@@ -1,5 +1,9 @@
+
 import { Router } from "express";
-import { getFinancialSummary } from "../controllers/financial-ledger.controller";
+import {
+  getFinancialSummary,
+  getFinancialEntries,
+} from "../controllers/financial-ledger.controller";
 import { protect } from "../middleware/auth.middleware";
 import { adminOnly } from "../middleware/admin.middleware";
 
@@ -7,15 +11,6 @@ const router = Router();
 
 // =====================================================
 // FINANCIAL SUMMARY — ADMIN ONLY
-// =====================================================
-//
-// Authentication:
-// protect → confirms the user is logged in
-//
-// Authorization:
-// adminOnly → confirms the user has ADMIN role
-//
-// Endpoint:
 // GET /api/financial-ledger/summary
 // =====================================================
 
@@ -24,6 +19,19 @@ router.get(
   protect,
   adminOnly,
   getFinancialSummary
+);
+
+// =====================================================
+// FINANCIAL LEDGER ENTRIES — ADMIN ONLY
+// GET /api/financial-ledger/entries
+// Read-only, paginated ledger records
+// =====================================================
+
+router.get(
+  "/entries",
+  protect,
+  adminOnly,
+  getFinancialEntries
 );
 
 export default router;

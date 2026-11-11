@@ -73,6 +73,8 @@ interface FinancialData {
   expenses: { total: number; transactions: number };
   grossProfit: number | null;
   financialResult: number | null;
+  recordedFinancialResult: number;
+  reconciliationComplete?: boolean;
   profitStatus?: "COMPLETE" | "RECORDED_COSTS_COMPLETE" | "PROVISIONAL";
   providerCostsComplete?: boolean;
   airtime: { revenue: number; transactions: number };
@@ -132,6 +134,39 @@ interface AdminTransactionsResponse {
 }
 
 
+interface AdminLedgerEntry {
+  _id: string;
+  type: string;
+  category: string;
+  amount: number;
+  reference?: string | null;
+  description?: string | null;
+  provider?: string | null;
+  service?: string | null;
+  createdAt: string;
+  user?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+  } | string | null;
+  transaction?: {
+    _id?: string;
+    category?: string;
+    status?: string;
+    reference?: string;
+    createdAt?: string;
+  } | string | null;
+}
+
+interface AdminLedgerResponse {
+  success?: boolean;
+  entries?: AdminLedgerEntry[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
+  message?: string;
+}
 interface AdminCustomer {
   _id: string;
   name: string;
@@ -216,6 +251,10 @@ const normalizeFinancialData = (
       typeof data.grossProfit === "number" ? data.grossProfit : null,
     financialResult:
       typeof data.financialResult === "number" ? data.financialResult : null,
+    recordedFinancialResult: Number(
+      data.recordedFinancialResult ?? data.financialResult ?? 0
+    ),
+    reconciliationComplete: data.reconciliationComplete === true,
     profitStatus:
       data.profitStatus === "COMPLETE" ||
       data.profitStatus === "RECORDED_COSTS_COMPLETE"
@@ -358,6 +397,19 @@ export default function Home() {
   const [transactionFrom, setTransactionFrom] = useState("");
   const [transactionTo, setTransactionTo] = useState("");
   const [refundingTransactionId, setRefundingTransactionId] = useState("");
+
+  // Financial Ledger
+  const [ledgerEntries, setLedgerEntries] = useState<AdminLedgerEntry[]>([]);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerError, setLedgerError] = useState("");
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerTotal, setLedgerTotal] = useState(0);
+  const [ledgerTotalPages, setLedgerTotalPages] = useState(1);
+  const [ledgerSearch, setLedgerSearch] = useState("");
+  const [ledgerType, setLedgerType] = useState("");
+  const [ledgerCategory, setLedgerCategory] = useState("");
+  const [ledgerFrom, setLedgerFrom] = useState("");
+  const [ledgerTo, setLedgerTo] = useState("");
 
   // Load provider wallet balances for financial control.
   const loadProviderWalletFunds = async () => {
@@ -638,6 +690,7 @@ export default function Home() {
       await Promise.all([
         loadAdminTransactions(transactionsPage),
         loadFinancialData(),
+        loadFinancialEntries(ledgerPage),
       ]);
     } catch (error) {
       window.alert(
@@ -671,6 +724,68 @@ export default function Home() {
     }
   };
 
+  // Load actual financial ledger entries. Read-only endpoint.
+  const loadFinancialEntries = async (
+    requestedPage = 1,
+    overrides?: {
+      search?: string;
+      type?: string;
+      category?: string;
+      from?: string;
+      to?: string;
+    }
+  ) => {
+    try {
+      setLedgerLoading(true);
+      setLedgerError("");
+
+      const filters = {
+        search: overrides?.search ?? ledgerSearch,
+        type: overrides?.type ?? ledgerType,
+        category: overrides?.category ?? ledgerCategory,
+        from: overrides?.from ?? ledgerFrom,
+        to: overrides?.to ?? ledgerTo,
+      };
+
+      const params = new URLSearchParams({
+        page: String(requestedPage),
+        limit: "20",
+      });
+
+      if (filters.search.trim()) params.set("search", filters.search.trim());
+      if (filters.type) params.set("type", filters.type);
+      if (filters.category) params.set("category", filters.category);
+      if (filters.from) params.set("from", filters.from);
+      if (filters.to) params.set("to", filters.to);
+
+      const response = await fetch(
+        `${API_URL}/financial-ledger/entries?${params.toString()}`,
+        {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        }
+      );
+
+      const result: AdminLedgerResponse = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Unable to load financial ledger.");
+      }
+
+      setLedgerEntries(Array.isArray(result.entries) ? result.entries : []);
+      setLedgerTotal(Number(result.total ?? 0));
+      setLedgerPage(Number(result.page ?? requestedPage));
+      setLedgerTotalPages(Math.max(1, Number(result.totalPages ?? 1)));
+    } catch (err) {
+      console.error("Financial ledger error:", err);
+      setLedgerError(
+        err instanceof Error ? err.message : "Unable to load financial ledger."
+      );
+    } finally {
+      setLedgerLoading(false);
+    }
+  };
   // Provider list and mapping drafts
   const loadMappingProviders = async (plans: DataPricingPlan[]) => {
     try {
@@ -1407,6 +1522,7 @@ export default function Home() {
         setUser(result.user);
         await Promise.all([
           loadFinancialData(),
+          loadFinancialEntries(1),
           loadAnnouncements(),
           loadDataPricing(),
           loadAdminProviders(),
@@ -1448,6 +1564,7 @@ export default function Home() {
 
       await Promise.all([
         loadFinancialData(),
+        loadFinancialEntries(1),
         loadAnnouncements(),
         loadDataPricing(),
         loadAdminProviders(),
@@ -1601,6 +1718,7 @@ export default function Home() {
             <button
               onClick={() => {
                 loadFinancialData();
+                loadFinancialEntries(1);
                 loadAnnouncements();
                 loadDataPricing();
                 loadAdminTransactions(1);
@@ -1628,6 +1746,9 @@ export default function Home() {
         <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-6 py-3">
           <a href="#admin-financial-overview" className="shrink-0 rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
             Financial Overview
+          </a>
+          <a href="#admin-financial-ledger" className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
+            Financial Ledger
           </a>
           <a href="#admin-transactions" className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
             Transactions
@@ -1766,27 +1887,23 @@ export default function Home() {
                 </div>
 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
   <p className="text-sm font-medium text-slate-500">
-    {financialData.providerCostsComplete
-      ? "Financial Result (Recorded)"
-      : "Financial Result (Provisional)"}
+    {financialData.reconciliationComplete
+      ? "Recorded Result (Service Costs Reconciled)"
+      : "Recorded Result (Provisional)"}
   </p>
 
   <p className="mt-3 text-3xl font-bold">
-    {financialData.financialResult === null
-      ? "Not available"
-      : formatMoney(financialData.financialResult)}
+    {formatMoney(financialData.recordedFinancialResult)}
   </p>
 
-  <p
-    className={`mt-2 text-xs ${
-      financialData.providerCostsComplete
-        ? "text-slate-500"
-        : "text-amber-700"
-    }`}
-  >
-    {financialData.providerCostsComplete
-      ? "All service-sale provider costs have been recorded. This result is based on available financial records and is not necessarily confirmed net profit. Paystack fee recovery remains unreconciled."
-      : "A reliable financial result cannot be calculated until every service sale has a verified provider cost."}
+  <p className={`mt-2 text-xs ${
+    financialData.reconciliationComplete
+      ? "text-slate-500"
+      : "text-amber-700"
+  }`}>
+    {financialData.reconciliationComplete
+      ? "Service sales and provider costs are reconciled. Paystack fee recovery remains unreconciled. This is not necessarily confirmed net profit."
+      : "This is the result from currently recorded revenue and expenses. Some service sales or provider costs remain unreconciled. It is not confirmed net profit."}
   </p>
 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1885,7 +2002,274 @@ export default function Home() {
           )}
         </div>
 
-        {/* ALL TRANSACTIONS */}
+        {/* FINANCIAL LEDGER */}
+        <div
+          id="admin-financial-ledger"
+          className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white shadow-sm"
+        >
+          <div className="border-b border-slate-200 p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-blue-600">Administration / Finance</p>
+                <h2 className="mt-1 text-2xl font-bold">Financial Ledger</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Actual recorded financial entries, including sales, wallet funding, provider costs, fees and refunds.
+                </p>
+                <p className="mt-2 text-xs text-slate-500">
+                  Entry date means when the ledger record was created, not necessarily the date of its linked transaction.
+                </p>
+              </div>
+              <button
+                onClick={() => loadFinancialEntries(ledgerPage)}
+                disabled={ledgerLoading}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
+              >
+                {ledgerLoading ? "Loading..." : "Refresh ledger"}
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="text-sm font-medium text-slate-700">
+                Search
+                <input
+                  type="search"
+                  value={ledgerSearch}
+                  onChange={(event) => setLedgerSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") loadFinancialEntries(1);
+                  }}
+                  placeholder="Reference, description, customer or provider"
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+
+              <label className="text-sm font-medium text-slate-700">
+                Entry type
+                <select
+                  value={ledgerType}
+                  onChange={(event) => setLedgerType(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                >
+                  <option value="">All types</option>
+                  <option value="REVENUE">Revenue</option>
+                  <option value="EXPENSE">Expense</option>
+                </select>
+              </label>
+
+              <label className="text-sm font-medium text-slate-700">
+                Category
+                <select
+                  value={ledgerCategory}
+                  onChange={(event) => setLedgerCategory(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                >
+                  <option value="">All categories</option>
+                  <option value="AIRTIME_SALE">Airtime Sale</option>
+                  <option value="DATA_SALE">Data Sale</option>
+                  <option value="WALLET_FUNDING">Wallet Funding</option>
+                  <option value="PAYSTACK_FEE">Paystack Fee</option>
+                  <option value="PROVIDER_COST">Provider Cost</option>
+                  <option value="REFUND">Refund</option>
+                  <option value="OTHER_REVENUE">Other Revenue</option>
+                  <option value="OTHER_EXPENSE">Other Expense</option>
+                </select>
+              </label>
+
+              <label className="text-sm font-medium text-slate-700">
+                Entry date from
+                <input
+                  type="date"
+                  value={ledgerFrom}
+                  onChange={(event) => setLedgerFrom(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+
+              <label className="text-sm font-medium text-slate-700">
+                Entry date to
+                <input
+                  type="date"
+                  value={ledgerTo}
+                  onChange={(event) => setLedgerTo(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+            </div>
+
+            {ledgerFrom && ledgerTo && ledgerFrom > ledgerTo && (
+              <p className="mt-3 text-sm text-red-600">
+                The start date cannot be later than the end date.
+              </p>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                onClick={() => loadFinancialEntries(1)}
+                disabled={ledgerLoading || Boolean(ledgerFrom && ledgerTo && ledgerFrom > ledgerTo)}
+                className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                Apply filters
+              </button>
+
+              <button
+                onClick={() => {
+                  const emptyFilters = {
+                    search: "",
+                    type: "",
+                    category: "",
+                    from: "",
+                    to: "",
+                  };
+                  setLedgerSearch("");
+                  setLedgerType("");
+                  setLedgerCategory("");
+                  setLedgerFrom("");
+                  setLedgerTo("");
+                  loadFinancialEntries(1, emptyFilters);
+                }}
+                disabled={ledgerLoading}
+                className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
+              >
+                Clear filters
+              </button>
+            </div>
+          </div>
+
+          {ledgerError && (
+            <div className="m-6 rounded-xl border border-red-200 bg-red-50 p-4">
+              <p className="text-sm font-semibold text-red-700">{ledgerError}</p>
+              <button
+                onClick={() => loadFinancialEntries(ledgerPage)}
+                className="mt-2 text-sm font-semibold text-red-700 underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          <div className="border-b border-slate-200 px-6 py-4">
+            <p className="text-sm text-slate-500">
+              {ledgerTotal.toLocaleString("en-NG")} total ledger record(s)
+              {" Â· "}Page {ledgerPage} of {ledgerTotalPages}
+            </p>
+          </div>
+
+          {ledgerLoading ? (
+            <div className="p-10 text-center text-sm text-slate-500">
+              Loading financial ledger...
+            </div>
+          ) : ledgerEntries.length === 0 ? (
+            <div className="p-10 text-center">
+              <h3 className="font-semibold">No ledger entries found</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Try changing your filters, or refresh to check again.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-[1200px] w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-5 py-4 font-semibold">Entry date</th>
+                    <th className="px-5 py-4 font-semibold">Type</th>
+                    <th className="px-5 py-4 font-semibold">Category</th>
+                    <th className="px-5 py-4 font-semibold">Description</th>
+                    <th className="px-5 py-4 font-semibold">Reference</th>
+                    <th className="px-5 py-4 font-semibold">Customer</th>
+                    <th className="px-5 py-4 font-semibold">Provider</th>
+                    <th className="px-5 py-4 text-right font-semibold">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {ledgerEntries.map((entry) => {
+                    const customer =
+                      typeof entry.user === "object" && entry.user
+                        ? entry.user
+                        : null;
+                    const linkedTransaction =
+                      typeof entry.transaction === "object" && entry.transaction
+                        ? entry.transaction
+                        : null;
+
+                    return (
+                      <tr key={entry._id} className="hover:bg-slate-50">
+                        <td className="whitespace-nowrap px-5 py-4 text-slate-600">
+                          {entry.createdAt
+                            ? new Date(entry.createdAt).toLocaleString("en-NG")
+                            : "â€”"}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className={
+                              entry.type === "REVENUE"
+                                ? "rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700"
+                                : "rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-700"
+                            }
+                          >
+                            {entry.type || "â€”"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 font-medium text-slate-700">
+                          {entry.category?.replace(/_/g, " ") || "â€”"}
+                        </td>
+                        <td className="max-w-xs px-5 py-4 text-slate-600">
+                          <p className="break-words">
+                            {entry.description || entry.service || "â€”"}
+                          </p>
+                          {linkedTransaction?.reference && (
+                            <p className="mt-1 text-xs text-slate-400">
+                              Transaction: {linkedTransaction.reference}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-5 py-4 font-mono text-xs text-slate-600">
+                          {entry.reference || "â€”"}
+                        </td>
+                        <td className="px-5 py-4 text-slate-600">
+                          {customer
+                            ? customer.name || customer.email || customer.phone || "â€”"
+                            : typeof entry.user === "string"
+                              ? entry.user
+                              : "â€”"}
+                        </td>
+                        <td className="px-5 py-4 text-slate-600">
+                          {entry.provider || "â€”"}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4 text-right font-semibold text-slate-800">
+                          {formatMoney(Number(entry.amount ?? 0))}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4">
+            <p className="text-sm text-slate-500">
+              Showing {ledgerEntries.length} record(s) on this page
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => loadFinancialEntries(ledgerPage - 1)}
+                disabled={ledgerLoading || ledgerPage <= 1}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => loadFinancialEntries(ledgerPage + 1)}
+                disabled={ledgerLoading || ledgerPage >= ledgerTotalPages}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ALL TRANSACTIONS */}        {/* ALL TRANSACTIONS */}
         <div id="admin-transactions" className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
