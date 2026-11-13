@@ -119,54 +119,67 @@ export const setActiveAirtimeProvider = async (
   res: Response,
   next: NextFunction
 ) => {
+
+
   try {
-    const providerKey = String(
-      req.params.providerKey || ""
-    )
+    const providerKey = String(req.params.providerKey || "")
       .trim()
       .toLowerCase();
 
-    const provider = await Provider.findOne({
-      key: providerKey,
-      active: true,
-      supportsAirtime: true,
-    });
+    const session = await Provider.startSession();
 
-    if (!provider) {
-      return next(
-        new AppError(
-          "Provider is unavailable for airtime services.",
-          404
-        )
-      );
-    }
+    try {
+      const selectedProvider = await session.withTransaction(async () => {
+        const provider = await Provider.findOne({
+          key: providerKey,
+          active: true,
+          supportsAirtime: true,
+        }).session(session);
 
-    await Provider.updateMany(
-      {},
-      {
-        $set: {
-          activeForAirtime: false,
-        },
+        if (!provider) {
+          throw new AppError(
+            "Provider is unavailable for airtime services.",
+            404
+          );
+        }
+
+        await Provider.updateMany(
+          {},
+          { $set: { activeForAirtime: false } },
+          { session }
+        );
+
+        provider.activeForAirtime = true;
+        await provider.save({ session });
+
+        return {
+          key: provider.key,
+          displayName: provider.displayName,
+        };
+      });
+
+      if (!selectedProvider) {
+        throw new AppError(
+          "Airtime provider selection could not be completed.",
+          500
+        );
       }
-    );
 
-    provider.activeForAirtime = true;
-    await provider.save();
-
-    return res.status(200).json({
-      success: true,
-      message: `${provider.displayName} is now the active Airtime provider.`,
-      data: {
-        key: provider.key,
-        displayName: provider.displayName,
-        activeForAirtime: true,
-      },
-    });
+      return res.status(200).json({
+        success: true,
+        message: `${selectedProvider.displayName} is now the active Airtime provider.`,
+        data: {
+          ...selectedProvider,
+          activeForAirtime: true,
+        },
+      });
+    } finally {
+      await session.endSession();
+    }
   } catch (error) {
     next(error);
   }
 };
-
 // =====================================================
 // SELECT ACTIVE DATA PROVIDER
 // =====================================================
@@ -176,49 +189,63 @@ export const setActiveDataProvider = async (
   res: Response,
   next: NextFunction
 ) => {
+
+
   try {
-    const providerKey = String(
-      req.params.providerKey || ""
-    )
+    const providerKey = String(req.params.providerKey || "")
       .trim()
       .toLowerCase();
 
-    const provider = await Provider.findOne({
-      key: providerKey,
-      active: true,
-      supportsData: true,
-    });
+    const session = await Provider.startSession();
 
-    if (!provider) {
-      return next(
-        new AppError(
-          "Provider is unavailable for data services.",
-          404
-        )
-      );
-    }
+    try {
+      const selectedProvider = await session.withTransaction(async () => {
+        const provider = await Provider.findOne({
+          key: providerKey,
+          active: true,
+          supportsData: true,
+        }).session(session);
 
-    await Provider.updateMany(
-      {},
-      {
-        $set: {
-          activeForData: false,
-        },
+        if (!provider) {
+          throw new AppError(
+            "Provider is unavailable for data services.",
+            404
+          );
+        }
+
+        await Provider.updateMany(
+          {},
+          { $set: { activeForData: false } },
+          { session }
+        );
+
+        provider.activeForData = true;
+        await provider.save({ session });
+
+        return {
+          key: provider.key,
+          displayName: provider.displayName,
+        };
+      });
+
+      if (!selectedProvider) {
+        throw new AppError(
+          "Data provider selection could not be completed.",
+          500
+        );
       }
-    );
 
-    provider.activeForData = true;
-    await provider.save();
-
-    return res.status(200).json({
-      success: true,
-      message: `${provider.displayName} is now the active Data provider.`,
-      data: {
-        key: provider.key,
-        displayName: provider.displayName,
-        activeForData: true,
-      },
-    });
+      return res.status(200).json({
+        success: true,
+        message: `${selectedProvider.displayName} is now the active Data provider.`,
+        data: {
+          ...selectedProvider,
+          activeForData: true,
+        },
+      });
+    } finally {
+      await session.endSession();
+    }
   } catch (error) {
     next(error);
   }
