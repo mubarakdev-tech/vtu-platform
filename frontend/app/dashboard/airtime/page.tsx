@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { buyAirtime, buyBulkAirtime } from "@/services/airtime";
 import { jsPDF } from "jspdf";
+import { formatMoney } from "@/lib/format-money";
 
 const networks = [
   {
@@ -294,7 +295,7 @@ export default function AirtimePage() {
 
         setMessage({
           type: "success",
-          text: `Airtime of ₦${value.toLocaleString()} sent to ${phone}`,
+          text: `Airtime of ${formatMoney(value)} sent to ${phone}`,
         });
 
         setPhone("");
@@ -319,8 +320,6 @@ export default function AirtimePage() {
     }
   };
 
-  const formatMoney = (value: number) =>
-    `₦${Number(value || 0).toLocaleString("en-NG")}`;
 
   const downloadPdf = async (tx: ReceiptData) => {
     const doc = new jsPDF();
@@ -754,7 +753,7 @@ Powered by Abu Niematullah Ventures`;
                           : "border-gray-200 hover:border-emerald-300 hover:bg-emerald-50"
                       }`}
                     >
-                      ₦{value.toLocaleString()}
+                      {formatMoney(value)}
                     </button>
                   ))}
                 </div>
@@ -887,7 +886,7 @@ Powered by Abu Niematullah Ventures`;
               <div className="flex justify-between gap-3">
                 <span className="text-gray-500">Amount per recipient</span>
                 <strong className="text-gray-900">
-                  {"\u20A6"}{Number(amount).toLocaleString("en-NG")}
+                  {formatMoney(Number(amount))}
                 </strong>
               </div>
 
@@ -917,7 +916,7 @@ Powered by Abu Niematullah Ventures`;
               <div className="flex justify-between border-t border-gray-200 pt-3 text-base">
                 <strong className="text-gray-900">Total charge</strong>
                 <strong className="text-emerald-700">
-                  {"\u20A6"}{(Number(amount) * (bulkMode ? bulkPhones.length : 1)).toLocaleString("en-NG")}
+                  {formatMoney(Number(amount) * (bulkMode ? bulkPhones.length : 1))}
                 </strong>
               </div>
             </div>

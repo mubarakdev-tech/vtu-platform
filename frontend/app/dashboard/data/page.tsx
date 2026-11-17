@@ -1,4 +1,4 @@
-﻿
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { getDataPlans, buyData, buyBulkData } from "@/services/data";
 import { jsPDF } from "jspdf";
+import { formatMoney } from "@/lib/format-money";
 
 const networks = [
   {
@@ -625,7 +626,7 @@ export default function DataPage() {
     doc.setFontSize(22);
     doc.setFont("helvetica", "bold");
     doc.text(
-      `NGN ${tx.amount.toLocaleString()}`,
+      `NGN ${formatMoney(tx.amount).replace(/^₦\s?/, "")}`,
       20,
       87
     );
@@ -645,15 +646,15 @@ export default function DataPage() {
     const rows = [
       [
         "Before Balance",
-        `NGN ${tx.balanceBefore.toLocaleString()}`,
+        `NGN ${formatMoney(tx.balanceBefore).replace(/^₦\s?/, "")}`,
       ],
       [
         "Amount Paid",
-        `NGN ${tx.amount.toLocaleString()}`,
+        `NGN ${formatMoney(tx.amount).replace(/^₦\s?/, "")}`,
       ],
       [
         "After Balance",
-        `NGN ${tx.balanceAfter.toLocaleString()}`,
+        `NGN ${formatMoney(tx.balanceAfter).replace(/^₦\s?/, "")}`,
       ],
       ["Plan", tx.planName],
       ["Network", tx.network.toUpperCase()],
@@ -711,11 +712,11 @@ export default function DataPage() {
 
 DATA PURCHASE SUCCESSFUL
 
-Amount Paid: ₦${tx.amount.toLocaleString()}
+Amount Paid: ${formatMoney(tx.amount)}
 
-Before Balance: ₦${tx.balanceBefore.toLocaleString()}
-Paid: ₦${tx.amount.toLocaleString()}
-After Balance: ₦${tx.balanceAfter.toLocaleString()}
+Before Balance: ${formatMoney(tx.balanceBefore)}
+Paid: ${formatMoney(tx.amount)}
+After Balance: ${formatMoney(tx.balanceAfter)}
 
 Plan: ${tx.planName}
 Network: ${tx.network.toUpperCase()}
@@ -954,8 +955,7 @@ Fast • Secure • Reliable`;
                         }
                         value={plan.variation_code}
                       >
-                        {plan.name} — ₦
-                        {plan.amount.toLocaleString()}
+                        {plan.name} - {formatMoney(plan.amount)}
                       </option>
                     ))}
                   </select>
@@ -983,7 +983,7 @@ Fast • Secure • Reliable`;
                   </div>
 
                   <p className="text-lg font-bold text-emerald-700">
-                    ₦{selectedPlan.amount.toLocaleString()}
+                    {formatMoney(selectedPlan.amount)}
                   </p>
                 </div>
               </div>
@@ -1067,8 +1067,7 @@ Fast • Secure • Reliable`;
               <div className="flex justify-between gap-3">
                 <span className="text-gray-500">Price per recipient</span>
                 <strong className="text-gray-900">
-                  {"\u20A6"}
-                  {selectedPlan.amount.toLocaleString("en-NG")}
+                  {formatMoney(selectedPlan.amount)}
                 </strong>
               </div>
 
@@ -1109,11 +1108,7 @@ Fast • Secure • Reliable`;
                 <strong className="text-gray-900">Total charge</strong>
 
                 <strong className="text-emerald-700">
-                  {"\u20A6"}
-                  {(
-                    selectedPlan.amount *
-                    (bulkMode ? bulkPhones.length : 1)
-                  ).toLocaleString("en-NG")}
+                  {formatMoney(selectedPlan.amount * (bulkMode ? bulkPhones.length : 1))}
                 </strong>
               </div>
             </div>
@@ -1194,7 +1189,7 @@ Fast • Secure • Reliable`;
                 </p>
 
                 <p className="mt-0.5 text-3xl font-extrabold tracking-tight text-gray-900">
-                  ₦{receipt.amount.toLocaleString()}
+                  {formatMoney(receipt.amount)}
                 </p>
 
                 <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
@@ -1224,7 +1219,7 @@ Fast • Secure • Reliable`;
                   </p>
 
                   <p className="mt-0.5 text-xs font-bold text-gray-900">
-                    ₦{receipt.balanceBefore.toLocaleString()}
+                    {formatMoney(receipt.balanceBefore)}
                   </p>
                 </div>
 
@@ -1234,7 +1229,7 @@ Fast • Secure • Reliable`;
                   </p>
 
                   <p className="mt-0.5 text-xs font-bold text-emerald-700">
-                    ₦{receipt.amount.toLocaleString()}
+                    {formatMoney(receipt.amount)}
                   </p>
                 </div>
 
@@ -1244,7 +1239,7 @@ Fast • Secure • Reliable`;
                   </p>
 
                   <p className="mt-0.5 text-xs font-bold text-gray-900">
-                    ₦{receipt.balanceAfter.toLocaleString()}
+                    {formatMoney(receipt.balanceAfter)}
                   </p>
                 </div>
               </div>

@@ -85,7 +85,7 @@ export const updateDataPricingPlan = async (
 ) => {
   try {
     const { id } = req.params;
-    const { sellingPrice, providerCost, active } = req.body || {};
+    const { sellingPrice, providerCost, active, costConfirmed } = req.body || {};
 
     if (
       sellingPrice === undefined &&
@@ -109,6 +109,18 @@ export const updateDataPricingPlan = async (
       return next(
         new AppError(
           "Selling price must be greater than zero",
+          400
+        )
+      );
+    }
+
+    if (
+      providerCost !== undefined &&
+      costConfirmed !== true
+    ) {
+      return next(
+        new AppError(
+          "Explicit confirmation is required before updating provider cost",
           400
         )
       );
@@ -211,6 +223,11 @@ export const updateDataPricingPlan = async (
         ? Number(rawCost)
         : null;
 
+    const updatedSellingPrice =
+      sellingPrice !== undefined
+        ? Number(sellingPrice)
+        : Number(plan.amount);
+
     return res.status(200).json({
       success: true,
       message: "Data pricing updated",
@@ -218,15 +235,18 @@ export const updateDataPricingPlan = async (
         id: String(plan._id),
         network: plan.network,
         name: plan.name,
-        sellingPrice: Number(plan.amount),
+        sellingPrice: updatedSellingPrice,
         providerCost: cost,
         expectedProfit:
           cost === null
             ? null
             : Number(
-                (Number(plan.amount) - cost).toFixed(2)
+                (updatedSellingPrice - cost).toFixed(2)
               ),
-        active: Boolean(plan.active),
+        active:
+          active !== undefined
+            ? active
+            : Boolean(plan.active),
       },
     });
   } catch (error) {
@@ -926,17 +946,11 @@ export const bulkMapDataPricingPlans = async (
 
         /*
          * Switch the internal provider mapping.
-         * Customer selling price is preserved unless Admin explicitly
-         * supplies a new valid sellingPrice.
-         *
+         * Existing customer selling price is ALWAYS preserved.
          * Provider cost/catalogue amount must NEVER determine amount.
          */
         dataPlan.provider = provider._id;
         dataPlan.providerPlan = providerPlan._id;
-
-        if (Number.isFinite(sellingPrice) && sellingPrice > 0) {
-          dataPlan.amount = sellingPrice;
-        }
 
         await dataPlan.save();
       } else {
@@ -975,10 +989,7 @@ export const bulkMapDataPricingPlans = async (
         created = true;
       }
 
-      const sellingPriceUpdated =
-        Boolean(requestedDataPlanId) &&
-        Number.isFinite(sellingPrice) &&
-        sellingPrice > 0;
+      const sellingPriceUpdated = false;
 
       results.push({
         id: String(dataPlan._id),
@@ -1004,3 +1015,4 @@ export const bulkMapDataPricingPlans = async (
     next(error);
   }
 };
+

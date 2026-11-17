@@ -19,6 +19,7 @@ import {
   Share2,
 } from "lucide-react";
 import api from "@/lib/api";
+import { formatMoney } from "@/lib/format-money";
 import { jsPDF } from "jspdf";
 import { getProviderLabel } from "@/lib/providers";
 
@@ -153,7 +154,7 @@ export default function TransactionsPage() {
     doc.setFontSize(22);
     doc.setTextColor(5, 150, 105);
     doc.text(
-      `${tx.type === "CREDIT" ? "+" : "-"}NGN ${Number(tx.amount || 0).toLocaleString()}`,
+      `${tx.type === "CREDIT" ? "+" : "-"}NGN ${formatMoney(tx.amount).replace(/^₦\s?/, "")}`,
       20,
       62
     );
@@ -198,7 +199,7 @@ export default function TransactionsPage() {
     const ref = getReference(tx);
     const text = `AbuPay Receipt
 
-Amount: ₦${Number(tx.amount || 0).toLocaleString()}
+Amount: ${formatMoney(tx.amount)}
 Status: ${tx.status}
 Description: ${tx.description || tx.category}
 Type: ${tx.type}
@@ -326,8 +327,7 @@ Powered by Abu Niematullah Ventures`;
                           : "text-gray-900"
                       }`}
                     >
-                      {tx.type === "CREDIT" ? "+" : "-"}₦
-                      {Number(tx.amount || 0).toLocaleString()}
+                      {tx.type === "CREDIT" ? "+" : "-"}{formatMoney(tx.amount)}
                     </p>
                     <span
                       className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getStatusStyle(
@@ -376,7 +376,7 @@ Powered by Abu Niematullah Ventures`;
                 </div>
                 <p className="text-sm text-gray-500">Amount</p>
                 <p className="text-3xl font-bold text-gray-900">
-                  ₦{Number(selected.amount || 0).toLocaleString()}
+                  {formatMoney(selected.amount)}
                 </p>
                 <span
                   className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(

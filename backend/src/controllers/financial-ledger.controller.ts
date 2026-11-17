@@ -124,7 +124,7 @@ export const getFinancialSummary = async (
           ? { createdAt: transactionDateFilter }
           : {}),
       })
-        .select("_id")
+        .select("_id category")
         .lean();
 
     const serviceTransactionIds =
@@ -143,20 +143,48 @@ export const getFinancialSummary = async (
             transaction: { $in: serviceTransactionIds },
             "metadata.isTest": { $ne: true },
           })
-            .select("transaction")
+            .select("transaction category")
             .lean()
         : [];
 
-    const matchedSaleTransactionIds = new Set(
+    const expectedSaleCategory = (transaction: any) =>
+      transaction.category === "AIRTIME"
+        ? "AIRTIME_SALE"
+        : "DATA_SALE";
+
+    const matchedSaleKeys = new Set(
       matchingSalesLedgerEntries
         .filter((entry) => entry.transaction)
-        .map((entry) => String(entry.transaction))
+        .map(
+          (entry) =>
+            `${String(entry.transaction)}:${entry.category}`
+        )
     );
 
     const missingSalesTransactions =
       successfulServiceTransactions.filter(
         (item) =>
-          !matchedSaleTransactionIds.has(String(item._id))
+          !matchedSaleKeys.has(
+            `${String(item._id)}:${expectedSaleCategory(item)}`
+          )
+      );
+
+    const missingAirtimeSalesTransactions =
+      successfulServiceTransactions.filter(
+        (item) =>
+          item.category === "AIRTIME" &&
+          !matchedSaleKeys.has(
+            `${String(item._id)}:AIRTIME_SALE`
+          )
+      );
+
+    const missingDataSalesTransactions =
+      successfulServiceTransactions.filter(
+        (item) =>
+          item.category === "DATA" &&
+          !matchedSaleKeys.has(
+            `${String(item._id)}:DATA_SALE`
+          )
       );
 
     const salesComplete =
@@ -302,6 +330,18 @@ export const getFinancialSummary = async (
     let knownCostSales = 0;
     let unknownCostSales = 0;
 
+    const airtimeCostStats = {
+      providerCost: 0,
+      knownCostSales: 0,
+      unknownCostSales: 0,
+    };
+
+    const dataCostStats = {
+      providerCost: 0,
+      knownCostSales: 0,
+      unknownCostSales: 0,
+    };
+
     const consumedProviderExpenseIds =
       new Set<string>();
 
@@ -317,6 +357,11 @@ export const getFinancialSummary = async (
         : [];
 
       const metadata = sale.metadata || {};
+
+      const serviceCostStats =
+        sale.category === "AIRTIME_SALE"
+          ? airtimeCostStats
+          : dataCostStats;
 
       const directCostIsKnown =
         typeof sale.providerCost === "number" &&
@@ -340,6 +385,9 @@ export const getFinancialSummary = async (
         totalProviderCost += cost;
         knownCostSales += 1;
 
+        serviceCostStats.providerCost += cost;
+        serviceCostStats.knownCostSales += 1;
+
         // Avoid counting the same sale cost twice.
         for (const expense of linkedExpenses) {
           consumedProviderExpenseIds.add(
@@ -353,6 +401,11 @@ export const getFinancialSummary = async (
 
         knownCostSales += 1;
 
+        serviceCostStats.providerCost += sumAmounts(
+          linkedExpenses
+        );
+        serviceCostStats.knownCostSales += 1;
+
         for (const expense of linkedExpenses) {
           consumedProviderExpenseIds.add(
             String(expense._id)
@@ -361,6 +414,7 @@ export const getFinancialSummary = async (
       } else {
         // Never assume an unrecorded provider cost is zero.
         unknownCostSales += 1;
+        serviceCostStats.unknownCostSales += 1;
       }
     }
 
@@ -422,6 +476,29 @@ export const getFinancialSummary = async (
       ? recordedGrossProfit
       : null;
 
+    const airtimeRevenue = sumAmounts(airtimeEntries);
+    const dataRevenue = sumAmounts(dataEntries);
+
+    const airtimeRecordedGrossProfit =
+      airtimeRevenue - airtimeCostStats.providerCost;
+
+    const dataRecordedGrossProfit =
+      dataRevenue - dataCostStats.providerCost;
+
+    const airtimeProviderCostsComplete =
+      airtimeCostStats.unknownCostSales === 0;
+
+    const dataProviderCostsComplete =
+      dataCostStats.unknownCostSales === 0;
+
+    const airtimeReconciliationComplete =
+      missingAirtimeSalesTransactions.length === 0 &&
+      airtimeProviderCostsComplete;
+
+    const dataReconciliationComplete =
+      missingDataSalesTransactions.length === 0 &&
+      dataProviderCostsComplete;
+
     return res.status(200).json({
       success: true,
       data: {
@@ -470,13 +547,32 @@ export const getFinancialSummary = async (
         },
 
         airtime: {
-          revenue: sumAmounts(airtimeEntries),
+          revenue: airtimeRevenue,
           transactions: airtimeEntries.length,
+          missingSalesTransactions: missingAirtimeSalesTransactions.length,
+          providerCost: airtimeCostStats.providerCost,
+          knownCostTransactions: airtimeCostStats.knownCostSales,
+          unknownCostTransactions: airtimeCostStats.unknownCostSales,
+          recordedGrossProfit: airtimeRecordedGrossProfit,
+          grossProfit: airtimeReconciliationComplete
+            ? airtimeRecordedGrossProfit
+            : null,
+          providerCostsComplete: airtimeProviderCostsComplete,
+          reconciliationComplete: airtimeReconciliationComplete,
         },
 
         data: {
-          revenue: sumAmounts(dataEntries),
+          revenue: dataRevenue,
           transactions: dataEntries.length,
+          providerCost: dataCostStats.providerCost,
+          knownCostTransactions: dataCostStats.knownCostSales,
+          unknownCostTransactions: dataCostStats.unknownCostSales,
+          recordedGrossProfit: dataRecordedGrossProfit,
+          grossProfit: dataReconciliationComplete
+            ? dataRecordedGrossProfit
+            : null,
+          providerCostsComplete: dataProviderCostsComplete,
+          reconciliationComplete: dataReconciliationComplete,
         },
 
         providerCosts: {

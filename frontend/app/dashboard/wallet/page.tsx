@@ -19,6 +19,7 @@ import {
   initializeFunding,
   verifyFunding,
 } from "@/services/wallet.service";
+import { formatMoney } from "@/lib/format-money";
 
 import CountUp from "react-countup";
 import useAuth from "@/hooks/useAuth";
@@ -256,7 +257,7 @@ export default function WalletPage() {
 
               setMessage({
                 type: "success",
-                text: `Wallet funded successfully with ₦${transactionAmount.toLocaleString()}`,
+                text: `Wallet funded successfully with ${formatMoney(transactionAmount)}`,
               });
             } catch (error: any) {
               console.error("Wallet verification error:", error);
@@ -376,9 +377,9 @@ export default function WalletPage() {
       pdf.setLineDashPattern([], 0);
       y += 13;
 
-      addRow("Previous Wallet Balance", `₦${receipt.previousBalance.toLocaleString()}`);
-      addRow("Amount Funded", `₦${receipt.amount.toLocaleString()}`, true);
-      addRow("New Wallet Balance", `₦${receipt.newBalance.toLocaleString()}`, true);
+      addRow("Previous Wallet Balance", `NGN ${formatMoney(receipt.previousBalance).replace(/^₦\s?/, "")}`);
+      addRow("Amount Funded", `NGN ${formatMoney(receipt.amount).replace(/^₦\s?/, "")}`, true);
+      addRow("New Wallet Balance", `NGN ${formatMoney(receipt.newBalance).replace(/^₦\s?/, "")}`, true);
       addRow("Status", receipt.status === "SUCCESS" ? "SUCCESSFUL" : receipt.status);
 
       y += 10;
@@ -418,9 +419,9 @@ Receipt Number: ${receipt.reference}
 Date & Time: ${receipt.date}
 Customer: ${receipt.customerName}
 Service: Wallet Funding
-Amount Funded: ₦${receipt.amount.toLocaleString()}
-Previous Balance: ₦${receipt.previousBalance.toLocaleString()}
-New Balance: ₦${receipt.newBalance.toLocaleString()}
+Amount Funded: ${formatMoney(receipt.amount)}
+Previous Balance: ${formatMoney(receipt.previousBalance)}
+New Balance: ${formatMoney(receipt.newBalance)}
 Status: ${receipt.status === "SUCCESS" ? "SUCCESSFUL" : receipt.status}
 
 Thank you for using AbuPay.
@@ -537,7 +538,7 @@ Powered by Abu Niematullah Ventures
                     : "hover:border-emerald-300 hover:bg-emerald-50"
                 }`}
               >
-                ₦{value.toLocaleString()}
+                {formatMoney(value)}
               </button>
             ))}
           </div>
@@ -570,7 +571,7 @@ Powered by Abu Niematullah Ventures
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-500">Wallet funding</span>
                     <span className="font-medium text-gray-900">
-                      ₦{Number(amount).toLocaleString()}
+                      {formatMoney(Number(amount))}
                     </span>
                   </div>
 
@@ -579,9 +580,7 @@ Powered by Abu Niematullah Ventures
                     <span className="font-medium text-gray-900">
                       {calculatingFee ? (
                         <Loader2 size={16} className="animate-spin" />
-                      ) : (
-                        <>₦{fundingFee.toLocaleString()}</>
-                      )}
+                      ) : formatMoney(fundingFee)}
                     </span>
                   </div>
 
@@ -594,9 +593,7 @@ Powered by Abu Niematullah Ventures
                     <span className="text-lg font-bold text-emerald-700">
                       {calculatingFee ? (
                         <Loader2 size={18} className="animate-spin" />
-                      ) : (
-                        <>₦{fundingTotal.toLocaleString()}</>
-                      )}
+                      ) : formatMoney(fundingTotal)}
                     </span>
                   </div>
                 </div>
@@ -676,16 +673,16 @@ Powered by Abu Niematullah Ventures
 
                 <ReceiptRow
                   label="Previous Balance"
-                  value={`₦${receipt.previousBalance.toLocaleString()}`}
+                  value={formatMoney(receipt.previousBalance)}
                 />
                 <ReceiptRow
                   label="Amount Funded"
-                  value={`₦${receipt.amount.toLocaleString()}`}
+                  value={formatMoney(receipt.amount)}
                   bold
                 />
                 <ReceiptRow
                   label="New Balance"
-                  value={`₦${receipt.newBalance.toLocaleString()}`}
+                  value={formatMoney(receipt.newBalance)}
                   bold
                 />
                 <ReceiptRow
