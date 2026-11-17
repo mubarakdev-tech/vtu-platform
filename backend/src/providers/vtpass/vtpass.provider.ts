@@ -300,9 +300,20 @@ export const buyAirtime = async ({
 export const getBalance = async () => {
   try {
     const response = await vtpassClient.get("/balance");
-    const balance = Number(response.data?.contents?.balance);
+    const rawBalance = response.data?.contents?.balance;
 
-    if (!Number.isFinite(balance)) {
+    const hasNumericType =
+      typeof rawBalance === "number" ||
+      typeof rawBalance === "string";
+
+    const hasValidBalance =
+      hasNumericType &&
+      !(typeof rawBalance === "string" && rawBalance.trim() === "") &&
+      Number.isFinite(Number(rawBalance));
+
+    const balance = hasValidBalance ? Number(rawBalance) : null;
+
+    if (balance === null) {
       return {
         success: false,
         message: "VTpass returned an invalid wallet balance",
