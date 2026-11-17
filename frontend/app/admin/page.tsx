@@ -54,7 +54,8 @@ interface ProviderWalletBalance {
 
 interface ProviderWalletFunds {
   providers: ProviderWalletBalance[];
-  productionTotal: number;
+  complete: boolean;
+  productionTotal: number | null;
 }
 
 interface ProviderCataloguePlan {
@@ -492,7 +493,14 @@ export default function Home() {
         providers: Array.isArray(result.data?.providers)
           ? result.data.providers
           : [],
-        productionTotal: Number(result.data?.productionTotal ?? 0),
+        complete: result.data?.complete === true,
+        productionTotal:
+          result.data?.complete === true &&
+          result.data?.productionTotal !== null &&
+          result.data?.productionTotal !== undefined &&
+          Number.isFinite(Number(result.data.productionTotal))
+            ? Number(result.data.productionTotal)
+            : null,
       });
     } catch (err) {
       console.error("Provider wallet balances error:", err);
@@ -2118,7 +2126,10 @@ export default function Home() {
 
                 <p className="mt-3 text-3xl font-bold">
                   {providerWalletFunds
-                    ? formatMoney(providerWalletFunds.productionTotal)
+                    ? providerWalletFunds.complete &&
+                      providerWalletFunds.productionTotal !== null
+                      ? formatMoney(providerWalletFunds.productionTotal)
+                      : "Not fully verified"
                     : "Loading..."}
                 </p>
 
@@ -2134,7 +2145,7 @@ export default function Home() {
                       !provider.available
                   ) && (
                     <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                      Incomplete Ã¢â‚¬â€ one or more active production provider balances cannot currently be retrieved automatically.
+                      Incomplete - one or more active production provider balances cannot currently be retrieved automatically.
                     </p>
                   )}
 
@@ -2143,8 +2154,47 @@ export default function Home() {
                     (provider) => provider.isTest
                   ) && (
                     <p className="mt-2 text-xs font-medium text-emerald-700">
-                      Sandbox/test provider balances excluded
+                      Sandbox/test provider balances excluded from the production total.
                     </p>
+                  )}
+
+                {providerWalletFunds &&
+                  providerWalletFunds.providers.length > 0 && (
+                    <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
+                      <p className="text-sm font-semibold text-slate-700">
+                        Individual Provider Balances
+                      </p>
+
+                      {providerWalletFunds.providers.map((provider) => (
+                        <div
+                          key={provider.key}
+                          className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-800">
+                              {provider.displayName || provider.key}
+                            </p>
+
+                            <p className="mt-1 text-xs text-slate-500">
+                              {!provider.active
+                                ? "Inactive"
+                                : provider.isTest
+                                  ? "Test / sandbox provider"
+                                  : provider.available
+                                    ? "Balance retrieved"
+                                    : "Balance unavailable"}
+                            </p>
+                          </div>
+
+                          <p className="shrink-0 text-sm font-bold text-slate-900">
+                            {provider.available &&
+                            typeof provider.balance === "number"
+                              ? formatMoney(provider.balance)
+                              : "—"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   )}
               </div>
 

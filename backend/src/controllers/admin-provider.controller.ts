@@ -1,3 +1,4 @@
+
 import { Request, Response, NextFunction } from "express";
 import Provider from "../models/provider.model";
 import AppError from "../utils/AppError";
@@ -20,6 +21,25 @@ export const getProviderBalances = async (
 
     const balances = await Promise.all(
       providers.map(async (provider) => {
+        const isTest =
+          provider.key === "vtpass" &&
+          String(process.env.VTPASS_BASE_URL || "")
+            .toLowerCase()
+            .includes("sandbox");
+
+        // Do not query disabled providers.
+        if (!provider.active) {
+          return {
+            key: provider.key,
+            displayName: provider.displayName,
+            active: false,
+            available: false,
+            balance: null,
+            isTest,
+            message: "Provider is inactive. Balance was not queried.",
+          };
+        }
+
         const implementation =
           registeredProviders[provider.key];
 
@@ -27,53 +47,89 @@ export const getProviderBalances = async (
           return {
             key: provider.key,
             displayName: provider.displayName,
-            active: provider.active,
+            active: true,
             available: false,
             balance: null,
-            isTest: false,
+            isTest,
             message: "Balance lookup is not available for this provider.",
           };
         }
 
-        const result =
-          await implementation.getBalance();
+        // Isolate each provider request so one failure
+        // cannot prevent other provider balances from loading.
+        try {
+          const result = await implementation.getBalance();
 
-        const isTest =
-          provider.key === "vtpass" &&
-          String(process.env.VTPASS_BASE_URL || "")
-            .toLowerCase()
-            .includes("sandbox");
+          const rawBalance = result.balance;
+          const hasValidBalance =
+            rawBalance !== null &&
+            rawBalance !== undefined &&
+            Number.isFinite(Number(rawBalance));
 
-        return {
-          key: provider.key,
-          displayName: provider.displayName,
-          active: provider.active,
-          available: result.success === true,
-          balance:
-            result.success === true &&
-            Number.isFinite(result.balance)
-              ? Number(result.balance)
-              : null,
-          isTest,
-          message: result.message,
-        };
+          const balance =
+            result.success === true && hasValidBalance
+              ? Number(rawBalance)
+              : null;
+
+          return {
+            key: provider.key,
+            displayName: provider.displayName,
+            active: true,
+            available: balance !== null,
+            balance,
+            isTest,
+            message:
+              balance !== null
+                ? result.message || "Balance retrieved successfully."
+                : result.message || "Provider balance could not be verified.",
+          };
+        } catch (providerError: any) {
+          console.error(
+            `PROVIDER BALANCE ERROR (${provider.key}):`,
+            providerError?.message || "Balance request failed"
+          );
+
+          return {
+            key: provider.key,
+            displayName: provider.displayName,
+            active: true,
+            available: false,
+            balance: null,
+            isTest,
+            message: "Unable to retrieve this provider's balance.",
+          };
+        }
       })
     );
 
-    const productionTotal = balances.reduce(
-      (total, item) =>
-        item.available &&
-        !item.isTest &&
-        typeof item.balance === "number"
-          ? total + item.balance
-          : total,
-      0
+    // Only active production providers are included.
+    const activeProductionProviders = balances.filter(
+      (item) => item.active && !item.isTest
     );
+
+    // The total is complete only when every active
+    // production provider has a verified balance.
+    const complete =
+      activeProductionProviders.length > 0 &&
+      activeProductionProviders.every(
+        (item) =>
+          item.available &&
+          typeof item.balance === "number" &&
+          Number.isFinite(item.balance)
+      );
+
+    const productionTotal = complete
+      ? activeProductionProviders.reduce(
+          (total, item) => total + (item.balance ?? 0),
+          0
+        )
+      : null;
 
     return res.status(200).json({
       success: true,
       data: {
         providers: balances,
+        complete,
         productionTotal,
       },
     });
@@ -81,6 +137,7 @@ export const getProviderBalances = async (
     next(error);
   }
 };
+
 // =====================================================
 // LIST PROVIDERS & ROUTING STATUS
 // =====================================================
@@ -119,8 +176,6 @@ export const setActiveAirtimeProvider = async (
   res: Response,
   next: NextFunction
 ) => {
-
-
   try {
     const providerKey = String(req.params.providerKey || "")
       .trim()
@@ -180,6 +235,7 @@ export const setActiveAirtimeProvider = async (
     next(error);
   }
 };
+
 // =====================================================
 // SELECT ACTIVE DATA PROVIDER
 // =====================================================
@@ -189,8 +245,6 @@ export const setActiveDataProvider = async (
   res: Response,
   next: NextFunction
 ) => {
-
-
   try {
     const providerKey = String(req.params.providerKey || "")
       .trim()

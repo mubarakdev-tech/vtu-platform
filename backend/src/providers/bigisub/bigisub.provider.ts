@@ -1,4 +1,5 @@
-﻿import bigisubClient from "./bigisub.client";
+
+import bigisubClient from "./bigisub.client";
 
 // =====================================================
 // NETWORK MAP
@@ -101,12 +102,8 @@ const classifyPurchaseResponse = (data: any) => {
 // =====================================================
 
 const classifyDataPurchaseResponse = (response: any) => {
-  // The actual purchase result is normally nested inside
-  // the API response's data object.
   const purchaseData = response?.data;
 
-  // Prefer the actual purchase status over the API
-  // envelope's success flag.
   const status = String(
     purchaseData?.status ?? response?.status ?? ""
   )
@@ -175,8 +172,6 @@ const classifyPurchaseError = (error: any) => {
     providerResponse || error?.message || error
   );
 
-  // A request error does not prove that the provider failed
-  // to fulfil the purchase. Keep the outcome uncertain.
   return {
     success: false,
     pending: true,
@@ -255,10 +250,6 @@ export const getDataPlans = async (network: string) => {
 // =====================================================
 // BUY BIGISUB DATA
 // =====================================================
-//
-// BigiSub expects plan to be the numeric plan ID returned
-// by /vtu/data/plans/.
-// =====================================================
 
 export const buyData = async ({
   network,
@@ -312,8 +303,6 @@ export const buyData = async ({
       JSON.stringify(data, null, 2)
     );
 
-    // Use the data-specific classifier so a top-level
-    // success flag cannot override a nested failed status.
     const result = classifyDataPurchaseResponse(data);
 
     return {
@@ -334,9 +323,6 @@ export const buyData = async ({
 
 // =====================================================
 // BUY BIGISUB AIRTIME
-// =====================================================
-//
-// Existing endpoint and payload structure are preserved.
 // =====================================================
 
 export const buyAirtime = async ({
@@ -394,6 +380,61 @@ export const buyAirtime = async ({
 };
 
 // =====================================================
+// GET BIGISUB WALLET BALANCE
+// =====================================================
+
+export const getBalance = async () => {
+  try {
+    const response = await bigisubClient.get(
+      "/financial/wallet/balance/"
+    );
+
+    const rawBalance = response.data?.data?.balance;
+    const hasNumericType =
+      typeof rawBalance === "number" ||
+      typeof rawBalance === "string";
+
+    const hasValidBalance =
+      hasNumericType &&
+      !(typeof rawBalance === "string" && rawBalance.trim() === "") &&
+      Number.isFinite(Number(rawBalance));
+
+    const balance = hasValidBalance ? Number(rawBalance) : null;
+
+    if (
+      response.data?.success !== true ||
+      balance === null
+    ) {
+      return {
+        success: false,
+        message: "BigiSub returned an invalid wallet balance.",
+        provider: "bigisub",
+      };
+    }
+
+    return {
+      success: true,
+      balance,
+      message: "BigiSub wallet balance retrieved successfully.",
+      provider: "bigisub",
+    };
+  } catch (error: any) {
+    console.error(
+      "BIGISUB WALLET BALANCE ERROR:",
+      error?.response?.status || error?.message || "Request failed"
+    );
+
+    return {
+      success: false,
+      message:
+        error?.response?.data?.message ||
+        "Unable to retrieve BigiSub wallet balance.",
+      provider: "bigisub",
+    };
+  }
+};
+
+// =====================================================
 // BIGISUB PROVIDER
 // =====================================================
 
@@ -402,4 +443,5 @@ export const bigisubProvider = {
   getDataPlans,
   buyData,
   buyAirtime,
+  getBalance,
 };
