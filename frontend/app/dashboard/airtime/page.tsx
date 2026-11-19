@@ -1,3 +1,4 @@
+﻿
 "use client";
 
 import { useState } from "react";
@@ -95,6 +96,7 @@ export default function AirtimePage() {
     setBulkInput(value);
     parseBulkPhones(value);
   };
+
   const removeBulkPhone = (phoneToRemove: string) => {
     const updatedPhones = bulkPhones.filter(
       (item) => item !== phoneToRemove
@@ -103,6 +105,7 @@ export default function AirtimePage() {
     setBulkPhones(updatedPhones);
     setBulkInput(updatedPhones.join("\n"));
   };
+
   const handleBulkPreview = () => {
     const validPhones = bulkPhones.filter(
       (item) => item.length === 11
@@ -136,6 +139,7 @@ export default function AirtimePage() {
     setShowPreview(true);
   };
 
+
   const handleBulkPurchase = async () => {
     const validPhones = bulkPhones.filter(
       (item) => item.length === 11
@@ -165,13 +169,46 @@ export default function AirtimePage() {
       return;
     }
 
+    const value = Number(amount);
+    const fingerprint = `${network.toLowerCase()}|${value}|${validPhones.join(",")}`;
+
+    // Each batch has its own storage key.
+    const storageKey = `abupay-bulk-airtime-request:${fingerprint}`;
+
     try {
       setLoading(true);
       setMessage(null);
 
-      const value = Number(amount);
+      let savedBatch: {
+        fingerprint: string;
+        requestId: string;
+      } | null = null;
+
+      try {
+        const stored = sessionStorage.getItem(storageKey);
+        savedBatch = stored ? JSON.parse(stored) : null;
+      } catch {
+        savedBatch = null;
+      }
+
+      let requestId: string;
+
+      if (
+        savedBatch?.fingerprint === fingerprint &&
+        savedBatch?.requestId
+      ) {
+        requestId = savedBatch.requestId;
+      } else {
+        requestId = crypto.randomUUID();
+
+        sessionStorage.setItem(
+          storageKey,
+          JSON.stringify({ fingerprint, requestId })
+        );
+      }
 
       const result = await buyBulkAirtime({
+        requestId,
         recipients: validPhones.map((recipientPhone) => ({
           network,
           phone: recipientPhone,
@@ -180,35 +217,90 @@ export default function AirtimePage() {
       });
 
       const successful = Number(result?.successful || 0);
+      const pending = Number(result?.pending || 0);
       const failed = Number(result?.failed || 0);
 
-      setMessage({
-        type: failed === 0 ? "success" : "error",
-        text:
-          failed === 0
-            ? `Airtime sent successfully to ${successful} recipient${
-                successful === 1 ? "" : "s"
-              }.`
-            : `${successful} successful, ${failed} failed. Batch: ${
-                result?.batchReference || "N/A"
-              }`,
-      });
-
-      if (failed === 0) {
-        setBulkInput("");
-        setBulkPhones([]);
+      if (pending > 0) {
+        setMessage({
+          type: "error",
+          text: `${successful} successful, ${pending} pending, ${failed} failed. Batch: ${
+            result?.batchReference || "N/A"
+          }. Retry the same batch to check its status.`,
+        });
+        return;
       }
+
+      if (failed > 0) {
+        const failedPhones = Array.isArray(result?.results)
+          ? result.results
+              .filter(
+                (item: any) =>
+                  String(item?.status || "").toUpperCase() === "FAILED"
+              )
+              .map((item: any) => String(item?.phone || "").trim())
+              .filter((item: string) => item.length === 11)
+          : [];
+
+        if (failedPhones.length > 0) {
+          setBulkPhones(failedPhones);
+          setBulkInput(failedPhones.join("\n"));
+
+          const retryFingerprint = `${network.toLowerCase()}|${value}|${failedPhones.join(",")}`;
+          const retryStorageKey = `abupay-bulk-airtime-request:${retryFingerprint}`;
+          const retryRequestId = crypto.randomUUID();
+
+          sessionStorage.setItem(
+            retryStorageKey,
+            JSON.stringify({
+              fingerprint: retryFingerprint,
+              requestId: retryRequestId,
+            })
+          );
+
+          // Do not remove the key if every recipient failed,
+          // because the retry fingerprint will be identical.
+          if (retryStorageKey !== storageKey) {
+            sessionStorage.removeItem(storageKey);
+          }
+        }
+
+        setMessage({
+          type: "error",
+          text:
+            failedPhones.length === 1
+              ? `${successful} successful, 1 failed. Only the failed number remains. Use single Airtime purchase to retry it. Batch: ${
+                  result?.batchReference || "N/A"
+                }`
+              : `${successful} successful, ${failed} failed. Only failed recipients remain for a new attempt. Review the recipient list before retrying. Batch: ${
+                  result?.batchReference || "N/A"
+                }`,
+        });
+        return;
+      }
+
+      sessionStorage.removeItem(storageKey);
+      setBulkInput("");
+      setBulkPhones([]);
+
+      setMessage({
+        type: "success",
+        text: `Airtime sent successfully to ${successful} recipient${
+          successful === 1 ? "" : "s"
+        }.`,
+      });
     } catch (error: any) {
       setMessage({
         type: "error",
         text:
           error?.response?.data?.message ||
-          "Bulk airtime purchase failed. Please try again.",
+          "Bulk Airtime result could not be confirmed. Retry the same batch to check its status.",
       });
     } finally {
       setLoading(false);
     }
   };
+
+
   const handlePurchase = () => {
     if (!phone || phone.length < 11) {
       setMessage({
@@ -231,7 +323,6 @@ export default function AirtimePage() {
   };
 
   const confirmPurchase = async () => {
-
     if (!phone || phone.length < 11) {
       setMessage({
         type: "error",
@@ -248,26 +339,49 @@ export default function AirtimePage() {
       return;
     }
 
+    const value = Number(amount);
+
+    // Create a stable key for this exact purchase.
+    // It is declared outside try so catch can also access it.
+    const requestFingerprint =
+      `${network.toLowerCase()}-${phone}-${value}`;
+
+    const storageKey =
+      `abupay-airtime-request-${requestFingerprint}`;
+
     try {
       setLoading(true);
       setMessage(null);
 
-      const value = Number(amount);
+      // Reuse the same request ID when the same purchase
+      // is retried, including after a page refresh.
+      let requestId = sessionStorage.getItem(storageKey);
+
+      if (!requestId) {
+        requestId = crypto.randomUUID();
+        sessionStorage.setItem(storageKey, requestId);
+      }
 
       const result = await buyAirtime({
         network,
         phone,
         amount: value,
+        requestId,
       });
 
       if (result.success) {
+        // A confirmed successful purchase is complete.
+        // Remove the key so a future intentional purchase
+        // receives a new request ID.
+        sessionStorage.removeItem(storageKey);
+
         const ref =
-  result.transaction?.reference ||
-  result.transaction?._id ||
-  result.transaction?.id ||
-  result.providerResponse?.request_id ||
-  result.providerResponse?.data?.request_id ||
-  `AIR-${Date.now()}`;
+          result.transaction?.reference ||
+          result.transaction?._id ||
+          result.transaction?.id ||
+          result.providerResponse?.request_id ||
+          result.providerResponse?.data?.request_id ||
+          `AIR-${Date.now()}`;
 
         const balanceBefore = Number(
           result.balanceBefore ??
@@ -300,26 +414,41 @@ export default function AirtimePage() {
 
         setPhone("");
         setAmount("");
+      } else if (result.status === "PENDING") {
+        // Keep the request ID. The user must not create
+        // a different request while this one is unresolved.
+        setMessage({
+          type: "error",
+          text:
+            "Your airtime purchase is being verified. Do not submit another purchase for this same request. Please check your transaction status.",
+        });
       } else {
         setMessage({
           type: "error",
           text:
             result.message ||
-            "Purchase failed. Please try again.",
+            "Purchase could not be confirmed. Please check your transaction history.",
         });
       }
     } catch (error: any) {
+      // HTTP 400 represents a rejected request or a
+      // confirmed failure handled by the backend.
+      // Keep the ID for other errors because the provider
+      // outcome may still need verification.
+      if (error?.response?.status === 400) {
+        sessionStorage.removeItem(storageKey);
+      }
+
       setMessage({
         type: "error",
         text:
           error?.response?.data?.message ||
-          "Something went wrong. Please try again.",
+          "Something went wrong. Please check your transaction history before trying again.",
       });
     } finally {
       setLoading(false);
     }
   };
-
 
   const downloadPdf = async (tx: ReceiptData) => {
     const doc = new jsPDF();
@@ -672,6 +801,7 @@ Powered by Abu Niematullah Ventures`;
                   ? "Use single recipient"
                   : "+ Add multiple recipients"}
               </button>
+
               {bulkMode && (
                 <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
                   <label className="mb-2 block text-sm font-semibold text-gray-700">
@@ -735,6 +865,7 @@ Powered by Abu Niematullah Ventures`;
                   )}
                 </div>
               )}
+
               {/* QUICK AMOUNT */}
               <div>
                 <label className="mb-3 block text-sm font-semibold text-gray-700">
@@ -867,7 +998,10 @@ Powered by Abu Niematullah Ventures`;
       {showPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-3">
           <div className="my-auto w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
-            <h2 className="text-xl font-bold text-gray-900">Review Airtime Purchase</h2>
+            <h2 className="text-xl font-bold text-gray-900">
+              Review Airtime Purchase
+            </h2>
+
             <p className="mt-1 text-sm text-gray-500">
               Confirm the details before paying.
             </p>
@@ -875,16 +1009,23 @@ Powered by Abu Niematullah Ventures`;
             <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4 text-sm">
               <div className="flex justify-between gap-3">
                 <span className="text-gray-500">Network</span>
-                <strong className="uppercase text-gray-900">{network}</strong>
+                <strong className="uppercase text-gray-900">
+                  {network}
+                </strong>
               </div>
 
               <div className="flex justify-between gap-3">
                 <span className="text-gray-500">Purchase type</span>
-                <strong className="text-gray-900">{bulkMode ? "Bulk airtime" : "Single airtime"}</strong>
+                <strong className="text-gray-900">
+                  {bulkMode ? "Bulk airtime" : "Single airtime"}
+                </strong>
               </div>
 
               <div className="flex justify-between gap-3">
-                <span className="text-gray-500">Amount per recipient</span>
+                <span className="text-gray-500">
+                  Amount per recipient
+                </span>
+
                 <strong className="text-gray-900">
                   {formatMoney(Number(amount))}
                 </strong>
@@ -893,14 +1034,25 @@ Powered by Abu Niematullah Ventures`;
               {bulkMode ? (
                 <>
                   <div className="flex justify-between gap-3">
-                    <span className="text-gray-500">Recipients</span>
-                    <strong className="text-gray-900">{bulkPhones.length}</strong>
+                    <span className="text-gray-500">
+                      Recipients
+                    </span>
+
+                    <strong className="text-gray-900">
+                      {bulkPhones.length}
+                    </strong>
                   </div>
 
                   <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white p-3">
-                    <p className="mb-2 font-semibold text-gray-700">Recipient numbers</p>
+                    <p className="mb-2 font-semibold text-gray-700">
+                      Recipient numbers
+                    </p>
+
                     {bulkPhones.map((item, index) => (
-                      <div key={`${item}-${index}`} className="py-1 text-gray-700">
+                      <div
+                        key={`${item}-${index}`}
+                        className="py-1 text-gray-700"
+                      >
                         {index + 1}. {item}
                       </div>
                     ))}
@@ -908,15 +1060,26 @@ Powered by Abu Niematullah Ventures`;
                 </>
               ) : (
                 <div className="flex justify-between gap-3">
-                  <span className="text-gray-500">Phone number</span>
-                  <strong className="text-gray-900">{phone}</strong>
+                  <span className="text-gray-500">
+                    Phone number
+                  </span>
+
+                  <strong className="text-gray-900">
+                    {phone}
+                  </strong>
                 </div>
               )}
 
               <div className="flex justify-between border-t border-gray-200 pt-3 text-base">
-                <strong className="text-gray-900">Total charge</strong>
+                <strong className="text-gray-900">
+                  Total charge
+                </strong>
+
                 <strong className="text-emerald-700">
-                  {formatMoney(Number(amount) * (bulkMode ? bulkPhones.length : 1))}
+                  {formatMoney(
+                    Number(amount) *
+                      (bulkMode ? bulkPhones.length : 1)
+                  )}
                 </strong>
               </div>
             </div>
@@ -936,6 +1099,7 @@ Powered by Abu Niematullah Ventures`;
                 disabled={loading}
                 onClick={() => {
                   setShowPreview(false);
+
                   if (bulkMode) {
                     void handleBulkPurchase();
                   } else {

@@ -1,4 +1,4 @@
-
+﻿
 import { Response, NextFunction } from "express";
 import { purchaseAirtime } from "../services/airtime.service";
 import AppError from "../utils/AppError";
@@ -11,7 +11,13 @@ export const buyAirtime = async (
 ) => {
   try {
     const userId = req.user?.id;
-    const { network, phone, amount } = req.body;
+
+    const {
+      network,
+      phone,
+      amount,
+      requestId,
+    } = req.body;
 
     if (!userId) {
       return next(new AppError("Unauthorized", 401));
@@ -34,8 +40,13 @@ export const buyAirtime = async (
 
     const numericAmount = Number(amount);
 
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      return next(new AppError("Invalid airtime amount", 400));
+    if (
+      !Number.isFinite(numericAmount) ||
+      numericAmount <= 0
+    ) {
+      return next(
+        new AppError("Invalid airtime amount", 400)
+      );
     }
 
     const result = await purchaseAirtime({
@@ -43,13 +54,23 @@ export const buyAirtime = async (
       network,
       phone,
       amount: numericAmount,
+      requestId,
     });
 
-    if (!result.success) {
-      return res.status(400).json(result);
+    // Pending or uncertain provider response.
+    // Do not report this as a confirmed failure.
+    if (result.status === "PENDING") {
+      return res.status(202).json(result);
     }
 
-    return res.status(200).json(result);
+    // Successful purchase.
+    if (result.success) {
+      return res.status(200).json(result);
+    }
+
+    // Any other unsuccessful result.
+    return res.status(400).json(result);
+
   } catch (error) {
     return next(error);
   }

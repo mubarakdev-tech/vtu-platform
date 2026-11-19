@@ -1,4 +1,4 @@
-// ==========================================
+﻿// ==========================================
 // ABUPAY PROVIDER INTERFACE
 // ==========================================
 
@@ -7,6 +7,7 @@ export interface AirtimePurchaseRequest {
   phone: string;
   amount: number;
   provider: string;
+  requestId?: string;
 }
 
 export interface DataPurchaseRequest {

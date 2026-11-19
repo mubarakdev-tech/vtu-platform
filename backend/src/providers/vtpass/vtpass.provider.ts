@@ -1,4 +1,8 @@
-import vtpassClient from "./vtpass.client";
+﻿import vtpassClient from "./vtpass.client";
+import type {
+  AirtimePurchaseRequest,
+  ProviderResponse,
+} from "../provider.interface";
 
 const dataServiceMap: Record<string, string> = {
   mtn: "mtn-data",
@@ -18,119 +22,158 @@ const airtimeServiceMap: Record<string, string> = {
 
 const generateRequestId = () => {
   const date = new Date();
-
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
-
-  const rand = Math.floor(Math.random() * 1e8);
+  const rand = Math.floor(Math.random() * 1e8)
+    .toString()
+    .padStart(8, "0");
 
   return `${y}${m}${d}${rand}`;
+};
+
+const classifyAirtimeResponse = (
+  data: any,
+  requestId: string
+): ProviderResponse => {
+  const code = String(data?.code || "").trim();
+  const transactionStatus = String(
+    data?.content?.transactions?.status || ""
+  ).trim().toLowerCase();
+
+  const description =
+    data?.response_description ||
+    data?.message ||
+    "VTpass airtime transaction status";
+
+  const successfulStatuses = [
+    "delivered",
+    "successful",
+    "completed",
+  ];
+
+  const failedStatuses = [
+    "failed",
+    "failure",
+    "rejected",
+    "declined",
+  ];
+
+  const success =
+    successfulStatuses.includes(transactionStatus);
+
+  const failure =
+    failedStatuses.includes(transactionStatus) ||
+    code === "016" ||
+    code === "091";
+
+  const providerCost = Number(
+    data?.content?.transactions?.total_amount
+  );
+
+  if (success) {
+    return {
+      success: true,
+      status: "SUCCESS",
+      uncertain: false,
+      message: String(description),
+      data,
+      provider: "vtpass",
+      request_id: requestId,
+      providerStatus: transactionStatus,
+      providerCost:
+        Number.isFinite(providerCost) && providerCost >= 0
+          ? providerCost
+          : undefined,
+    };
+  }
+
+  if (failure) {
+    return {
+      success: false,
+      status: "FAILED",
+      uncertain: false,
+      message: String(description),
+      data,
+      provider: "vtpass",
+      request_id: requestId,
+      providerStatus: transactionStatus || code,
+    };
+  }
+
+  return {
+    success: false,
+    status: "UNCERTAIN",
+    uncertain: true,
+    retryable: false,
+    message: String(description),
+    data,
+    provider: "vtpass",
+    request_id: requestId,
+    providerStatus: transactionStatus || code || "UNKNOWN",
+  };
 };
 
 // =====================================================
 // GET DATA PLANS
 // =====================================================
 
-export const getDataPlans = async (
-  network: string
-) => {
-  const serviceID =
-    dataServiceMap[
-      network.toLowerCase()
-    ];
+export const getDataPlans = async (network: string) => {
+  const serviceID = dataServiceMap[network.toLowerCase()];
 
   if (!serviceID) {
-    throw new Error(
-      "Unsupported network"
-    );
+    throw new Error("Unsupported network");
   }
 
-  console.log(
-    "========== VTPASS GET DATA PLANS =========="
-  );
+  console.log("========== VTPASS GET DATA PLANS ==========");
+  console.log("Network:", network);
+  console.log("Service ID:", serviceID);
 
-  console.log(
-    "Network:",
-    network
+  const response = await vtpassClient.get(
+    "/service-variations",
+    {
+      params: { serviceID },
+    }
   );
-
-  console.log(
-    "Service ID:",
-    serviceID
-  );
-
-  const response =
-    await vtpassClient.get(
-      "/service-variations",
-      {
-        params: {
-          serviceID,
-        },
-      }
-    );
 
   console.log(
     "VTPASS PLANS RAW:",
-    JSON.stringify(
-      response.data,
-      null,
-      2
-    )
+    JSON.stringify(response.data, null, 2)
   );
 
   const variations =
-    response.data?.content
-      ?.varations ||
-    response.data?.content
-      ?.variations ||
+    response.data?.content?.varations ||
+    response.data?.content?.variations ||
     [];
 
   const plans = (
-    Array.isArray(
-      variations
-    )
-      ? variations
-      : []
+    Array.isArray(variations) ? variations : []
   )
-    .map(
-      (item: any) => ({
-        name:
-          item.name ||
-          item.variation_name ||
-          "Data Plan",
-
-        variation_code:
-          String(
-            item.variation_code ||
-              item.code ||
-              ""
-          ),
-
-        amount:
-          Number(
-            item.variation_amount ||
-              item.amount ||
-              0
-          ),
-      })
-    )
+    .map((item: any) => ({
+      name:
+        item.name ||
+        item.variation_name ||
+        "Data Plan",
+      variation_code: String(
+        item.variation_code || item.code || ""
+      ),
+      amount: Number(
+        item.variation_amount || item.amount || 0
+      ),
+    }))
     .filter(
-      (p: any) =>
-        p.variation_code &&
-        p.amount > 0
+      (plan: any) =>
+        plan.variation_code && plan.amount > 0
     );
 
-  console.log(
-    "VTPASS PLANS COUNT:",
-    plans.length
-  );
+  console.log("VTPASS PLANS COUNT:", plans.length);
 
   return plans;
 };
 
 // =====================================================
 // BUY DATA
+// Existing data purchase behaviour preserved.
 // =====================================================
 
 export const buyData = async ({
@@ -144,50 +187,34 @@ export const buyData = async ({
   plan: string;
   amount: number;
 }) => {
-  const serviceID =
-    dataServiceMap[
-      network.toLowerCase()
-    ];
+  const serviceID = dataServiceMap[network.toLowerCase()];
 
   if (!serviceID) {
     return {
       success: false,
-      message:
-        "Unsupported network",
+      message: "Unsupported network",
       provider: "vtpass",
       request_id: undefined,
     };
   }
 
-  const request_id =
-    generateRequestId();
+  const request_id = generateRequestId();
 
   const payload = {
     request_id,
-
     serviceID,
-
-    billersCode:
-      phone.trim(),
-
-    variation_code:
-      plan,
-
-    amount:
-      Number(amount),
-
-    phone:
-      phone.trim(),
+    billersCode: phone.trim(),
+    variation_code: plan,
+    amount: Number(amount),
+    phone: phone.trim(),
   };
 
-  const response =
-    await vtpassClient.post(
-      "/pay",
-      payload
-    );
+  const response = await vtpassClient.post(
+    "/pay",
+    payload
+  );
 
-  const data =
-    response.data;
+  const data = response.data;
 
   const success =
     data?.code === "000" ||
@@ -196,102 +223,100 @@ export const buyData = async ({
 
   return {
     success,
-
     message:
       data?.response_description ||
       data?.message ||
       "Data purchase",
-
     data,
-
-    provider:
-      "vtpass",
-
+    provider: "vtpass",
     request_id,
   };
 };
 
 // =====================================================
 // BUY AIRTIME
+// Uses the request ID already persisted by AbuPay.
 // =====================================================
 
-export const buyAirtime = async ({
-  network,
-  phone,
-  amount,
-}: {
-  network: string;
-  phone: string;
-  amount: number;
-}) => {
+export const buyAirtime = async (
+  request: AirtimePurchaseRequest
+): Promise<ProviderResponse> => {
+  const { network, phone, amount } = request;
+
   const serviceID =
-    airtimeServiceMap[
-      network.toLowerCase()
-    ];
+    airtimeServiceMap[network.toLowerCase()];
 
   if (!serviceID) {
     return {
       success: false,
-      message:
-        "Unsupported network",
+      status: "FAILED",
+      uncertain: false,
+      message: "Unsupported network",
       provider: "vtpass",
     };
   }
 
   const request_id =
-    generateRequestId();
+    request.requestId || generateRequestId();
 
   const payload = {
     request_id,
-
     serviceID,
-
-    amount:
-      Number(amount),
-
-    phone:
-      phone.trim(),
+    amount: Number(amount),
+    phone: phone.trim(),
   };
 
-  const response =
-    await vtpassClient.post(
-      "/pay",
-      payload
-    );
+  const response = await vtpassClient.post(
+    "/pay",
+    payload
+  );
 
-  const data =
-    response.data;
-
-  const success =
-    data?.code === "000" ||
-    data?.response_description ===
-      "TRANSACTION SUCCESSFUL";
-
-  return {
-    success,
-
-    message:
-      data?.response_description ||
-      data?.message ||
-      "Airtime purchase",
-
-    data,
-
-    provider:
-      "vtpass",
-
-    request_id,
-
-    providerCost:
-      success && Number.isFinite(Number(data?.content?.transactions?.total_amount))
-        ? Number(data.content.transactions.total_amount)
-        : undefined,
-  };
+  return classifyAirtimeResponse(
+    response.data,
+    request_id
+  );
 };
 
 // =====================================================
-// VTPASS PROVIDER
+// REQUERY ORIGINAL VTPASS TRANSACTION
+// Never submits another /pay request.
 // =====================================================
+
+export const checkTransactionStatus = async (
+  requestId: string
+): Promise<ProviderResponse> => {
+  try {
+    const response = await vtpassClient.post(
+      "/requery",
+      {
+        request_id: requestId,
+      }
+    );
+
+    return classifyAirtimeResponse(
+      response.data,
+      requestId
+    );
+  } catch (error: any) {
+    console.error(
+      "VTPASS REQUERY ERROR:",
+      error?.response?.data ||
+        error?.message ||
+        error
+    );
+
+    return {
+      success: false,
+      status: "UNCERTAIN",
+      uncertain: true,
+      retryable: false,
+      message:
+        "VTpass transaction status could not be confirmed. The transaction remains pending.",
+      provider: "vtpass",
+      request_id: requestId,
+    };
+  }
+};
 
 // =====================================================
 // GET VTPASS WALLET BALANCE
@@ -300,7 +325,8 @@ export const buyAirtime = async ({
 export const getBalance = async () => {
   try {
     const response = await vtpassClient.get("/balance");
-    const rawBalance = response.data?.contents?.balance;
+    const rawBalance =
+      response.data?.contents?.balance;
 
     const hasNumericType =
       typeof rawBalance === "number" ||
@@ -308,15 +334,21 @@ export const getBalance = async () => {
 
     const hasValidBalance =
       hasNumericType &&
-      !(typeof rawBalance === "string" && rawBalance.trim() === "") &&
+      !(
+        typeof rawBalance === "string" &&
+        rawBalance.trim() === ""
+      ) &&
       Number.isFinite(Number(rawBalance));
 
-    const balance = hasValidBalance ? Number(rawBalance) : null;
+    const balance = hasValidBalance
+      ? Number(rawBalance)
+      : null;
 
     if (balance === null) {
       return {
         success: false,
-        message: "VTpass returned an invalid wallet balance",
+        message:
+          "VTpass returned an invalid wallet balance",
         provider: "vtpass",
       };
     }
@@ -329,12 +361,15 @@ export const getBalance = async () => {
   } catch (error: any) {
     console.error(
       "VTPASS BALANCE ERROR:",
-      error?.response?.data || error?.message || error
+      error?.response?.data ||
+        error?.message ||
+        error
     );
 
     return {
       success: false,
-      message: "Unable to retrieve VTpass wallet balance",
+      message:
+        "Unable to retrieve VTpass wallet balance",
       provider: "vtpass",
     };
   }
@@ -342,12 +377,9 @@ export const getBalance = async () => {
 
 export const vtpassProvider = {
   key: "vtpass",
-
   getDataPlans,
-
   buyData,
-
   buyAirtime,
-
+  checkTransactionStatus,
   getBalance,
 };

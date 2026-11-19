@@ -83,12 +83,49 @@ const createBulkDataRecipientRequestId = (
   ].join("-");
 };
 
+/**
+ * Creates a deterministic UUID for one recipient in a bulk Airtime batch.
+ * Repeating the same batch request with the same recipient order and
+ * details produces the same recipient request IDs.
+ */
+const createBulkAirtimeRecipientRequestId = (
+  batchRequestId: string,
+  index: number,
+  network: string,
+  phone: string,
+  amount: number
+): string => {
+  const hash = createHash("sha256")
+    .update(
+      `${batchRequestId.toLowerCase()}:${index}:${network}:${phone}:${amount}`
+    )
+    .digest("hex")
+    .slice(0, 32)
+    .split("");
+
+  // Set UUID version 5 and RFC 4122 variant bits.
+  hash[12] = "5";
+  hash[16] = (parseInt(hash[16], 16) & 0x3 | 0x8).toString(16);
+
+  const value = hash.join("");
+
+  return [
+    value.slice(0, 8),
+    value.slice(8, 12),
+    value.slice(12, 16),
+    value.slice(16, 20),
+    value.slice(20, 32),
+  ].join("-");
+};
+
 export const purchaseBulkAirtime = async ({
   userId,
   recipients,
+  requestId,
 }: {
   userId: string;
   recipients: BulkAirtimeRecipient[];
+  requestId: string;
 }) => {
   if (!userId) {
     throw new AppError("Unauthorized", 401);
@@ -100,11 +137,17 @@ export const purchaseBulkAirtime = async ({
 
   validateRecipientCount(recipients);
 
-  const batchReference =
-    `BULK-AIRTIME-${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 8)
-      .toUpperCase()}`;
+  if (!isValidRequestId(requestId)) {
+    throw new AppError(
+      "A valid bulk Airtime request ID is required.",
+      400
+    );
+  }
+
+  const normalizedRequestId = requestId.toLowerCase();
+
+  // Stable across retries of this batch.
+  const batchReference = `BULK-AIRTIME-${normalizedRequestId}`;
 
   const results: BulkRecipientResult[] = [];
 
@@ -129,23 +172,40 @@ export const purchaseBulkAirtime = async ({
           index,
           phone,
           success: false,
+          status: "FAILED",
           message: "Invalid airtime recipient details.",
         });
+
         continue;
       }
+
+      const recipientRequestId =
+        createBulkAirtimeRecipientRequestId(
+          normalizedRequestId,
+          index,
+          network,
+          phone,
+          amount
+        );
 
       const result: any = await purchaseAirtime({
         userId,
         network,
         phone,
         amount,
+        requestId: recipientRequestId,
         batchReference,
       });
+
+      const status =
+        result?.status ||
+        (result?.success ? "SUCCESS" : "FAILED");
 
       results.push({
         index,
         phone,
         success: Boolean(result?.success),
+        status,
         message:
           result?.message ||
           (result?.success
@@ -157,6 +217,7 @@ export const purchaseBulkAirtime = async ({
         index,
         phone: String(recipient?.phone || "").trim(),
         success: false,
+        status: "FAILED",
         message:
           error?.message || "Airtime purchase failed.",
       });
@@ -167,14 +228,25 @@ export const purchaseBulkAirtime = async ({
     (item) => item.success
   ).length;
 
+  const pending = results.filter(
+    (item) => item.status === "PENDING"
+  ).length;
+
+  const failed = results.filter(
+    (item) =>
+      !item.success && item.status !== "PENDING"
+  ).length;
+
   return {
     success: successful === results.length,
     batchReference,
+    requestId: normalizedRequestId,
     partialSuccess:
       successful > 0 && successful < results.length,
     total: results.length,
     successful,
-    failed: results.length - successful,
+    pending,
+    failed,
     results,
   };
 };

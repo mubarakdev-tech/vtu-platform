@@ -14,6 +14,7 @@ import airtimeRoutes from "./routes/airtime.routes";
 import transactionRoutes from "./routes/transaction.routes";
 import adminTransactionRoutes from "./routes/admin-transaction.routes";
 import adminProviderRoutes from "./routes/admin-provider.routes";
+import adminAirtimePricingRoutes from "./routes/admin-airtime-pricing.routes";
 import adminCustomerRoutes from "./routes/admin-customer.routes";
 import dataRoutes from "./routes/data.routes";
 import bulkPurchaseRoutes from "./routes/bulk-purchase.routes";
@@ -222,6 +223,7 @@ app.use("/api/transactions", transactionRoutes);
 
 app.use("/api/admin/transactions", adminTransactionRoutes);
 app.use("/api/admin/providers", adminProviderRoutes);
+app.use("/api/admin/airtime-pricing", adminAirtimePricingRoutes);
 app.use("/api/admin/customers", adminCustomerRoutes);
 
 // =====================================================

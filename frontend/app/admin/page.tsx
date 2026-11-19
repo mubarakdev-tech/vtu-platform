@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useState } from "react";
 import { formatMoney as formatNaira } from "@/lib/format-money";
@@ -41,6 +41,18 @@ interface AdminProvider {
   activeForAirtime: boolean;
   activeForData: boolean;
 }
+type AirtimeNetwork = "mtn" | "airtel" | "glo" | "9mobile";
+
+interface AdminAirtimePricingProvider {
+  key: string;
+  displayName: string;
+  active: boolean;
+  supportsAirtime: boolean;
+  discountRates: Record<AirtimeNetwork, number | null>;
+  configured: boolean;
+}
+
+type AirtimePricingDraft = Record<AirtimeNetwork, string>;
 
 interface ProviderWalletBalance {
   key: string;
@@ -143,6 +155,7 @@ interface AdminTransaction {
     purchaseStatus?: string;
     providerResponse?: { success?: boolean };
     refundProcessed?: boolean;
+    isTest?: boolean;
   };
 }
 
@@ -395,6 +408,15 @@ export default function Home() {
   const [adminProvidersSaving, setAdminProvidersSaving] = useState<string | null>(null);
   const [adminProvidersError, setAdminProvidersError] = useState("");
   const [adminProvidersMessage, setAdminProvidersMessage] = useState("");
+// Airtime provider discount configuration
+const [airtimePricingProviders, setAirtimePricingProviders] =
+  useState<AdminAirtimePricingProvider[]>([]);
+const [airtimePricingDrafts, setAirtimePricingDrafts] =
+  useState<Record<string, AirtimePricingDraft>>({});
+const [airtimePricingLoading, setAirtimePricingLoading] = useState(false);
+const [airtimePricingSaving, setAirtimePricingSaving] = useState<string | null>(null);
+const [airtimePricingError, setAirtimePricingError] = useState("");
+const [airtimePricingMessage, setAirtimePricingMessage] = useState("");
 
   // Provider mapping
   const [pricingProviders, setPricingProviders] = useState<DataPricingProvider[]>([]);
@@ -457,6 +479,14 @@ export default function Home() {
   const [transactionType, setTransactionType] = useState("");
   const [transactionFrom, setTransactionFrom] = useState("");
   const [transactionTo, setTransactionTo] = useState("");
+
+  // Phase 3: Reports and Analytics
+  const [reportFrom, setReportFrom] = useState("");
+  const [reportTo, setReportTo] = useState("");
+  const [reportFinancialData, setReportFinancialData] = useState<FinancialData | null>(null);
+  const [reportTransactions, setReportTransactions] = useState<AdminTransaction[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsError, setReportsError] = useState("");
   const [refundingTransactionId, setRefundingTransactionId] = useState("");
 
   // Financial Ledger
@@ -539,7 +569,131 @@ export default function Home() {
     }
   };
 
+// Load saved Airtime discounts for every configured provider.
+const loadAdminAirtimePricing = async () => {
+  try {
+    setAirtimePricingLoading(true);
+    setAirtimePricingError("");
 
+    const response = await fetch(`${API_URL}/admin/airtime-pricing`, {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || "Unable to load Airtime pricing.");
+    }
+
+    const providers: AdminAirtimePricingProvider[] =
+      Array.isArray(result.data) ? result.data : [];
+
+    const drafts: Record<string, AirtimePricingDraft> = {};
+
+    providers.forEach((provider) => {
+      drafts[provider.key] = {
+        mtn: provider.discountRates?.mtn == null
+          ? ""
+          : String(provider.discountRates.mtn),
+        airtel: provider.discountRates?.airtel == null
+          ? ""
+          : String(provider.discountRates.airtel),
+        glo: provider.discountRates?.glo == null
+          ? ""
+          : String(provider.discountRates.glo),
+        "9mobile": provider.discountRates?.["9mobile"] == null
+          ? ""
+          : String(provider.discountRates["9mobile"]),
+      };
+    });
+
+    setAirtimePricingProviders(providers);
+    setAirtimePricingDrafts(drafts);
+  } catch (err) {
+    console.error("Airtime pricing load error:", err);
+    setAirtimePricingError(
+      err instanceof Error ? err.message : "Unable to load Airtime pricing."
+    );
+  } finally {
+    setAirtimePricingLoading(false);
+  }
+};
+
+// Save discount settings independently for the selected provider.
+const saveAdminAirtimePricing = async (providerKey: string) => {
+  try {
+    const draft = airtimePricingDrafts[providerKey];
+
+    if (!draft) {
+      throw new Error("No Airtime pricing values are available to save.");
+    }
+
+    const networks: AirtimeNetwork[] = [
+      "mtn",
+      "airtel",
+      "glo",
+      "9mobile",
+    ];
+
+    const discountRates: Record<string, number | null> = {};
+
+    for (const network of networks) {
+      const rawValue = draft[network].trim();
+
+      if (rawValue === "") {
+        discountRates[network] = null;
+        continue;
+      }
+
+      const value = Number(rawValue);
+
+      if (!Number.isFinite(value) || value < 0 || value > 100) {
+        throw new Error(
+          `${network.toUpperCase()} discount must be between 0 and 100.`
+        );
+      }
+
+      discountRates[network] = value;
+    }
+
+    setAirtimePricingSaving(providerKey);
+    setAirtimePricingError("");
+    setAirtimePricingMessage("");
+
+    const response = await fetch(
+      `${API_URL}/admin/airtime-pricing/${encodeURIComponent(providerKey)}`,
+      {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ discountRates }),
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || "Unable to save Airtime pricing.");
+    }
+
+    setAirtimePricingMessage(
+      `${providerKey} Airtime discount settings saved successfully.`
+    );
+
+    await loadAdminAirtimePricing();
+  } catch (err) {
+    console.error("Airtime pricing save error:", err);
+    setAirtimePricingError(
+      err instanceof Error ? err.message : "Unable to save Airtime pricing."
+    );
+  } finally {
+    setAirtimePricingSaving(null);
+  }
+};
   // Change the active provider route for Airtime or Data.
   const setActiveAdminProvider = async (
     providerKey: string,
@@ -769,6 +923,185 @@ export default function Home() {
     }
   };
 
+  // Phase 3: Load date-filtered financial reports and all transaction pages
+  const loadReports = async () => {
+    setReportsLoading(true);
+    setReportsError("");
+
+    try {
+      const dateParams = new URLSearchParams();
+
+      if (reportFrom) dateParams.set("from", reportFrom);
+      if (reportTo) dateParams.set("to", reportTo);
+
+      const financialUrl =
+        `${API_URL}/financial-ledger/summary` +
+        (dateParams.toString() ? `?${dateParams.toString()}` : "");
+
+      const financialResponse = await fetch(financialUrl, {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      const financialResult = await financialResponse.json();
+
+      if (!financialResponse.ok || !financialResult.success) {
+        throw new Error(
+          financialResult.message || "Unable to load financial report."
+        );
+      }
+
+      setReportFinancialData(normalizeFinancialData(financialResult.data));
+
+      const allTransactions: AdminTransaction[] = [];
+      let pageNumber = 1;
+      let totalPages = 1;
+
+      do {
+        const params = new URLSearchParams({
+          page: String(pageNumber),
+          limit: "100",
+        });
+
+        if (reportFrom) params.set("from", reportFrom);
+        if (reportTo) params.set("to", reportTo);
+
+        const response = await fetch(
+          `${API_URL}/admin/transactions?${params.toString()}`,
+          {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+          }
+        );
+
+        const result: AdminTransactionsResponse = await response.json();
+
+        if (!response.ok || !result.transactions) {
+          throw new Error(
+            result.message || "Unable to load transaction analytics."
+          );
+        }
+
+        allTransactions.push(...result.transactions);
+        totalPages = Math.max(1, Number(result.totalPages || 1));
+        pageNumber += 1;
+      } while (pageNumber <= totalPages);
+
+      setReportTransactions(allTransactions);
+    } catch (err) {
+      console.error("Reports loading error:", err);
+      setReportsError(
+        err instanceof Error ? err.message : "Unable to load reports."
+      );
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+  // Phase 3: Exclude test records and historical Airtime test purchases
+  const reportTransactionsForAnalytics = reportTransactions.filter(
+    (transaction) =>
+      transaction.category !== "AIRTIME" &&
+      transaction.metadata?.isTest !== true
+  );
+
+  const reportStats = reportTransactionsForAnalytics.reduce(
+    (stats, transaction) => {
+      const status = String(transaction.status || "").toUpperCase();
+      const isRefunded =
+        status === "REFUNDED" ||
+        transaction.category === "REFUND" ||
+        transaction.metadata?.refundProcessed === true;
+
+      if (isRefunded) {
+        stats.refunded += 1;
+      } else if (status === "SUCCESS") {
+        stats.successful += 1;
+      } else if (status === "PENDING" || status === "PROCESSING") {
+        stats.pending += 1;
+      } else if (status === "FAILED") {
+        stats.failed += 1;
+      }
+
+      return stats;
+    },
+    { successful: 0, failed: 0, pending: 0, refunded: 0 }
+  );
+
+  const exportReportsCsv = () => {
+    const financial = reportFinancialData;
+
+    if (!financial) {
+      setReportsError("Load the report before exporting.");
+      return;
+    }
+
+    const csvCell = (value: unknown) =>
+      `"${String(value ?? "").replace(/"/g, '""')}"`;
+
+    const rows: unknown[][] = [
+      ["AbuPay Reports & Analytics"],
+      ["Period", reportFrom || "All available dates", reportTo || "Present"],
+      [],
+      ["Financial Summary", "Amount (NGN)"],
+      ["Airtime Revenue", financial.airtime.revenue],
+      ["Data Revenue", financial.data.revenue],
+      ["Total Revenue", financial.revenue.total],
+      ["Provider Costs", financial.providerCosts.total],
+      ["Paystack Fees", financial.paystackFees.total],
+      ["Total Expenses", financial.expenses.total],
+      ["Recorded Financial Result", financial.recordedFinancialResult],
+      [
+        "Confirmed Gross Profit",
+        financial.grossProfit === null
+          ? "Not fully verified"
+          : financial.grossProfit,
+      ],
+      [],
+      ["Transaction Status", "Count"],
+      ["Successful", reportStats.successful],
+      ["Failed", reportStats.failed],
+      ["Pending / Processing", reportStats.pending],
+      ["Refunded", reportStats.refunded],
+      [],
+      [
+        "Date",
+        "Reference",
+        "Category",
+        "Type",
+        "Status",
+        "Amount (NGN)",
+        "Gateway",
+      ],
+    ];
+
+    reportTransactionsForAnalytics.forEach((transaction) => {
+      rows.push([
+        transaction.createdAt,
+        transaction.reference,
+        transaction.category,
+        transaction.type,
+        transaction.status,
+        transaction.amount,
+        transaction.gateway || "",
+      ]);
+    });
+
+    const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob(["\uFEFF" + csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `abupay-report-${reportFrom || "all"}-${reportTo || "present"}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
   // Financial data
   const loadFinancialData = async () => {
     try {
@@ -1661,6 +1994,7 @@ export default function Home() {
           loadAnnouncements(),
           loadDataPricing(),
           loadAdminProviders(),
+          loadAdminAirtimePricing(),
           loadProviderWalletFunds(),
           loadAdminCustomers(1),
           loadAdminTransactions(1),
@@ -1703,6 +2037,7 @@ export default function Home() {
         loadAnnouncements(),
         loadDataPricing(),
         loadAdminProviders(),
+        loadAdminAirtimePricing(),
         loadProviderWalletFunds(),
         loadAdminCustomers(1),
         loadAdminTransactions(1),
@@ -1834,6 +2169,7 @@ export default function Home() {
         <nav aria-label="Admin sections" className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
           {[
             ["admin-financial-overview", "Financial Overview"],
+            ["admin-reports", "Reports & Analytics"],
             ["admin-financial-ledger", "Financial Ledger"],
             ["admin-transactions", "Transactions"],
             ["customers-wallets", "Customers & Wallets"],
@@ -1926,6 +2262,7 @@ export default function Home() {
         <div className="flex gap-2 overflow-x-auto px-4 py-3">
           {[
             ["admin-financial-overview", "Overview"],
+            ["admin-reports", "Reports"],
             ["admin-financial-ledger", "Ledger"],
             ["admin-transactions", "Transactions"],
             ["customers-wallets", "Customers & Wallets"],
@@ -2187,10 +2524,12 @@ export default function Home() {
                           </div>
 
                           <p className="shrink-0 text-sm font-bold text-slate-900">
-                            {provider.available &&
-                            typeof provider.balance === "number"
-                              ? formatMoney(provider.balance)
-                              : "—"}
+                            {provider.isTest
+                              ? "Excluded (test/sandbox)"
+                              : provider.available &&
+                                typeof provider.balance === "number"
+                                ? formatMoney(provider.balance)
+                                : "-"}
                           </p>
                         </div>
                       ))}
@@ -2232,6 +2571,260 @@ export default function Home() {
           )}
         </div>
 
+        {/* PHASE 3: REPORTS & ANALYTICS */}
+        <div
+          id="admin-reports"
+          className={`scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-7 ${activeSection === "admin-reports" ? "" : "hidden"}`}
+        >
+          <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-blue-600">
+                Dashboard / Reports
+              </p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-900">
+                Reports & Analytics
+              </h2>
+              <p className="mt-2 text-sm text-slate-500">
+                Review service revenue, operating expenses, profitability and transaction activity.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={exportReportsCsv}
+              disabled={!reportFinancialData || reportsLoading}
+              className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Export CSV
+            </button>
+          </div>
+
+          <div className="mb-6 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-3">
+            <label className="text-sm font-medium text-slate-700">
+              From
+              <input
+                type="date"
+                value={reportFrom}
+                max={reportTo || undefined}
+                onChange={(event) => setReportFrom(event.target.value)}
+                className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              />
+            </label>
+
+            <label className="text-sm font-medium text-slate-700">
+              To
+              <input
+                type="date"
+                value={reportTo}
+                min={reportFrom || undefined}
+                onChange={(event) => setReportTo(event.target.value)}
+                className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              />
+            </label>
+
+            <div className="flex items-end gap-2">
+              <button
+                type="button"
+                onClick={loadReports}
+                disabled={reportsLoading}
+                className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {reportsLoading ? "Loading..." : "Apply Filters"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReportFrom("");
+                  setReportTo("");
+                }}
+                disabled={reportsLoading}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {reportsError && (
+            <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {reportsError}
+            </div>
+          )}
+
+          {reportsLoading && (
+            <p className="mb-4 text-sm text-slate-500">
+              Loading financial figures and transaction records...
+            </p>
+          )}
+
+          {!reportFinancialData && !reportsLoading && (
+            <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center">
+              <p className="font-semibold text-slate-700">
+                No report loaded yet
+              </p>
+              <p className="mt-2 text-sm text-slate-500">
+                Select a date range, or leave the dates blank for all available dates, then apply filters.
+              </p>
+              <button
+                type="button"
+                onClick={loadReports}
+                className="mt-4 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white"
+              >
+                Load Reports
+              </button>
+            </div>
+          )}
+
+          {reportFinancialData && (
+            <>
+              <div className="mb-5">
+                <h3 className="text-lg font-bold text-slate-900">
+                  Financial Summary
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {reportFrom || "All available dates"} to {reportTo || "Present"}
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  {
+                    label: "Airtime Revenue",
+                    value: formatMoney(reportFinancialData.airtime.revenue),
+                  },
+                  {
+                    label: "Data Revenue",
+                    value: formatMoney(reportFinancialData.data.revenue),
+                  },
+                  {
+                    label: "Total Revenue",
+                    value: formatMoney(reportFinancialData.revenue.total),
+                  },
+                  {
+                    label: "Provider Costs",
+                    value: formatMoney(reportFinancialData.providerCosts.total),
+                  },
+                  {
+                    label: "Paystack Fees",
+                    value: formatMoney(reportFinancialData.paystackFees.total),
+                  },
+                  {
+                    label: "Total Expenses",
+                    value: formatMoney(reportFinancialData.expenses.total),
+                  },
+                  {
+                    label: "Recorded Financial Result",
+                    value: formatMoney(reportFinancialData.recordedFinancialResult),
+                  },
+                  {
+                    label: "Confirmed Gross Profit",
+                    value:
+                      reportFinancialData.grossProfit === null
+                        ? "Not verified"
+                        : formatMoney(reportFinancialData.grossProfit),
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-xl border border-slate-200 p-4"
+                  >
+                    <p className="text-xs font-medium text-slate-500">
+                      {item.label}
+                    </p>
+                    <p className="mt-2 break-words text-xl font-bold text-slate-900">
+                      {item.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-7 grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 p-5">
+                  <h3 className="font-bold text-slate-900">
+                    Airtime Cost Reconciliation
+                  </h3>
+                  <p className="mt-3 text-sm text-slate-600">
+                    Known-cost transactions:{" "}
+                    <strong>{reportFinancialData.airtime.knownCostTransactions}</strong>
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Unknown-cost transactions:{" "}
+                    <strong>{reportFinancialData.airtime.unknownCostTransactions}</strong>
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Reconciliation:{" "}
+                    <strong>
+                      {reportFinancialData.airtime.reconciliationComplete
+                        ? "Complete"
+                        : "Incomplete"}
+                    </strong>
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-5">
+                  <h3 className="font-bold text-slate-900">
+                    Data Cost Reconciliation
+                  </h3>
+                  <p className="mt-3 text-sm text-slate-600">
+                    Known-cost transactions:{" "}
+                    <strong>{reportFinancialData.data.knownCostTransactions}</strong>
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Unknown-cost transactions:{" "}
+                    <strong>{reportFinancialData.data.unknownCostTransactions}</strong>
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Reconciliation:{" "}
+                    <strong>
+                      {reportFinancialData.data.reconciliationComplete
+                        ? "Complete"
+                        : "Incomplete"}
+                    </strong>
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-7">
+                <h3 className="mb-4 text-lg font-bold text-slate-900">
+                  Transaction Analytics
+                </h3>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {[
+                    { label: "Successful", value: reportStats.successful },
+                    { label: "Failed", value: reportStats.failed },
+                    { label: "Pending / Processing", value: reportStats.pending },
+                    { label: "Refunded", value: reportStats.refunded },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="rounded-xl border border-slate-200 p-4"
+                    >
+                      <p className="text-xs text-slate-500">{item.label}</p>
+                      <p className="mt-2 text-2xl font-bold text-slate-900">
+                        {item.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-slate-500">
+                  Status counts exclude historical Airtime test purchases and transactions explicitly marked as tests. Wallet funding is not included in service revenue.
+                </p>
+              </div>
+
+              <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-semibold text-amber-900">
+                  Reporting notes
+                </p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-amber-900">
+                  <li>Customer wallet funding is not treated as Airtime or Data sales revenue.</li>
+                  <li>Unknown provider costs are not assumed to be zero.</li>
+                  <li>Confirmed gross profit is displayed only when the financial summary verifies it.</li>
+                  <li>Network and provider-level profitability breakdowns are not shown until the ledger supplies verified cost attribution.</li>
+                </ul>
+              </div>
+            </>
+          )}
+        </div>
         {/* FINANCIAL LEDGER */}
         <div
           id="admin-financial-ledger"
@@ -2380,7 +2973,7 @@ export default function Home() {
           <div className="border-b border-slate-200 px-6 py-4">
             <p className="text-sm text-slate-500">
               {ledgerTotal.toLocaleString("en-NG")} total ledger record(s)
-              {" Ãƒâ€šÃ‚Â· "}Page {ledgerPage} of {ledgerTotalPages}
+              {" | "}Page {ledgerPage} of {ledgerTotalPages}
             </p>
           </div>
 
@@ -2426,7 +3019,7 @@ export default function Home() {
                         <td className="whitespace-nowrap px-5 py-4 text-slate-600">
                           {entry.createdAt
                             ? new Date(entry.createdAt).toLocaleString("en-NG")
-                            : "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                            : "-"}
                         </td>
                         <td className="px-5 py-4">
                           <span
@@ -2436,15 +3029,15 @@ export default function Home() {
                                 : "rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-700"
                             }
                           >
-                            {entry.type || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                            {entry.type || "-"}
                           </span>
                         </td>
                         <td className="px-5 py-4 font-medium text-slate-700">
-                          {entry.category?.replace(/_/g, " ") || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                          {entry.category?.replace(/_/g, " ") || "-"}
                         </td>
                         <td className="max-w-xs px-5 py-4 text-slate-600">
                           <p className="break-words">
-                            {entry.description || entry.service || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                            {entry.description || entry.service || "-"}
                           </p>
                           {linkedTransaction?.reference && (
                             <p className="mt-1 text-xs text-slate-400">
@@ -2453,17 +3046,17 @@ export default function Home() {
                           )}
                         </td>
                         <td className="px-5 py-4 font-mono text-xs text-slate-600">
-                          {entry.reference || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                          {entry.reference || "-"}
                         </td>
                         <td className="px-5 py-4 text-slate-600">
                           {customer
-                            ? customer.name || customer.email || customer.phone || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"
+                            ? customer.name || customer.email || customer.phone || "-"
                             : typeof entry.user === "string"
                               ? entry.user
-                              : "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                              : "-"}
                         </td>
                         <td className="px-5 py-4 text-slate-600">
-                          {entry.provider || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                          {entry.provider || "-"}
                         </td>
                         <td className="whitespace-nowrap px-5 py-4 text-right font-semibold text-slate-800">
                           {formatMoney(Number(entry.amount ?? 0))}
@@ -2655,7 +3248,7 @@ export default function Home() {
           <div className="border-b border-slate-200 px-6 py-4">
             <p className="text-sm text-slate-500">
               {transactionsTotal.toLocaleString("en-NG")} total record(s)
-              {" Ã‚Â· "}Page {transactionsPage} of {transactionsTotalPages}
+              {" | "}Page {transactionsPage} of {transactionsTotalPages}
             </p>
           </div>
 
@@ -2716,7 +3309,7 @@ export default function Home() {
                         </td>
                         <td className="px-5 py-4">
                           <p className="font-mono text-xs text-slate-700">
-                            {transaction.reference || "Ã¢â‚¬â€"}
+                            {transaction.reference || "-"}
                           </p>
                           {transaction.gatewayReference && (
                             <p className="mt-1 text-xs text-slate-400">
@@ -2725,7 +3318,7 @@ export default function Home() {
                           )}
                         </td>
                         <td className="px-5 py-4">
-                          {String(transaction.category || "Ã¢â‚¬â€").replaceAll("_", " ")}
+                          {String(transaction.category || "-").replaceAll("_", " ")}
                         </td>
                         <td className="px-5 py-4">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -2733,7 +3326,7 @@ export default function Home() {
                               ? "bg-blue-100 text-blue-700"
                               : "bg-slate-100 text-slate-700"
                           }`}>
-                            {transaction.type || "Ã¢â‚¬â€"}
+                            {transaction.type || "-"}
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-5 py-4 font-semibold">
@@ -2746,7 +3339,7 @@ export default function Home() {
                         </td>
                         <td className="max-w-xs px-5 py-4 text-slate-600">
                           <p className="line-clamp-2">
-                            {transaction.description || transaction.gateway || "Ã¢â‚¬â€"}
+                            {transaction.description || transaction.gateway || "-"}
                           </p>
                         </td>
                         <td className="whitespace-nowrap px-5 py-4">
@@ -2766,7 +3359,8 @@ export default function Home() {
                                 : "Refund"}
                             </button>
                           ) : (
-                            <span className="text-xs text-slate-400">Ã¢â‚¬â€</span>
+                            <span className="text-xs text-slate-400">-
+                            </span>
                           )}
                         </td>
                       </tr>
@@ -2944,7 +3538,7 @@ export default function Home() {
                       </td>
 
                       <td className="px-5 py-4 text-slate-700">
-                        {customer.phone || "Ã¢â‚¬â€"}
+                        {customer.phone || "-"}
                       </td>
 
                       <td className="px-5 py-4">
@@ -3231,6 +3825,158 @@ export default function Home() {
             </button>
           </div>
 
+          {/* Provider-specific Airtime discount configuration */}
+          <div className="mt-8 rounded-2xl border border-blue-200 bg-blue-50/40 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  Provider Discount Configuration
+                </h3>
+                <p className="mt-1 max-w-3xl text-sm text-slate-600">
+                  Configure the expected discount independently for each
+                  Airtime provider and network. These rates estimate provider
+                  cost and gross profit; they do not increase or change the
+                  customer's Airtime face value.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={loadAdminAirtimePricing}
+                disabled={airtimePricingLoading}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {airtimePricingLoading ? "Refreshing..." : "Refresh Discounts"}
+              </button>
+            </div>
+
+            {airtimePricingError && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {airtimePricingError}
+              </div>
+            )}
+
+            {airtimePricingMessage && (
+              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                {airtimePricingMessage}
+              </div>
+            )}
+
+            {airtimePricingLoading && airtimePricingProviders.length === 0 ? (
+              <p className="mt-5 text-sm text-slate-500">
+                Loading configured Airtime providers...
+              </p>
+            ) : airtimePricingProviders.length === 0 ? (
+              <p className="mt-5 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                No providers supporting Airtime were returned. Refresh or check
+                the provider configuration.
+              </p>
+            ) : (
+              <div className="mt-5 grid gap-4 xl:grid-cols-2">
+                {airtimePricingProviders.map((provider) => (
+                  <div
+                    key={provider.key}
+                    className="rounded-xl border border-slate-200 bg-white p-5"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h4 className="font-bold text-slate-900">
+                          {provider.displayName}
+                        </h4>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Provider key: {provider.key}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          provider.configured
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {provider.configured ? "Settings saved" : "Not configured"}
+                      </span>
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {(["mtn", "airtel", "glo", "9mobile"] as AirtimeNetwork[]).map(
+                        (network) => (
+                          <label
+                            key={network}
+                            className="block"
+                          >
+                            <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                              {network.toUpperCase()} discount (%)
+                            </span>
+
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                inputMode="decimal"
+                                placeholder="Not configured"
+                                value={
+                                  airtimePricingDrafts[provider.key]?.[network] ?? ""
+                                }
+                                onChange={(event) =>
+                                  setAirtimePricingDrafts((current) => ({
+                                    ...current,
+                                    [provider.key]: {
+                                      ...(current[provider.key] || {
+                                        mtn: "",
+                                        airtel: "",
+                                        glo: "",
+                                        "9mobile": "",
+                                      }),
+                                      [network]: event.target.value,
+                                    },
+                                  }))
+                                }
+                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 pr-9 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                              />
+                              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+                                %
+                              </span>
+                            </div>
+                          </label>
+                        )
+                      )}
+                    </div>
+
+                    <p className="mt-4 text-xs leading-5 text-slate-500">
+                      Leave a network blank if its discount is unknown.
+                      Enter 0 if the provider gives no discount for that network.
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => saveAdminAirtimePricing(provider.key)}
+                      disabled={
+                        airtimePricingSaving !== null ||
+                        airtimePricingLoading
+                      }
+                      className="mt-5 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {airtimePricingSaving === provider.key
+                        ? "Saving..."
+                        : `Save ${provider.displayName} Discounts`}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <p className="mt-5 rounded-lg bg-white p-3 text-xs leading-5 text-slate-500">
+              Important: configured discounts are estimates, not confirmed
+              provider charges. Actual gross profit must be calculated from
+              the verified provider debit after a completed transaction.
+              Saving these settings does not change customer purchase prices,
+              provider selection, or existing transactions.
+            </p>
+          </div>
           {!financialData ? (
             <p className="mt-6 text-sm text-slate-500">
               Financial data is not available. Refresh the dashboard to load
@@ -3714,12 +4460,12 @@ export default function Home() {
                       <div>
                         <h3 className="font-semibold text-slate-900">{plan.name}</h3>
                         <p className="mt-1 text-sm text-slate-500">
-                          {plan.network.toUpperCase()} Ã‚Â· {plan.dataType}
-                          {plan.validity ? ` Ã‚Â· ${plan.validity}` : ""}
+                          {plan.network.toUpperCase()}  |  {plan.dataType}
+                          {plan.validity ? `  |  ${plan.validity}` : ""}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
                           Provider: {plan.provider?.displayName || "Not mapped"}
-                          {" Ã‚Â· "}Provider plan: {plan.providerPlan?.name || "Not mapped"}
+                          {" | "}Provider plan: {plan.providerPlan?.name || "Not mapped"}
                         </p>
                       </div>
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -3912,8 +4658,8 @@ export default function Home() {
                               <option value="">Select exact catalogue plan</option>
                               {mappingCatalogues[plan.id].map((item) => (
                                 <option key={item.code} value={item.code}>
-                                  {item.name} Ã¢â‚¬â€ {item.code}
-                                  {item.validity ? ` Ã¢â‚¬â€ ${item.validity}` : ""}
+                                  {item.name}  |  {item.code}
+                                  {item.validity ? `  |  ${item.validity}` : ""}
                                   {item.catalogueAmount != null
                                     ? `catalogue amount ${formatMoney(item.catalogueAmount)}`
                                     : ""}
@@ -4269,6 +5015,3 @@ export default function Home() {
     </main>
   );
 }
-
-
-
