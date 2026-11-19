@@ -21,15 +21,27 @@ const airtimeServiceMap: Record<string, string> = {
 };
 
 const generateRequestId = () => {
-  const date = new Date();
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  const rand = Math.floor(Math.random() * 1e8)
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Lagos",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+
+  const getPart = (type: string): string =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  const timestamp =
+    `${getPart("year")}${getPart("month")}${getPart("day")}${getPart("hour")}${getPart("minute")}`;
+
+  const randomPart = Math.floor(Math.random() * 100000000)
     .toString()
     .padStart(8, "0");
 
-  return `${y}${m}${d}${rand}`;
+  return `${timestamp}${randomPart}`;
 };
 
 const classifyAirtimeResponse = (

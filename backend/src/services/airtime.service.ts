@@ -32,14 +32,27 @@ const isValidRequestId = (value: string): boolean =>
   );
 
 const generateVtpassRequestId = (): string => {
-  const now = new Date();
-  const datePart =
-    `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Lagos",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+
+  const getPart = (type: string): string =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  const timestamp =
+    `${getPart("year")}${getPart("month")}${getPart("day")}${getPart("hour")}${getPart("minute")}`;
+
   const randomPart = Math.floor(Math.random() * 100000000)
     .toString()
     .padStart(8, "0");
 
-  return `${datePart}${randomPart}`;
+  return `${timestamp}${randomPart}`;
 };
 const findExistingAirtimeRequest = async (
   idempotencyKey: string
