@@ -1273,8 +1273,8 @@ export default function Home() {
     setPasswordMessage("");
     setPasswordError("");
 
-    if (newPassword.length < 6) {
-      setPasswordError("New password must be at least 6 characters.");
+    if ((newPassword.length < 12 || newPassword.length > 72) || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword) || !/[^A-Za-z0-9\s]/.test(newPassword)) {
+      setPasswordError("Use at least 12 characters with uppercase, lowercase, a number and a special character.");
       return;
     }
 
@@ -1298,7 +1298,8 @@ export default function Home() {
         throw new Error(result.message || "Unable to change password.");
       }
 
-      setPasswordMessage("Password changed successfully.");
+      setUser(null);
+      setError("Password changed successfully. Please sign in again with your new password.");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -1325,9 +1326,16 @@ export default function Home() {
 
       const result = await response.json();
 
-      if (result.success && result.user) {
-        setUser(result.user);
-        await Promise.all([
+      if (
+  result.success &&
+  result.user &&
+  ["admin", "super_admin"].includes(
+    String(result.user.role || "").toLowerCase()
+  )
+) {
+  setUser(result.user);
+  await Promise.all([
+
           loadFinancialData(),
           loadAnnouncements(),
           loadDataPricing(),
@@ -1565,6 +1573,9 @@ export default function Home() {
           <a href="#admin-announcements" className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
             Announcements
           </a>
+          <a href="/admin/audit-logs" className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
+            Audit Logs
+          </a>
         </div>
       </nav>
 
@@ -1607,7 +1618,7 @@ export default function Home() {
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
                     required
-                    minLength={6}
+                    minLength={12}
                     className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
                   />
                 </label>

@@ -39,10 +39,8 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError(
-        "Password must be at least 6 characters."
-      );
+    if ((newPassword.length < 12 || newPassword.length > 72) || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword) || !/[^A-Za-z0-9\s]/.test(newPassword)) {
+      setError("Use at least 12 characters with uppercase, lowercase, a number and a special character.");
       return;
     }
 

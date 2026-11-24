@@ -1,4 +1,5 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 
 import {
   register,
@@ -16,6 +17,15 @@ import {
 } from "../middleware/auth.middleware";
 
 const router = Router();
+
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, message: "Too many admin login attempts. Try again in 15 minutes." },
+});
 
 // ==========================================
 // REGISTER
@@ -41,6 +51,7 @@ router.post(
 
 router.post(
   "/admin-login",
+  adminLoginLimiter,
   adminLogin
 );
 
