@@ -8,6 +8,7 @@ export interface AuthRequest extends Request {
 
 interface JwtPayload {
   id: string;
+  tokenVersion?: number;
 }
 
 export const protect = async (
@@ -57,10 +58,6 @@ export const protect = async (
     // ==========================================
 
     if (!token) {
-      console.log(
-        "AUTH ERROR: No token found in Authorization header or cookie"
-      );
-
       return res.status(401).json({
         success: false,
         message:
@@ -125,16 +122,20 @@ export const protect = async (
       });
     }
 
+    // Reject tokens issued before logout or a password change. Older tokens
+    // without tokenVersion are treated as version 0 for safe migration.
+    if ((decoded.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
+      return res.status(401).json({
+        success: false,
+        message: "Your session is no longer valid. Please login again.",
+      });
+    }
+
     // ==========================================
     // ATTACH USER TO REQUEST
     // ==========================================
 
     req.user = user;
-
-    console.log(
-      "AUTH SUCCESS:",
-      user.email
-    );
 
     next();
   } catch (error: any) {

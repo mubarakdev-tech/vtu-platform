@@ -22,6 +22,7 @@ import dashboardRoutes from "./routes/dashboard.routes";
 import financialLedgerRoutes from "./routes/financial-ledger.routes";
 import dataPricingRoutes from "./routes/data-pricing.routes";
 import announcementRoutes from "./routes/announcement.routes";
+import adminAuditRoutes from "./routes/admin-audit.routes";
 
 import { errorHandler } from "./middleware/error.middleware";
 import logger from "./utils/logger";
@@ -225,6 +226,7 @@ app.use("/api/admin/transactions", adminTransactionRoutes);
 app.use("/api/admin/providers", adminProviderRoutes);
 app.use("/api/admin/airtime-pricing", adminAirtimePricingRoutes);
 app.use("/api/admin/customers", adminCustomerRoutes);
+app.use("/api/admin/audit-logs", adminAuditRoutes);
 
 // =====================================================
 // DASHBOARD ROUTES

@@ -12,6 +12,7 @@ import {
 
 import { protect } from "../middleware/auth.middleware";
 import { adminOnly } from "../middleware/admin.middleware";
+import { auditAdminActivity } from "../middleware/adminAudit.middleware";
 
 const router =
   express.Router();
@@ -63,6 +64,7 @@ router.post(
   "/",
   protect,
   adminOnly,
+  auditAdminActivity,
   createAnnouncement
 );
 
@@ -93,6 +95,7 @@ router.put(
   "/:id",
   protect,
   adminOnly,
+  auditAdminActivity,
   updateAnnouncement
 );
 
@@ -108,6 +111,7 @@ router.delete(
   "/:id",
   protect,
   adminOnly,
+  auditAdminActivity,
   deleteAnnouncement
 );
 
@@ -123,6 +127,7 @@ router.patch(
   "/:id/status",
   protect,
   adminOnly,
+  auditAdminActivity,
   toggleAnnouncementStatus
 );
 

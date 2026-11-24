@@ -8,16 +8,21 @@ import crypto from "crypto";
 import transporter from "../config/email";
 import env from "../config/env";
 import { AuthRequest } from "../middleware/auth.middleware";
+import {
+  isStrongPassword,
+  PASSWORD_POLICY_MESSAGE,
+} from "../utils/passwordPolicy";
+import { writeAdminAuditLog, writeAdminLoginFailureLog } from "../utils/adminAudit";
 
 // ==========================================
 // CREATE JWT
 // ==========================================
-const createToken = (id: string) => {
+const createToken = (id: string, tokenVersion = 0) => {
   if (!process.env.JWT_SECRET) {
     throw new Error("JWT_SECRET is not configured");
   }
 
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+  return jwt.sign({ id, tokenVersion }, process.env.JWT_SECRET, {
     expiresIn: "7d",
   });
 };
@@ -69,16 +74,17 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    if (password.length < 6) {
+    if (!isStrongPassword(password)) {
       return res.status(400).json({
         success: false,
-        message: "Password must be at least 6 characters.",
+        message: PASSWORD_POLICY_MESSAGE,
       });
     }
 
     const cleanName = String(name).trim();
     const cleanEmail = String(email).toLowerCase().trim();
     const cleanPhone = String(phone).trim();
+
     const cleanReferralCode =
       typeof referralCode === "string"
         ? referralCode.trim().toUpperCase()
@@ -134,7 +140,10 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    const token = createToken(user._id.toString());
+    const token = createToken(
+      user._id.toString(),
+      user.tokenVersion ?? 0
+    );
 
     res.cookie("token", token, cookieOptions);
 
@@ -197,7 +206,10 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    const token = createToken(user._id.toString());
+    const token = createToken(
+      user._id.toString(),
+      user.tokenVersion ?? 0
+    );
 
     res.cookie("token", token, cookieOptions);
 
@@ -245,6 +257,12 @@ export const adminLogin = async (req: Request, res: Response) => {
     });
 
     if (!user) {
+      await writeAdminLoginFailureLog({
+        email,
+        failureReason: "ACCOUNT_NOT_FOUND",
+        statusCode: 401,
+        req,
+      });
       return res.status(401).json({
         success: false,
         message: "Invalid email or password.",
@@ -252,6 +270,12 @@ export const adminLogin = async (req: Request, res: Response) => {
     }
 
     if (user.role !== "admin" && user.role !== "super_admin") {
+      await writeAdminLoginFailureLog({
+        email,
+        failureReason: "NOT_ADMIN",
+        statusCode: 403,
+        req,
+      });
       return res.status(403).json({
         success: false,
         message: "Access denied. Admin privileges required.",
@@ -261,13 +285,36 @@ export const adminLogin = async (req: Request, res: Response) => {
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
+      await writeAdminLoginFailureLog({
+        email,
+        failureReason: "INVALID_PASSWORD",
+        statusCode: 401,
+        req,
+      });
       return res.status(401).json({
         success: false,
         message: "Invalid email or password.",
       });
     }
 
-    const token = createToken(user._id.toString());
+    const token = createToken(
+      user._id.toString(),
+      user.tokenVersion ?? 0
+    );
+
+    // Audit logging must not prevent a valid administrator from logging in.
+    try {
+      await writeAdminAuditLog({
+        actor: user,
+        action: "ADMIN_LOGIN",
+        resource: "/api/auth/admin-login",
+        method: "POST",
+        statusCode: 200,
+        req,
+      });
+    } catch (auditError) {
+      console.error("Admin login audit write failed:", auditError);
+    }
 
     res.cookie("token", token, cookieOptions);
 
@@ -332,13 +379,78 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 // ==========================================
 // LOGOUT
 // ==========================================
-export const logout = (req: Request, res: Response) => {
+export const logout = async (req: Request, res: Response) => {
+  let revocationFailed = false;
+
+  try {
+    const header = req.headers.authorization;
+    const token = header?.startsWith("Bearer ")
+      ? header.slice(7).trim()
+      : req.cookies?.token;
+
+    if (token && process.env.JWT_SECRET) {
+      try {
+        const decoded = jwt.verify(
+          token,
+          process.env.JWT_SECRET
+        ) as { id?: string };
+
+        if (decoded.id) {
+          const user = await User.findById(decoded.id);
+
+          if (user) {
+            user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+            await user.save();
+
+            if (user.role === "admin" || user.role === "super_admin") {
+              try {
+                await writeAdminAuditLog({
+                  actor: user,
+                  action: "ADMIN_LOGOUT",
+                  resource: "/api/auth/logout",
+                  method: "POST",
+                  statusCode: 200,
+                  req,
+                });
+              } catch (auditError) {
+                console.error(
+                  "Admin logout audit write failed:",
+                  auditError
+                );
+              }
+            }
+          }
+        }
+      } catch (error: any) {
+        if (
+          error?.name !== "TokenExpiredError" &&
+          error?.name !== "JsonWebTokenError" &&
+          error?.name !== "NotBeforeError"
+        ) {
+          revocationFailed = true;
+          console.error("Logout session revocation failed:", error);
+        }
+      }
+    }
+  } catch (error) {
+    revocationFailed = true;
+    console.error("Logout session revocation failed:", error);
+  }
+
   res.clearCookie("token", {
     httpOnly: true,
     secure: isProduction,
     sameSite: isProduction ? ("none" as const) : ("lax" as const),
     path: "/",
   });
+
+  if (revocationFailed) {
+    return res.status(500).json({
+      success: false,
+      message:
+        "The browser session was cleared, but server-side session revocation could not be confirmed.",
+    });
+  }
 
   return res.status(200).json({
     success: true,
@@ -370,7 +482,6 @@ export const forgotPassword = async (req: Request, res: Response) => {
       });
     }
 
-    // Do not create a reset token if email cannot be delivered.
     if (!transporter || !env.EMAIL_FROM) {
       console.error(
         "Password reset email unavailable: Resend is not configured."
@@ -384,9 +495,15 @@ export const forgotPassword = async (req: Request, res: Response) => {
     }
 
     const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenHash = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
 
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000);
+    user.resetPasswordToken = resetTokenHash;
+    user.resetPasswordExpires = new Date(
+      Date.now() + 15 * 60 * 1000
+    );
 
     await user.save();
 
@@ -449,7 +566,7 @@ export const resetPassword = async (req: Request, res: Response) => {
     const { token } = req.params;
     const { newPassword } = req.body;
 
-    if (!token) {
+    if (typeof token !== "string" || !token.trim()) {
       return res.status(400).json({
         success: false,
         message: "Reset token is required",
@@ -463,15 +580,20 @@ export const resetPassword = async (req: Request, res: Response) => {
       });
     }
 
-    if (newPassword.length < 6) {
+    if (!isStrongPassword(newPassword)) {
       return res.status(400).json({
         success: false,
-        message: "Password must be at least 6 characters",
+        message: PASSWORD_POLICY_MESSAGE,
       });
     }
 
+    const resetTokenHash = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
     const user = await User.findOne({
-      resetPasswordToken: token,
+      resetPasswordToken: { $in: [resetTokenHash, token] },
       resetPasswordExpires: { $gt: new Date() },
     });
 
@@ -485,10 +607,29 @@ export const resetPassword = async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     user.password = hashedPassword;
+    user.tokenVersion = (user.tokenVersion ?? 0) + 1;
     user.resetPasswordToken = null;
     user.resetPasswordExpires = null;
 
     await user.save();
+
+    if (user.role === "admin" || user.role === "super_admin") {
+      try {
+        await writeAdminAuditLog({
+          actor: user,
+          action: "ADMIN_PASSWORD_RESET",
+          resource: "/api/auth/reset-password",
+          method: "POST",
+          statusCode: 200,
+          req,
+        });
+      } catch (auditError) {
+        console.error(
+          "Admin password-reset audit write failed:",
+          auditError
+        );
+      }
+    }
 
     return res.status(200).json({
       success: true,
@@ -524,14 +665,15 @@ export const changePassword = async (
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: "Current password and new password are required.",
+        message:
+          "Current password and new password are required.",
       });
     }
 
-    if (newPassword.length < 6) {
+    if (!isStrongPassword(newPassword)) {
       return res.status(400).json({
         success: false,
-        message: "New password must be at least 6 characters.",
+        message: PASSWORD_POLICY_MESSAGE,
       });
     }
 
@@ -570,12 +712,35 @@ export const changePassword = async (
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
+
     user.password = hashedPassword;
+    user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+
     await user.save();
+
+    res.clearCookie("token", { ...cookieOptions });
+
+    if (user.role === "admin" || user.role === "super_admin") {
+      try {
+        await writeAdminAuditLog({
+          actor: user,
+          action: "ADMIN_PASSWORD_CHANGED",
+          resource: "/api/auth/change-password",
+          method: "POST",
+          statusCode: 200,
+          req,
+        });
+      } catch (auditError) {
+        console.error(
+          "Admin password-change audit write failed:",
+          auditError
+        );
+      }
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Password changed successfully.",
+      message: "Password changed successfully. Please login again.",
     });
   } catch (error: any) {
     console.error("Change password error:", error);
