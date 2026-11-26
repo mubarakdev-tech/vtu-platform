@@ -5,6 +5,7 @@ export interface IUser extends mongoose.Document {
   email: string;
   phone?: string | null;
   password: string;
+  tokenVersion: number;
 
   role: "user" | "admin" | "super_admin";
 
@@ -63,6 +64,9 @@ const userSchema = new Schema<IUser>(
       type: String,
       required: true,
     },
+
+    // Incrementing this value revokes every previously issued JWT.
+    tokenVersion: { type: Number, default: 0, select: true },
 
     role: {
       type: String,

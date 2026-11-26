@@ -1934,8 +1934,15 @@ const saveAdminAirtimePricing = async (providerKey: string) => {
     setPasswordMessage("");
     setPasswordError("");
 
-    if (newPassword.length < 6) {
-      setPasswordError("New password must be at least 6 characters.");
+    if (
+      newPassword.length < 12 ||
+      newPassword.length > 72 ||
+      !/[a-z]/.test(newPassword) ||
+      !/[A-Z]/.test(newPassword) ||
+      !/\d/.test(newPassword) ||
+      !/[^A-Za-z0-9\s]/.test(newPassword)
+    ) {
+      setPasswordError("Use at least 12 characters with uppercase, lowercase, a number and a special character.");
       return;
     }
 
@@ -1959,7 +1966,8 @@ const saveAdminAirtimePricing = async (providerKey: string) => {
         throw new Error(result.message || "Unable to change password.");
       }
 
-      setPasswordMessage("Password changed successfully.");
+      setUser(null);
+      setError("Password changed successfully. Please sign in again with your new password.");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -1986,7 +1994,13 @@ const saveAdminAirtimePricing = async (providerKey: string) => {
 
       const result = await response.json();
 
-      if (result.success && result.user) {
+      if (
+        result.success &&
+        result.user &&
+        ["admin", "super_admin"].includes(
+          String(result.user.role || "").toLowerCase()
+        )
+      ) {
         setUser(result.user);
         await Promise.all([
           loadFinancialData(),
@@ -2178,6 +2192,7 @@ const saveAdminAirtimePricing = async (providerKey: string) => {
             ["admin-data-pricing", "Data Plan Pricing"],
             ["admin-data-plan-mapping", "Data Plan Mapping & Catalogue"],
             ["admin-announcements", "Announcements"],
+            ["admin-audit-logs", "Audit Logs"],
             ["settings", "Settings"],
           ].map(([id, label]) => (
             <button
@@ -2186,6 +2201,10 @@ const saveAdminAirtimePricing = async (providerKey: string) => {
               onClick={() => {
                 if (id === "admin-data-plan-mapping") {
                   window.location.href = "/admin/data-plan-mapping";
+                  return;
+                }
+                if (id === "admin-audit-logs") {
+                  window.location.href = "/admin/audit-logs";
                   return;
                 }
                 setActiveSection(id);
@@ -2271,6 +2290,7 @@ const saveAdminAirtimePricing = async (providerKey: string) => {
             ["admin-data-pricing", "Data Pricing"],
             ["admin-data-plan-mapping", "Mapping & Catalogue"],
             ["admin-announcements", "Announcements"],
+            ["admin-audit-logs", "Audit Logs"],
             ["settings", "Settings"],
           ].map(([id, label]) => (
             <button
@@ -2279,6 +2299,10 @@ const saveAdminAirtimePricing = async (providerKey: string) => {
               onClick={() => {
                 if (id === "admin-data-plan-mapping") {
                   window.location.href = "/admin/data-plan-mapping";
+                  return;
+                }
+                if (id === "admin-audit-logs") {
+                  window.location.href = "/admin/audit-logs";
                   return;
                 }
                 setActiveSection(id);
@@ -2331,7 +2355,8 @@ const saveAdminAirtimePricing = async (providerKey: string) => {
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
                     required
-                    minLength={6}
+                    minLength={12}
+                    maxLength={72}
                     className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
                   />
                 </label>

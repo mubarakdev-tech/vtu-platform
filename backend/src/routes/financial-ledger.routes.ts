@@ -6,8 +6,10 @@ import {
 } from "../controllers/financial-ledger.controller";
 import { protect } from "../middleware/auth.middleware";
 import { adminOnly } from "../middleware/admin.middleware";
+import { auditAdminActivity } from "../middleware/adminAudit.middleware";
 
 const router = Router();
+router.use(protect, adminOnly, auditAdminActivity);
 
 // =====================================================
 // FINANCIAL SUMMARY — ADMIN ONLY
@@ -16,8 +18,6 @@ const router = Router();
 
 router.get(
   "/summary",
-  protect,
-  adminOnly,
   getFinancialSummary
 );
 

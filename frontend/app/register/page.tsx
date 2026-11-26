@@ -48,8 +48,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+if ((password.length < 12 || password.length > 72) || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9\s]/.test(password)) {
+      setError("Use at least 12 characters with uppercase, lowercase, a number and a special character.");
       return;
     }
 
